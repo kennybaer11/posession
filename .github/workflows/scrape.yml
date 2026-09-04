@@ -7,6 +7,11 @@ on:
     - cron: "17 * * * *"   # :17 past the hour - off the busy top-of-hour slot,
                            # where GitHub's shared runners queue up
   workflow_dispatch:        # lets you trigger a run by hand from the Actions tab
+  push:
+    branches: [main]        # a code change should prove itself immediately
+                            # rather than wait for the next hour's cron
+    paths-ignore:
+      - "README.md"         # docs alone cannot change what the site renders
 
 concurrency:
   # Never let two runs write at once: a slow run overlapping the next hour's
