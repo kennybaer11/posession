@@ -436,19 +436,34 @@ def main():
         log.warning("%d row(s) have no xG - the API may have renamed a field",
                     missing_xg)
 
+    # No stat rows has two very different causes, and only one is a failure.
+    #
+    #  - Nothing was DUE: every match is already stored and settled. That is the
+    #    normal result of an hourly run between matchdays, not an error. Exiting
+    #    non-zero here turned a quiet Sunday into a red build.
+    #  - Matches were due and every one of them came back unusable: that is a
+    #    real failure, and probably means the API changed under us.
+    #
+    # Either way the run still has fixtures, the calendar and any new match
+    # metadata to write - upcoming kickoffs move around even in a quiet week -
+    # so it carries on to the writes below rather than returning early.
     if not rows:
-        log.error("Nothing to write.")
-        if db:
-            db.close()
-        return 1
+        if needed:
+            log.error("Fetched %d match(es) and got no usable stats from any "
+                      "of them - the API may have changed.", len(needed))
+            if db:
+                db.close()
+            return 1
+        log.info("No new matches to fetch; refreshing fixtures and calendar only.")
 
-    stamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
-    out_path = BASE_DIR / "output" / f"pl-stats-{stamp}.json"
-    out_path.parent.mkdir(exist_ok=True)
-    out_path.write_text(json.dumps(rows, indent=2, ensure_ascii=False,
-                                   default=json_default), encoding="utf-8")
-    log.info("Saved %d team-match row(s) to %s (%d API requests)",
-             len(rows), out_path, api.request_count)
+    if rows:
+        stamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
+        out_path = BASE_DIR / "output" / f"pl-stats-{stamp}.json"
+        out_path.parent.mkdir(exist_ok=True)
+        out_path.write_text(json.dumps(rows, indent=2, ensure_ascii=False,
+                                       default=json_default), encoding="utf-8")
+        log.info("Saved %d team-match row(s) to %s (%d API requests)",
+                 len(rows), out_path, api.request_count)
 
     if args.dry_run:
         for r in rows[:3]:
@@ -466,13 +481,13 @@ def main():
         db.upsert_teams(teams)
         db.upsert_matches(all_matches)
         db.upsert_appearances(calendar)
-        res = db.upsert_team_matches(rows)
+        written = db.upsert_team_matches(rows)["written"] if rows else 0
         log.info("Wrote %d team(s), %d match(es), %d appearance(s), %d stat row(s). "
                  "pl_team_match holds %d row(s).",
-                 len(teams), len(all_matches), len(calendar), res["written"],
+                 len(teams), len(all_matches), len(calendar), written,
                  db.count())
 
-        if collect_detail:
+        if collect_detail and (goals_all or lineups_all):
             by_match = {mid: ([], [], []) for mid in event_matches}
             for r in goals_all:
                 by_match[r["match_id"]][0].append(r)
