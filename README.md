@@ -206,6 +206,24 @@ Every page is a thin wrapper over the views in `views.sql` - no business logic
 lives in the web layer, so the UI cannot disagree with the modelling layer about
 what a number means.
 
+## Always-on version
+
+The UI is also publishable as static HTML, which is what `export_static.py`
+does:
+
+```
+python export_static.py site      # renders every page to site/
+```
+
+The hourly GitHub Action runs this after each scrape and deploys the result to
+GitHub Pages. Because every page is read-only and the data only changes when
+the scraper runs, a snapshot loses nothing a live server would give you - and
+the connection string never leaves the Action. Deploying the Flask app instead
+would mean putting `DATABASE_URL` on a third-party host.
+
+Links in the output are relative, so the site works under a Pages project
+subpath, at a domain root, or opened straight off disk.
+
 ## Files
 
 | File | Purpose |
@@ -217,5 +235,6 @@ what a number means.
 | `db.py` | Postgres schema + upserts |
 | `queries.sql` | Health checks, form tables, training/prediction exports |
 | `app.py` | Local read-only web UI (`python app.py`) |
+| `export_static.py` | Renders the UI to static HTML for GitHub Pages |
 | `templates/`, `static/` | Pages and stylesheet for the UI |
 | `.github/workflows/scrape.yml` | The hourly job |

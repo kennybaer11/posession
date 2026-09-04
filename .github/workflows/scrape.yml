@@ -14,6 +14,11 @@ concurrency:
   group: pl-scrape
   cancel-in-progress: false
 
+permissions:
+  contents: read
+  pages: write            # publish the rendered site
+  id-token: write         # required by actions/deploy-pages
+
 jobs:
   scrape:
     runs-on: ubuntu-latest
@@ -37,6 +42,19 @@ jobs:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
         run: python main.py
 
+      - name: Render the static site
+        # Reads the database that was just updated and writes site/. The
+        # credentials stay here, inside the Action - the published pages are
+        # plain HTML with no connection string in them.
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: python export_static.py site
+
+      - name: Upload the site
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
       - name: Save the run's JSON snapshot
         # Handy for diffing what changed if a run looks wrong. Kept short:
         # the database is the real store, this is just a breadcrumb.
@@ -47,3 +65,15 @@ jobs:
           path: output/*.json
           retention-days: 7
           if-no-files-found: ignore
+
+  publish:
+    # Split from the scrape so a Pages misconfiguration cannot fail the job
+    # that actually collects the data.
+    needs: scrape
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - id: deploy
+        uses: actions/deploy-pages@v4
