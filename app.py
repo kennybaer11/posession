@@ -274,40 +274,62 @@ def model():
     """Readiness of the modelling layer - no model is trained yet."""
     import load as loader
 
-    train = loader.training_set(min_history=3)
+    train = loader.training_set()
     upcoming = loader.fixtures()
     feats = loader.feature_columns(train, upcoming)
     fit, holdout = loader.time_split(train)
+    target = loader.TARGET
 
-    balance = (train["outcome"].value_counts().to_dict()
-               if "outcome" in train and len(train) else {})
+    stats = None
+    if len(train):
+        y = train[target]
+        stats = {"mean": y.mean(), "min": y.min(), "max": y.max(),
+                 "std": y.std()}
 
     # Group the feature list so the page reads as an inventory, not a dump.
+    # Possession inputs lead, because that is what is being predicted.
     groups = {
+        "Possession": [c for c in feats if "poss" in c or "pass" in c
+                       or "touch" in c or "long_balls" in c
+                       or "dispossessed" in c or "recoveries" in c],
         "Attacking form": [c for c in feats if "xg" in c and "xga" not in c
                            and "edge" not in c and "gap" not in c],
         "Defensive form": [c for c in feats if "xga" in c],
         "Points and results": [c for c in feats if "ppg" in c],
         "Volume": [c for c in feats if any(k in c for k in
-                   ("shots", "sot", "corners", "poss"))],
+                   ("shots", "sot", "corners"))],
         "Matchup edges": [c for c in feats if "edge" in c or "_vs_" in c],
         "Head to head": [c for c in feats if c.startswith("h2h")],
         "Schedule and fatigue": [c for c in feats if any(k in c for k in
                                 ("rest", "last_14d", "european", "break"))],
     }
-    seen = set().union(*groups.values()) if groups else set()
-    groups["Other"] = [c for c in feats if c not in seen]
-    groups = {k: v for k, v in groups.items() if v}
+    ordered, seen = {}, set()
+    for name, cols in groups.items():
+        cols = [c for c in cols if c not in seen]
+        seen.update(cols)
+        if cols:
+            ordered[name] = cols
+    rest = [c for c in feats if c not in seen]
+    if rest:
+        ordered["Other"] = rest
 
     coverage = None
     if len(train):
         coverage = {"first": train["kickoff"].min(),
                     "last": train["kickoff"].max()}
 
+    # How much of the training set each h2h column actually covers - in a
+    # single season most pairs have not met yet, so these are mostly empty.
+    sparse = []
+    for c in feats:
+        if len(train) and train[c].notna().sum() < len(train) * 0.5:
+            sparse.append((c, int(train[c].notna().sum())))
+
     return render_template(
-        "model.html", n_train=len(train), n_fixtures=len(upcoming),
-        n_features=len(feats), n_fit=len(fit), n_holdout=len(holdout),
-        balance=balance, groups=groups, coverage=coverage,
+        "model.html", target=target, n_train=len(train),
+        n_fixtures=len(upcoming), n_features=len(feats), n_fit=len(fit),
+        n_holdout=len(holdout), stats=stats, groups=ordered, coverage=coverage,
+        baselines=loader.baselines(train), sparse=sparse,
         preview=upcoming.head(10).to_dict("records") if len(upcoming) else [])
 
 

@@ -21,6 +21,12 @@ from sqlalchemy import create_engine
 BASE_DIR = Path(__file__).resolve().parent
 load_dotenv(BASE_DIR / ".env")
 
+# What the model predicts. Possession is zero-sum inside a match, so this one
+# column defines the whole result: away possession is 100 minus it. Fitting a
+# second model for the away side would only create two answers that can
+# disagree with each other.
+TARGET = "home_possession"
+
 
 def _config():
     with open(BASE_DIR / "config.yaml", encoding="utf-8") as fh:
@@ -98,10 +104,38 @@ def training_set(min_history=None, season="config", half_life_days=None):
         sql += " AND season = %(season)s"
     sql += " ORDER BY kickoff"
 
+    sql = sql.replace("ORDER BY kickoff",
+                      f"AND {TARGET} IS NOT NULL ORDER BY kickoff")
     df = pd.read_sql(sql, engine(), params=params, parse_dates=["kickoff"])
     df["weight"] = (decay_weights(df["kickoff"], half_life_days)
                     if len(df) else pd.Series(dtype="float64"))
     return df
+
+
+def baselines(train, target=TARGET):
+    """What a model has to beat, in mean absolute error (percentage points).
+
+    Regression needs a reference the way a classifier needs the majority class.
+    Three, in increasing order of difficulty:
+
+      always_50      - possession is zero-sum, so 50 is the unconditional mean
+                       and this is the "know nothing" floor.
+      home_form      - predict the home side's own recent average, ignoring who
+                       they are playing.
+      naive_midpoint - split the difference between what the home side usually
+                       takes and what the away side usually concedes. This is
+                       the one that matters: it is nearly free to compute, and
+                       a model that cannot beat it is not earning its keep.
+    """
+    if not len(train):
+        return {}
+    y = train[target]
+    out = {"always_50": (y - 50).abs().mean()}
+    if "home_poss_l5" in train:
+        out["home_form"] = (y - train["home_poss_l5"]).abs().mean()
+    if "poss_naive_l5" in train:
+        out["naive_midpoint"] = (y - train["poss_naive_l5"]).abs().mean()
+    return {k: float(v) for k, v in out.items() if pd.notna(v)}
 
 
 def fixtures():
@@ -125,6 +159,15 @@ def feature_columns(train, upcoming):
         # would sail through the numeric check below and hand the model a
         # column that encodes how recent the match is.
         "weight",
+        # The targets.
+        "home_possession", "away_possession",
+        # Post-match context. These are numeric and would pass every check
+        # below, but minutes spent ahead or behind are only known once the
+        # match is over. Feeding them to a model that predicts possession is
+        # leakage, and would look like a brilliant model right up to the point
+        # you tried to predict a fixture that had not kicked off.
+        "home_minutes_ahead_post", "home_minutes_level_post",
+        "home_minutes_behind_post",
     }
     return [c for c in train.columns
             if c in upcoming.columns
@@ -148,8 +191,14 @@ if __name__ == "__main__":
     up = fixtures()
     feats = feature_columns(tr, up)
     a, b = time_split(tr)
-    print(f"training rows : {len(tr)}")
-    print(f"fixtures      : {len(up)}")
+    print(f"target         : {TARGET}")
+    print(f"training rows  : {len(tr)}")
+    print(f"fixtures       : {len(up)}")
     print(f"usable features: {len(feats)}")
-    print(f"time split    : {len(a)} train / {len(b)} holdout")
-    print(f"label balance : {tr.outcome.value_counts().to_dict()}")
+    print(f"time split     : {len(a)} fit / {len(b)} holdout")
+    if len(tr):
+        print(f"target range   : {tr[TARGET].min():.1f} - {tr[TARGET].max():.1f}"
+              f"  (mean {tr[TARGET].mean():.1f})")
+        print("baselines (mean absolute error, percentage points):")
+        for name, mae in sorted(baselines(tr).items(), key=lambda kv: -kv[1]):
+            print(f"    {name:16} {mae:.2f}")

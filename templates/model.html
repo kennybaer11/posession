@@ -5,9 +5,10 @@
 {% block content %}
 
 <div class="note">
-  <strong>No model is trained yet.</strong> This page reports what the modelling layer
-  currently has to work with, so the numbers below are readiness, not results. Predictions
-  appear here once a model is fitted.
+  <strong>Target: home possession %.</strong> Possession is zero-sum inside a match, so
+  this one number defines the whole result &mdash; the away side is 100 minus it. This is a
+  regression problem, not a win/draw/lose one. <strong>No model is trained yet;</strong>
+  the figures below are what the modelling layer has to work with.
 </div>
 
 <div class="tiles" style="margin-bottom:22px">
@@ -21,6 +22,44 @@
 <div class="cols2">
 
   <div class="panel">
+    <h2>What a model must beat <span class="sub">&mdash; mean absolute error, percentage points</span></h2>
+    {% if baselines %}
+      {% set worst = baselines.values()|max %}
+      <table>
+        <tbody>
+          {% for name, mae in baselines|dictsort(by='value', reverse=true) %}
+          <tr>
+            <td class="l">
+              {% if name == 'always_50' %}Always predict 50%
+                <div class="muted" style="font-size:12px;white-space:normal">The know-nothing floor</div>
+              {% elif name == 'home_form' %}Home side's own recent average
+                <div class="muted" style="font-size:12px;white-space:normal">Ignores who they are playing</div>
+              {% else %}Naive midpoint
+                <div class="muted" style="font-size:12px;white-space:normal">
+                  Home form vs what the away side concedes &mdash; the one that matters
+                </div>
+              {% endif %}
+            </td>
+            <td style="width:45%">
+              <div class="bar"><div class="fill {{ 'a' if name == 'naive_midpoint' else 'h' }}"
+                   style="width: {{ (100 * mae / worst)|round(1) }}%"></div></div>
+            </td>
+            <td class="num">{{ '%.2f'|format(mae) }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      <p class="muted" style="font-size:12.5px;margin-bottom:0">
+        A model is only earning its keep below
+        <strong>{{ '%.2f'|format(baselines.values()|min) }}</strong> points of error.
+        Beating "always 50" is not an achievement.
+      </p>
+    {% else %}
+      <div class="empty">Not enough data yet.</div>
+    {% endif %}
+  </div>
+
+  <div class="panel">
     <h2>Training set</h2>
     <table>
       <tbody>
@@ -28,11 +67,21 @@
           <td class="l">
             Rows
             <div class="muted" style="font-size:12px;white-space:normal">
-              Played matches where both sides had at least 3 prior matches
+              Played matches where both sides had enough prior matches to form an average
             </div>
           </td>
           <td class="num">{{ n_train }}</td>
         </tr>
+        {% if stats %}
+        <tr>
+          <td class="l">Home possession seen</td>
+          <td class="num">{{ '%.1f'|format(stats.min) }}% &ndash; {{ '%.1f'|format(stats.max) }}%</td>
+        </tr>
+        <tr>
+          <td class="l">Mean / spread</td>
+          <td class="num">{{ '%.1f'|format(stats.mean) }}% &plusmn; {{ '%.1f'|format(stats.std) }}</td>
+        </tr>
+        {% endif %}
         {% if coverage %}
         <tr><td class="l">Earliest match</td><td class="muted">{{ coverage.first.strftime('%d %b %Y') }}</td></tr>
         <tr><td class="l">Latest match</td><td class="muted">{{ coverage.last.strftime('%d %b %Y') }}</td></tr>
@@ -41,8 +90,7 @@
           <td class="l">
             Split
             <div class="muted" style="font-size:12px;white-space:normal">
-              Chronological, never random &mdash; a random split would let the model
-              learn from matches played after the ones it is scored on
+              Chronological, never random
             </div>
           </td>
           <td class="num">{{ n_fit }} / {{ n_holdout }}</td>
@@ -51,42 +99,39 @@
     </table>
   </div>
 
-  <div class="panel">
-    <h2>Label balance <span class="sub">&mdash; what the model has to predict</span></h2>
-    {% if balance %}
-      {% set total = balance.values()|sum %}
-      <table>
-        <tbody>
-          {% for label, n in balance.items() %}
-          <tr>
-            <td class="l">
-              {% if label == 'H' %}Home win{% elif label == 'A' %}Away win{% elif label == 'D' %}Draw{% else %}{{ label }}{% endif %}
-            </td>
-            <td style="width:60%">
-              <div class="bar"><div class="fill h" style="width: {{ (100 * n / total)|round(1) }}%"></div></div>
-            </td>
-            <td class="num">{{ n }}</td>
-            <td class="num muted">{{ (100 * n / total)|round(1) }}%</td>
-          </tr>
-          {% endfor %}
-        </tbody>
-      </table>
-      <p class="muted" style="font-size:12.5px;margin-bottom:0">
-        Any model has to beat always predicting the most common class
-        ({{ (100 * balance.values()|max / total)|round(1) }}%) to be worth anything.
-      </p>
-    {% else %}
-      <div class="empty">Not enough data yet.</div>
-    {% endif %}
-  </div>
-
 </div>
+
+{% if n_features > n_train %}
+<div class="note" style="border-left-color: var(--warn)">
+  <strong>{{ n_features }} features against {{ n_train }} rows.</strong> More columns than
+  examples means any model will fit the training data perfectly and learn nothing that
+  generalises. Until the season fills out, prefer a handful of possession columns and
+  strong regularisation over the full set &mdash; or widen
+  <code>training.season</code> in config.yaml.
+</div>
+{% endif %}
+
+{% if sparse %}
+<div class="panel">
+  <h2>Thin features <span class="sub">&mdash; present in fewer than half the training rows</span></h2>
+  <p class="muted" style="font-size:13px;margin-top:-6px">
+    Mostly head-to-head columns: within one season two clubs have met at most once by
+    now, so there is usually no prior meeting to average. These fill in from January,
+    when the reverse fixtures start.
+  </p>
+  <div class="featlist">
+    {% for name, n in sparse %}<code>{{ name }} &middot; {{ n }}/{{ n_train }}</code>{% endfor %}
+  </div>
+</div>
+{% endif %}
 
 <div class="panel">
   <h2>Feature inventory <span class="sub">&mdash; {{ n_features }} columns present in both training and fixtures</span></h2>
   <p class="muted" style="font-size:13px;margin-top:-6px">
-    A feature that exists only in training cannot be used to predict, so anything missing
-    from the fixture side is excluded here rather than discovered at scoring time.
+    Minutes spent ahead, level and behind are deliberately <em>not</em> here. They are
+    only known after the whistle, so using them to predict possession would be leakage.
+    They are stored for explaining errors instead: a match settled early is inherently
+    less predictable, because the leading side stops trying to keep the ball.
   </p>
   {% for group, cols in groups.items() %}
   <div class="featgroup">
@@ -99,13 +144,13 @@
 </div>
 
 <div class="panel">
-  <h2>Next fixtures as the model will see them</h2>
+  <h2>Next fixtures <span class="sub">&mdash; with the naive prediction to beat</span></h2>
   <div class="tablewrap">
     <table>
       <thead>
         <tr>
           <th class="l">Kickoff</th><th class="l">Match</th>
-          <th>xGD edge</th><th>PPG edge</th><th>H xG L5</th><th>A xG L5</th>
+          <th>Home form</th><th>Away form</th><th>Gap</th><th>Naive home poss</th>
         </tr>
       </thead>
       <tbody>
@@ -113,10 +158,10 @@
         <tr>
           <td class="l muted">{{ f.kickoff.strftime('%d %b, %H:%M') }}</td>
           <td class="l">{{ f.home_team }} v {{ f.away_team }}</td>
-          <td class="num">{{ f.xgd_edge_l5|num }}</td>
-          <td class="num">{{ f.ppg_edge_l5|num }}</td>
-          <td class="num">{{ f.home_xg_l5|num }}</td>
-          <td class="num">{{ f.away_xg_l5|num }}</td>
+          <td class="num muted">{{ f.home_poss_l5|num(1) }}%</td>
+          <td class="num muted">{{ f.away_poss_l5|num(1) }}%</td>
+          <td class="num {{ 'good' if f.poss_gap_l5 and f.poss_gap_l5 > 0 else 'bad' }}">{{ f.poss_gap_l5|signed(1) }}</td>
+          <td class="num"><strong>{{ f.poss_naive_l5|num(1) }}%</strong></td>
         </tr>
         {% endfor %}
       </tbody>
