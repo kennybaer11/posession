@@ -1,0 +1,52 @@
+# ---------------------------------------------------------------------------
+# Premier League possession + xG scraper.
+# Data comes from premierleague.com's own JSON API (see pl_api.py) - the match
+# pages are a JavaScript app whose HTML contains no stats to parse.
+# ---------------------------------------------------------------------------
+
+premier_league:
+  # How many recent matches to store per team.
+  matches_per_team: 10
+
+  # Seasons to draw from, NEWEST FIRST, by start year (2026 = 2026/27).
+  # The current season is walked first; earlier seasons are only touched if a
+  # team still needs more matches. This matters right now: 2026/27 has only
+  # 2 matchweeks played, so most of the last 10 come from 2025/26.
+  seasons:
+    - 2026
+    - 2025
+
+  # Politeness. ~100 matches means ~100 requests; 1s apart is about 2 minutes.
+  delay_seconds: 1.0
+  timeout_seconds: 25
+  retries: 3
+
+  # How many upcoming fixtures to store as prediction targets.
+  upcoming_fixtures: 20
+
+  # Matches finishing within this many hours are re-fetched each run, since
+  # Opta revises xG shortly after a match. 0 disables re-checking.
+  recheck_hours: 48
+
+  # Also fetch goal/card/substitution events and lineups for each new match.
+  # Costs 2 extra requests per match, and only for matches not already stored.
+  # Goal minutes are what make game state (ahead/level/behind) knowable, and
+  # lineups are the only source of formation and midfield shape.
+  collect_detail: true
+
+  # --- modelling ----------------------------------------------------------
+  training:
+    # Which seasons the training set draws on: "current" (the first season
+    # listed above), "all", or a specific start year like 2025.
+    season: current
+
+    # Recency weighting. A match this many days old counts half as much as
+    # today's, halving again every further half_life_days. This is what makes
+    # "only recent form matters" a slope instead of a cliff - and it is the
+    # reason the season above can stay narrow without every older match being
+    # thrown away when you widen it.
+    half_life_days: 30
+
+    # Drop matches where either side had fewer than this many prior matches:
+    # a 2-match average is noise, not form.
+    min_history: 3

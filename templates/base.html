@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block title %}PL Data{% endblock %}</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="{{ url_for('index') }}">PL<span>data</span></a>
+  <nav>
+    <a href="{{ url_for('index') }}"    class="{{ 'on' if request.endpoint == 'index' }}">Overview</a>
+    <a href="{{ url_for('teams') }}"    class="{{ 'on' if request.endpoint in ('teams','team') }}">Teams</a>
+    <a href="{{ url_for('matches') }}"  class="{{ 'on' if request.endpoint in ('matches','match') }}">Matches</a>
+    <a href="{{ url_for('fixtures') }}" class="{{ 'on' if request.endpoint == 'fixtures' }}">Fixtures</a>
+    <a href="{{ url_for('model') }}"    class="{{ 'on' if request.endpoint == 'model' }}">Model</a>
+  </nav>
+</header>
+
+<main>
+  <h1 class="page-title">{% block heading %}{% endblock %}</h1>
+  {% block content %}{% endblock %}
+</main>
+
+<footer>Read-only view of the Neon database &middot; rendered {{ now.strftime('%d %b %Y %H:%M') }} UTC</footer>
+
+<script>
+// Click a th[data-sort] to sort its table. Numeric when every cell parses as a
+// number, otherwise lexical. Kept here so no build step or CDN is needed.
+document.querySelectorAll('table.sortable').forEach(function (table) {
+  const body = table.tBodies[0];
+  table.querySelectorAll('th').forEach(function (th, col) {
+    if (th.dataset.nosort !== undefined) return;
+    th.classList.add('sortable-th');
+    th.addEventListener('click', function () {
+      const rows = Array.from(body.rows);
+      const asc = th.dataset.dir !== 'asc';
+      table.querySelectorAll('th').forEach(o => { o.dataset.dir = ''; o.classList.remove('sorted-asc','sorted-desc'); });
+      th.dataset.dir = asc ? 'asc' : 'desc';
+      th.classList.add(asc ? 'sorted-asc' : 'sorted-desc');
+      const val = r => {
+        const c = r.cells[col];
+        return c ? (c.dataset.v !== undefined ? c.dataset.v : c.textContent.trim()) : '';
+      };
+      const numeric = rows.every(r => { const v = val(r); return v === '' || v === '-' || !isNaN(parseFloat(v)); });
+      rows.sort(function (a, b) {
+        let x = val(a), y = val(b);
+        if (numeric) {
+          x = (x === '' || x === '-') ? -Infinity : parseFloat(x);
+          y = (y === '' || y === '-') ? -Infinity : parseFloat(y);
+          return asc ? x - y : y - x;
+        }
+        return asc ? x.localeCompare(y) : y.localeCompare(x);
+      });
+      rows.forEach(r => body.appendChild(r));
+    });
+  });
+});
+</script>
+</body>
+</html>

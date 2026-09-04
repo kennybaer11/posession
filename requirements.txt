@@ -1,0 +1,12 @@
+# Ranges, not exact pins: Python 3.14 needs recent wheels.
+requests>=2.32.3,<3
+psycopg[binary]>=3.2.0
+python-dotenv>=1.0.1,<2
+PyYAML>=6.0.2,<7
+
+# For working with the data in pandas (optional but you'll want it for models)
+pandas>=2.2.0
+SQLAlchemy>=2.0.30
+
+# Local read-only web UI (app.py)
+Flask>=3.0,<4

@@ -1,0 +1,143 @@
+{% extends "base.html" %}
+{% block title %}Overview &middot; PL data{% endblock %}
+{% block heading %}Overview{% endblock %}
+
+{% block content %}
+
+<div class="tiles" style="margin-bottom:22px">
+  <div class="tile"><div class="v num">{{ totals.teams }}</div><div class="k">Teams</div></div>
+  <div class="tile"><div class="v num">{{ totals.matches }}</div><div class="k">Matches stored</div></div>
+  <div class="tile"><div class="v num">{{ totals.fixtures }}</div><div class="k">Upcoming fixtures</div></div>
+  <div class="tile"><div class="v num">{{ totals.stat_rows }}</div><div class="k">Team-match stat rows</div></div>
+  <div class="tile"><div class="v num">{{ totals.appearances }}</div><div class="k">Team appearances<br><span style="font-size:11px">all competitions, drives rest days</span></div></div>
+</div>
+
+<div class="cols2">
+
+  <div class="panel">
+    <h2>Data health</h2>
+    <table>
+      <tbody>
+        <tr>
+          <td class="l">Rows missing xG</td>
+          <td>
+            {% if health.missing_xg %}<span class="chip no">{{ health.missing_xg }}</span>
+            {% else %}<span class="chip ok">none</span>{% endif %}
+          </td>
+        </tr>
+        <tr>
+          <td class="l">Rows missing possession</td>
+          <td>
+            {% if health.missing_poss %}<span class="chip wa">{{ health.missing_poss }}</span>
+            {% else %}<span class="chip ok">none</span>{% endif %}
+          </td>
+        </tr>
+        <tr>
+          <td class="l">
+            Mean possession
+            <div class="muted" style="font-size:12px;white-space:normal">
+              Zero-sum within a match, so this should sit on 50.00
+            </div>
+          </td>
+          <td>
+            {% set poss = health.avg_possession|float %}
+            {% if poss > 49.5 and poss < 50.5 %}
+              <span class="chip ok">{{ health.avg_possession }}%</span>
+            {% else %}
+              <span class="chip no">{{ health.avg_possession }}%</span>
+            {% endif %}
+          </td>
+        </tr>
+        <tr>
+          <td class="l">
+            Matches without exactly 2 rows
+            <div class="muted" style="font-size:12px;white-space:normal">
+              Every match must contribute one row per side
+            </div>
+          </td>
+          <td>
+            {% if orphans %}<span class="chip no">{{ orphans }}</span>
+            {% else %}<span class="chip ok">none</span>{% endif %}
+          </td>
+        </tr>
+        <tr>
+          <td class="l">xG range</td>
+          <td class="num muted">{{ health.min_xg }} &ndash; {{ health.max_xg }} (mean {{ health.avg_xg }})</td>
+        </tr>
+        <tr>
+          <td class="l">Last scrape</td>
+          <td class="muted">
+            {{ freshness.last_scrape.strftime('%d %b %Y %H:%M') if freshness.last_scrape else '-' }}
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="panel">
+    <h2>Seasons</h2>
+    <div class="tablewrap">
+      <table>
+        <thead>
+          <tr><th class="l">Season</th><th>Matches</th><th>Played</th><th>From</th><th>To</th></tr>
+        </thead>
+        <tbody>
+          {% for s in seasons %}
+          <tr>
+            <td class="l"><a href="{{ url_for('matches', season=s.season) }}">{{ s.season|season }}</a></td>
+            <td class="num">{{ s.matches }}</td>
+            <td class="num">{{ s.played }}</td>
+            <td class="muted">{{ s.first_kickoff|dt }}</td>
+            <td class="muted">{{ s.last_kickoff|dt }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+
+<div class="panel">
+  <h2>Coverage per team <span class="sub">&mdash; fewest matches first, so gaps surface at the top</span></h2>
+  <div class="tablewrap">
+    <table class="sortable">
+      <thead>
+        <tr><th class="l">Team</th><th>Matches stored</th><th>Last played</th></tr>
+      </thead>
+      <tbody>
+        {% for c in coverage %}
+        <tr>
+          <td class="l"><a href="{{ url_for('team', team_id=c.team_id) }}">{{ c.name }}</a></td>
+          <td class="num">{{ c.matches }}</td>
+          <td class="muted" data-v="{{ c.last_played.timestamp() if c.last_played else 0 }}">{{ c.last_played|dt }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="panel">
+  <h2>Latest matches</h2>
+  <div class="tablewrap">
+    <table>
+      <thead>
+        <tr><th class="l">Date</th><th class="l">Match</th><th>Score</th><th>xG</th><th></th></tr>
+      </thead>
+      <tbody>
+        {% for m in recent %}
+        <tr>
+          <td class="l muted">{{ m.kickoff|dt }}</td>
+          <td class="l">{{ m.home }} v {{ m.away }}</td>
+          <td class="num">{{ m.home_goals }}&ndash;{{ m.away_goals }}</td>
+          <td class="num muted">{{ m.home_xg|num }} &ndash; {{ m.away_xg|num }}</td>
+          <td><a href="{{ url_for('match', match_id=m.match_id) }}">detail</a></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+{% endblock %}

@@ -1,0 +1,150 @@
+{% extends "base.html" %}
+{% block title %}{{ home.team_abbr }} v {{ away.team_abbr }} &middot; PL data{% endblock %}
+
+{% block content %}
+
+<div class="panel">
+  <div class="scoreline">
+    <div class="t h"><a href="{{ url_for('team', team_id=home.team_id) }}">{{ home.team_name }}</a></div>
+    <div class="s">{{ home.goals_for }} &ndash; {{ away.goals_for }}</div>
+    <div class="t a"><a href="{{ url_for('team', team_id=away.team_id) }}">{{ away.team_name }}</a></div>
+  </div>
+  <div class="kickoff">
+    {{ home.kickoff.strftime('%A %d %B %Y, %H:%M') }}
+    &middot; {{ home.season|season }}
+    {% if home.match_week %}&middot; matchweek {{ home.match_week }}{% endif %}
+  </div>
+
+  {% for label, key, places in metrics %}
+    {% set h = home[key]|float if home[key] is not none else 0 %}
+    {% set a = away[key]|float if away[key] is not none else 0 %}
+    {% set total = h + a %}
+    <div class="cmp">
+      <div class="v h">{{ home[key]|num(places) }}</div>
+      <div class="bar right">
+        <div class="fill h" style="width: {{ (100 * h / total) if total else 50 }}%"></div>
+      </div>
+      <div class="lab">{{ label }}</div>
+      <div class="bar">
+        <div class="fill a" style="width: {{ (100 * a / total) if total else 50 }}%"></div>
+      </div>
+      <div class="v a">{{ away[key]|num(places) }}</div>
+    </div>
+  {% endfor %}
+</div>
+
+{% if goals %}
+<div class="panel">
+  <h2>Goals</h2>
+  <table>
+    <tbody>
+      {% for g in goals %}
+      <tr>
+        <td class="l num" style="width:60px">{{ g.minute }}'</td>
+        <td class="l" style="width:70px"><span class="chip">{{ g.abbr }}</span></td>
+        <td class="l">
+          {{ g.first_name or '' }} {{ g.last_name or 'Unknown' }}
+          {% if g.goal_type and g.goal_type != 'Goal' %}
+            <span class="chip wa">{{ 'own goal' if g.goal_type == 'Own' else g.goal_type|lower }}</span>
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+
+{% if state %}
+<div class="panel">
+  <h2>Game state <span class="sub">&mdash; minutes spent ahead, level and behind</span></h2>
+  <p class="muted" style="font-size:13px;margin-top:-6px">
+    Possession and xG are only published as whole-match totals. A side that led for
+    an hour and sat deep produces the same raw numbers as one that was outplayed, so
+    this is the context those totals were accumulated in. Measured on a nominal 90
+    minutes &mdash; stoppage time is not published per match.
+  </p>
+  <table>
+    <thead>
+      <tr><th class="l">Team</th><th>Ahead</th><th>Level</th><th>Behind</th><th>Possession</th></tr>
+    </thead>
+    <tbody>
+      {% for side in (home, away) %}
+        {% set s = state.get(side.team_id) %}
+        {% if s %}
+        <tr>
+          <td class="l">{{ side.team_name }}</td>
+          <td class="num {{ 'good' if s.minutes_ahead else 'muted' }}">{{ s.minutes_ahead }}'</td>
+          <td class="num muted">{{ s.minutes_level }}'</td>
+          <td class="num {{ 'bad' if s.minutes_behind else 'muted' }}">{{ s.minutes_behind }}'</td>
+          <td class="num">{{ side.possession_for|num(1) }}%</td>
+        </tr>
+        {% endif %}
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+
+{% if mid %}
+<div class="panel">
+  <h2>Shape <span class="sub">&mdash; formation and midfield unit</span></h2>
+  <table>
+    <thead>
+      <tr><th class="l">Team</th><th>Formation</th><th>Midfielders</th><th>Changed since last match</th></tr>
+    </thead>
+    <tbody>
+      {% for side in (home, away) %}
+        {% set m = mid.get(side.team_id) %}
+        {% if m %}
+        <tr>
+          <td class="l">{{ side.team_name }}</td>
+          <td><span class="chip">{{ m.formation or '-' }}</span></td>
+          <td class="num">{{ m.midfielders }}</td>
+          <td class="num {{ 'warn' if m.midfield_changes and m.midfield_changes > 1 else 'muted' }}">
+            {{ m.midfield_changes if m.midfield_changes is not none else '-' }}
+          </td>
+        </tr>
+        {% endif %}
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+
+<div class="panel">
+  <h2>Context</h2>
+  <table>
+    <thead>
+      <tr><th class="l"></th><th>{{ home.team_abbr }}</th><th>{{ away.team_abbr }}</th></tr>
+    </thead>
+    <tbody>
+      <tr><td class="l">Venue</td><td>Home</td><td>Away</td></tr>
+      <tr>
+        <td class="l">Result</td>
+        <td><span class="res {{ home.result }}">{{ home.result }}</span></td>
+        <td><span class="res {{ away.result }}">{{ away.result }}</span></td>
+      </tr>
+      <tr><td class="l">Points</td><td class="num">{{ home.points }}</td><td class="num">{{ away.points }}</td></tr>
+      <tr>
+        <td class="l">Errors leading to a shot</td>
+        <td class="num">{{ home.errors_lead_to_shot }}</td>
+        <td class="num">{{ away.errors_lead_to_shot }}</td>
+      </tr>
+      <tr>
+        <td class="l">Possession won in attacking third</td>
+        <td class="num">{{ home.poss_won_att_third }}</td>
+        <td class="num">{{ away.poss_won_att_third }}</td>
+      </tr>
+      <tr>
+        <td class="l">Penalty area entries</td>
+        <td class="num">{{ home.pen_area_entries }}</td>
+        <td class="num">{{ away.pen_area_entries }}</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<p><a href="{{ url_for('matches') }}">&larr; all matches</a></p>
+
+{% endblock %}

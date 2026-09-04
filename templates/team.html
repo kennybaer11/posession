@@ -1,0 +1,100 @@
+{% extends "base.html" %}
+{% block title %}{{ info.name }} &middot; PL data{% endblock %}
+{% block heading %}{{ info.name }}{% endblock %}
+
+{% block content %}
+
+<p class="muted" style="margin-top:-12px">
+  {{ info.stadium or '' }}{% if info.city %}, {{ info.city }}{% endif %}
+  {% if info.capacity %} &middot; capacity {{ '{:,}'.format(info.capacity) }}{% endif %}
+</p>
+
+{% if form %}
+<div class="tiles" style="margin-bottom:22px">
+  <div class="tile"><div class="v num">{{ form.xg_for_l5|num }}</div><div class="k">xG for (L5)</div></div>
+  <div class="tile"><div class="v num">{{ form.xg_against_l5|num }}</div><div class="k">xG against (L5)</div></div>
+  <div class="tile"><div class="v num {{ 'good' if form.xg_diff_l5 and form.xg_diff_l5 > 0 else 'bad' }}">{{ form.xg_diff_l5|signed }}</div><div class="k">xG difference (L5)</div></div>
+  <div class="tile"><div class="v num">{{ form.ppg_l5|num(2) }}</div><div class="k">Points per game (L5)</div></div>
+  <div class="tile"><div class="v num">{{ form.possession_l5|num(1) }}%</div><div class="k">Possession (L5)</div></div>
+  <div class="tile"><div class="v num {{ 'good' if form.finishing_gap_l10 and form.finishing_gap_l10 > 0 else 'muted' }}">{{ form.finishing_gap_l10|signed }}</div><div class="k">Finishing gap (L10)</div></div>
+</div>
+{% endif %}
+
+<div class="panel">
+  <h2>Match log <span class="sub">&mdash; {{ matches|length }} matches, newest first</span></h2>
+  <div class="tablewrap">
+    <table class="sortable">
+      <thead>
+        <tr>
+          <th class="l">Date</th>
+          <th class="l">Opponent</th>
+          <th>H/A</th>
+          <th>Res</th>
+          <th>Score</th>
+          <th>xG</th>
+          <th>xGA</th>
+          <th>Poss</th>
+          <th>Shots</th>
+          <th>SoT</th>
+          <th>Big ch.</th>
+          <th>Corners</th>
+          <th data-nosort></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for m in matches %}
+        <tr>
+          <td class="l muted" data-v="{{ m.kickoff.timestamp() }}">{{ m.kickoff|dt }}</td>
+          <td class="l">{{ m.opponent_name }}</td>
+          <td class="muted">{{ 'H' if m.is_home else 'A' }}</td>
+          <td><span class="res {{ m.result }}">{{ m.result }}</span></td>
+          <td class="num">{{ m.goals_for }}&ndash;{{ m.goals_against }}</td>
+          <td class="num">{{ m.xg_for|num }}</td>
+          <td class="num">{{ m.xg_against|num }}</td>
+          <td class="num muted">{{ m.possession_for|num(1) }}</td>
+          <td class="num muted">{{ m.shots_for }}</td>
+          <td class="num muted">{{ m.shots_on_target_for }}</td>
+          <td class="num muted">{{ m.big_chances_for }}</td>
+          <td class="num muted">{{ m.corners_for }}</td>
+          <td><a href="{{ url_for('match', match_id=m.match_id) }}">detail</a></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="panel">
+  <h2>Head to head <span class="sub">&mdash; across every season stored</span></h2>
+  <div class="tablewrap">
+    <table class="sortable">
+      <thead>
+        <tr>
+          <th class="l">Opponent</th><th>Met</th><th>W</th><th>D</th><th>L</th>
+          <th>PPG</th><th>GF avg</th><th>GA avg</th><th>xG avg</th><th>xGA avg</th>
+          <th>Poss avg</th><th>Last</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for h in h2h %}
+        <tr>
+          <td class="l"><a href="{{ url_for('team', team_id=h.opponent_id) }}">{{ h.opponent_name }}</a></td>
+          <td class="num">{{ h.meetings }}</td>
+          <td class="num good">{{ h.wins }}</td>
+          <td class="num muted">{{ h.draws }}</td>
+          <td class="num bad">{{ h.losses }}</td>
+          <td class="num">{{ h.ppg|num(2) }}</td>
+          <td class="num muted">{{ h.goals_for_avg|num(1) }}</td>
+          <td class="num muted">{{ h.goals_against_avg|num(1) }}</td>
+          <td class="num">{{ h.xg_for_avg|num }}</td>
+          <td class="num">{{ h.xg_against_avg|num }}</td>
+          <td class="num muted">{{ h.possession_avg|num(1) }}</td>
+          <td class="muted" data-v="{{ h.last_meeting.timestamp() if h.last_meeting else 0 }}">{{ h.last_meeting|dt }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+{% endblock %}

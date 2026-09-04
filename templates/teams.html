@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+{% block title %}Teams &middot; PL data{% endblock %}
+{% block heading %}Team form{% endblock %}
+
+{% block content %}
+
+<div class="note">
+  Rolling averages over each team's last 5 and 10 matches, straight from
+  <strong>v_team_form_current</strong>. <strong>Finishing gap</strong> is goals minus xG over 10
+  matches: positive means finishing above the chances created, which tends to regress.
+  Click any column to sort.
+</div>
+
+<div class="panel">
+  <div class="tablewrap">
+    <table class="sortable">
+      <thead>
+        <tr>
+          <th class="l">Team</th>
+          <th>Used</th>
+          <th>xG&nbsp;L5</th>
+          <th>xGA&nbsp;L5</th>
+          <th>xGD&nbsp;L5</th>
+          <th>PPG&nbsp;L5</th>
+          <th>Poss&nbsp;L5</th>
+          <th>Shots&nbsp;L5</th>
+          <th>SoT&nbsp;L5</th>
+          <th>Corners&nbsp;L5</th>
+          <th>xG&nbsp;L10</th>
+          <th>xGA&nbsp;L10</th>
+          <th>PPG&nbsp;L10</th>
+          <th>Finishing gap</th>
+          <th data-nosort></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in rows %}
+        <tr>
+          <td class="l"><a href="{{ url_for('team', team_id=r.team_id) }}">{{ r.name }}</a></td>
+          <td class="num muted">{{ r.matches_used }}</td>
+          <td class="num">{{ r.xg_for_l5|num }}</td>
+          <td class="num">{{ r.xg_against_l5|num }}</td>
+          <td class="num {{ 'good' if r.xg_diff_l5 and r.xg_diff_l5 > 0 else 'bad' }}">{{ r.xg_diff_l5|signed }}</td>
+          <td class="num">{{ r.ppg_l5|num(2) }}</td>
+          <td class="num muted">{{ r.possession_l5|num(1) }}</td>
+          <td class="num muted">{{ r.shots_l5|num(1) }}</td>
+          <td class="num muted">{{ r.sot_l5|num(1) }}</td>
+          <td class="num muted">{{ r.corners_l5|num(1) }}</td>
+          <td class="num">{{ r.xg_for_l10|num }}</td>
+          <td class="num">{{ r.xg_against_l10|num }}</td>
+          <td class="num">{{ r.ppg_l10|num(2) }}</td>
+          <td class="num {{ 'good' if r.finishing_gap_l10 and r.finishing_gap_l10 > 0 else 'muted' }}">{{ r.finishing_gap_l10|signed }}</td>
+          <td><a href="{{ url_for('team', team_id=r.team_id) }}">view</a></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+{% endblock %}

@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+{% block title %}Matches &middot; PL data{% endblock %}
+{% block heading %}Matches{% endblock %}
+
+{% block content %}
+
+<div class="filters">
+  <a href="{{ url_for('matches') }}" class="{{ 'on' if not current }}">All seasons</a>
+  {% for s in seasons %}
+  <a href="{{ url_for('matches', season=s.season) }}"
+     class="{{ 'on' if current == s.season }}">{{ s.season|season }}</a>
+  {% endfor %}
+</div>
+
+<div class="panel">
+  <h2>{{ rows|length }} match{{ '' if rows|length == 1 else 'es' }} with stats</h2>
+  <div class="tablewrap">
+    <table class="sortable">
+      <thead>
+        <tr>
+          <th class="l">Date</th>
+          <th>MW</th>
+          <th class="l">Home</th>
+          <th>Score</th>
+          <th class="l">Away</th>
+          <th>Home xG</th>
+          <th>Away xG</th>
+          <th>xG diff</th>
+          <th>Home poss</th>
+          <th data-nosort></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for m in rows %}
+        <tr>
+          <td class="l muted" data-v="{{ m.kickoff.timestamp() }}">{{ m.kickoff|dt }}</td>
+          <td class="num muted">{{ m.match_week or '-' }}</td>
+          <td class="l">{{ m.home }}</td>
+          <td class="num">{{ m.home_goals }}&ndash;{{ m.away_goals }}</td>
+          <td class="l">{{ m.away }}</td>
+          <td class="num">{{ m.home_xg|num }}</td>
+          <td class="num">{{ m.away_xg|num }}</td>
+          {% set diff = (m.home_xg|float) - (m.away_xg|float) %}
+          <td class="num {{ 'good' if diff > 0 else 'bad' }}" data-v="{{ diff }}">{{ diff|signed }}</td>
+          <td class="num muted">{{ m.home_poss|num(1) }}</td>
+          <td><a href="{{ url_for('match', match_id=m.match_id) }}">detail</a></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% if not rows %}<div class="empty">No matches stored for this season yet.</div>{% endif %}
+</div>
+
+{% endblock %}

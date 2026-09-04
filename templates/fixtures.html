@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{% block title %}Fixtures &middot; PL data{% endblock %}
+{% block heading %}Upcoming fixtures{% endblock %}
+
+{% block content %}
+
+<div class="note">
+  These are the prediction targets, with the same pre-kickoff features the model will
+  see &mdash; from <strong>v_fixture_features</strong>. Nothing here uses information from after
+  the whistle. <strong>xGD edge</strong> is the home side's L5 xG difference minus the away side's:
+  positive favours the home team.
+</div>
+
+<div class="panel">
+  <div class="tablewrap">
+    <table class="sortable">
+      <thead>
+        <tr>
+          <th class="l">Kickoff</th>
+          <th>MW</th>
+          <th class="l">Home</th>
+          <th class="l">Away</th>
+          <th>xGD edge</th>
+          <th>PPG edge</th>
+          <th>H att v A def</th>
+          <th>A att v H def</th>
+          <th>H rest</th>
+          <th>A rest</th>
+          <th>H2H</th>
+          <th>Hist</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for f in rows %}
+        <tr>
+          <td class="l muted" data-v="{{ f.kickoff.timestamp() }}">{{ f.kickoff.strftime('%d %b, %H:%M') }}</td>
+          <td class="num muted">{{ f.match_week or '-' }}</td>
+          <td class="l"><a href="{{ url_for('team', team_id=f.home_team_id) }}">{{ f.home_team }}</a></td>
+          <td class="l"><a href="{{ url_for('team', team_id=f.away_team_id) }}">{{ f.away_team }}</a></td>
+          <td class="num {{ 'good' if f.xgd_edge_l5 and f.xgd_edge_l5 > 0 else 'bad' }}">{{ f.xgd_edge_l5|signed }}</td>
+          <td class="num {{ 'good' if f.ppg_edge_l5 and f.ppg_edge_l5 > 0 else 'bad' }}">{{ f.ppg_edge_l5|signed }}</td>
+          <td class="num">{{ f.home_attack_vs_away_defence|num }}</td>
+          <td class="num">{{ f.away_attack_vs_home_defence|num }}</td>
+          <td class="num muted">{{ f.home_days_rest if f.home_days_rest is not none else '-' }}</td>
+          <td class="num muted">{{ f.away_days_rest if f.away_days_rest is not none else '-' }}</td>
+          <td class="num muted">{{ f.h2h_meetings or 0 }}</td>
+          <td class="num muted" title="Matches of history behind each side's form">
+            {{ f.home_matches_before }}/{{ f.away_matches_before }}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% if not rows %}<div class="empty">No upcoming fixtures stored. Run the scraper.</div>{% endif %}
+</div>
+
+{% endblock %}

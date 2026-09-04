@@ -1,0 +1,128 @@
+{% extends "base.html" %}
+{% block title %}Model &middot; PL data{% endblock %}
+{% block heading %}Model{% endblock %}
+
+{% block content %}
+
+<div class="note">
+  <strong>No model is trained yet.</strong> This page reports what the modelling layer
+  currently has to work with, so the numbers below are readiness, not results. Predictions
+  appear here once a model is fitted.
+</div>
+
+<div class="tiles" style="margin-bottom:22px">
+  <div class="tile"><div class="v num">{{ n_train }}</div><div class="k">Training rows</div></div>
+  <div class="tile"><div class="v num">{{ n_features }}</div><div class="k">Usable features</div></div>
+  <div class="tile"><div class="v num">{{ n_fit }}</div><div class="k">Fit split</div></div>
+  <div class="tile"><div class="v num">{{ n_holdout }}</div><div class="k">Holdout split</div></div>
+  <div class="tile"><div class="v num">{{ n_fixtures }}</div><div class="k">Fixtures to score</div></div>
+</div>
+
+<div class="cols2">
+
+  <div class="panel">
+    <h2>Training set</h2>
+    <table>
+      <tbody>
+        <tr>
+          <td class="l">
+            Rows
+            <div class="muted" style="font-size:12px;white-space:normal">
+              Played matches where both sides had at least 3 prior matches
+            </div>
+          </td>
+          <td class="num">{{ n_train }}</td>
+        </tr>
+        {% if coverage %}
+        <tr><td class="l">Earliest match</td><td class="muted">{{ coverage.first.strftime('%d %b %Y') }}</td></tr>
+        <tr><td class="l">Latest match</td><td class="muted">{{ coverage.last.strftime('%d %b %Y') }}</td></tr>
+        {% endif %}
+        <tr>
+          <td class="l">
+            Split
+            <div class="muted" style="font-size:12px;white-space:normal">
+              Chronological, never random &mdash; a random split would let the model
+              learn from matches played after the ones it is scored on
+            </div>
+          </td>
+          <td class="num">{{ n_fit }} / {{ n_holdout }}</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="panel">
+    <h2>Label balance <span class="sub">&mdash; what the model has to predict</span></h2>
+    {% if balance %}
+      {% set total = balance.values()|sum %}
+      <table>
+        <tbody>
+          {% for label, n in balance.items() %}
+          <tr>
+            <td class="l">
+              {% if label == 'H' %}Home win{% elif label == 'A' %}Away win{% elif label == 'D' %}Draw{% else %}{{ label }}{% endif %}
+            </td>
+            <td style="width:60%">
+              <div class="bar"><div class="fill h" style="width: {{ (100 * n / total)|round(1) }}%"></div></div>
+            </td>
+            <td class="num">{{ n }}</td>
+            <td class="num muted">{{ (100 * n / total)|round(1) }}%</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      <p class="muted" style="font-size:12.5px;margin-bottom:0">
+        Any model has to beat always predicting the most common class
+        ({{ (100 * balance.values()|max / total)|round(1) }}%) to be worth anything.
+      </p>
+    {% else %}
+      <div class="empty">Not enough data yet.</div>
+    {% endif %}
+  </div>
+
+</div>
+
+<div class="panel">
+  <h2>Feature inventory <span class="sub">&mdash; {{ n_features }} columns present in both training and fixtures</span></h2>
+  <p class="muted" style="font-size:13px;margin-top:-6px">
+    A feature that exists only in training cannot be used to predict, so anything missing
+    from the fixture side is excluded here rather than discovered at scoring time.
+  </p>
+  {% for group, cols in groups.items() %}
+  <div class="featgroup">
+    <h3>{{ group }} <span class="muted" style="font-weight:400">({{ cols|length }})</span></h3>
+    <div class="featlist">
+      {% for c in cols %}<code>{{ c }}</code>{% endfor %}
+    </div>
+  </div>
+  {% endfor %}
+</div>
+
+<div class="panel">
+  <h2>Next fixtures as the model will see them</h2>
+  <div class="tablewrap">
+    <table>
+      <thead>
+        <tr>
+          <th class="l">Kickoff</th><th class="l">Match</th>
+          <th>xGD edge</th><th>PPG edge</th><th>H xG L5</th><th>A xG L5</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for f in preview %}
+        <tr>
+          <td class="l muted">{{ f.kickoff.strftime('%d %b, %H:%M') }}</td>
+          <td class="l">{{ f.home_team }} v {{ f.away_team }}</td>
+          <td class="num">{{ f.xgd_edge_l5|num }}</td>
+          <td class="num">{{ f.ppg_edge_l5|num }}</td>
+          <td class="num">{{ f.home_xg_l5|num }}</td>
+          <td class="num">{{ f.away_xg_l5|num }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% if not preview %}<div class="empty">No fixtures stored.</div>{% endif %}
+</div>
+
+{% endblock %}

@@ -1,0 +1,49 @@
+name: Update Premier League data
+
+# Hourly. Matches finish a few times a week, and each run exits in seconds when
+# there is nothing new, so this is cheap. Cron here is UTC.
+on:
+  schedule:
+    - cron: "17 * * * *"   # :17 past the hour - off the busy top-of-hour slot,
+                           # where GitHub's shared runners queue up
+  workflow_dispatch:        # lets you trigger a run by hand from the Actions tab
+
+concurrency:
+  # Never let two runs write at once: a slow run overlapping the next hour's
+  # would have both fetching and upserting the same matches.
+  group: pl-scrape
+  cancel-in-progress: false
+
+jobs:
+  scrape:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Scrape and load
+        env:
+          # Add this under Settings -> Secrets and variables -> Actions.
+          # It is the Neon connection string; never commit it.
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: python main.py
+
+      - name: Save the run's JSON snapshot
+        # Handy for diffing what changed if a run looks wrong. Kept short:
+        # the database is the real store, this is just a breadcrumb.
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: scrape-output
+          path: output/*.json
+          retention-days: 7
+          if-no-files-found: ignore
