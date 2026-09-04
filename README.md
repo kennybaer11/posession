@@ -136,6 +136,60 @@ and `after_long_break`.
 - Data is Premier League/Opta copyright — fine for your own analysis; check
   their terms before republishing.
 
+## Game state, and why possession alone misleads
+
+Possession and xG are published only as whole-match totals. That makes a side
+that led for an hour and sat deep look identical to one that was outplayed.
+
+Goal minutes fix this. `pl_match_goal` stores every goal with the minute it was
+scored, and `v_match_game_state` turns those into minutes spent ahead, level and
+behind. On the data collected so far:
+
+| Game state | n | Possession | xG |
+| --- | --- | --- | --- |
+| Led 45+ minutes | 52 | 48.3% | 1.92 |
+| Mostly level | 92 | 50.0% | 1.40 |
+| Trailed 45+ minutes | 52 | 51.7% | 1.15 |
+
+Teams that chase have *more* of the ball and create *less*. Raw possession
+reads backwards until you condition on game state.
+
+Two caveats worth knowing. Minutes are measured on a nominal 90 because
+stoppage time is not published per match, so every match sits on the same scale
+rather than a guessed one. And own goals are filed under the team they count
+for, not the scorer's side - verified against 30 matches, where event counts
+matched every stored scoreline.
+
+## Midfielders
+
+There are no per-player performance stats anywhere in this API - no player xG,
+passes or tackles. What there is:
+
+- `pl_lineup` - the starting XI and bench, with `line_index`: the band a player
+  occupies in the formation. This matters because `position` says "Midfielder"
+  for a holding player and a number 10 alike; in a 4-2-3-1 the holding pair are
+  band 2 and the attacking three band 3.
+- `v_player_minutes` - minutes played, derived from the XI and substitutions.
+  Every team-match sums to exactly 11 x 90 = 990.
+- `v_team_midfield` - the midfield unit per match, its formation, and
+  `midfield_changes`: how many starting midfielders did not start the previous
+  match.
+
+Team-level midfield control lives in `pl_team_match`: `poss_won_mid_third`,
+`passes_final_third`, `dispossessed`, `ball_recoveries`, `take_ons_won` and
+others. These come free with the stats call that was already being made.
+
+## Recency weighting
+
+`load.training_set()` returns a `weight` column: an exponential recency weight
+that halves every `half_life_days` (see `config.yaml`). Pass it as
+`sample_weight` when fitting.
+
+This is deliberately not a cutoff. A hard "current season only" rule says a
+match 91 days ago is worthless and one 89 days ago is worth full price; decay
+says neither, and keeps the rows. `training.season` controls the scope
+independently, so you can widen it later without rewriting anything.
+
 ## Looking at the data
 
 ```
