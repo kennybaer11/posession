@@ -10,3 +10,7 @@ SQLAlchemy>=2.0.30
 
 # Local read-only web UI (app.py)
 Flask>=3.0,<4
+
+# Possession model and bet assessment (model.py)
+scikit-learn>=1.5
+scipy>=1.13
