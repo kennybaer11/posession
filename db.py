@@ -176,6 +176,37 @@ CREATE TABLE IF NOT EXISTS pl_player (
 )
 """
 
+# Bookmaker possession lines. This is the only table here not filled by the
+# scraper - the odds are entered by hand from the bookmaker's site.
+#
+# Why it matters more than its size suggests: without recorded lines, a model's
+# "edge" is a number it computes about itself. With them you can ask the only
+# question that decides whether to bet - would backing my edges actually have
+# made money - and the answer stops being an opinion.
+#
+# BOTH prices are wanted, not just the one being considered. Implied
+# probabilities on the two sides sum to more than 1, and that excess is the
+# bookmaker's margin. Without the other side you cannot strip it out, and
+# comparing a model against a margin-inflated probability flatters it.
+#
+# team_id says whose possession the line refers to: "Arsenal over/under 54.5"
+# and "Chelsea over/under 45.5" are the same market priced from either end.
+LINES_DDL = """
+CREATE TABLE IF NOT EXISTS pl_possession_line (
+  match_id    TEXT NOT NULL,
+  team_id     TEXT NOT NULL,
+  line        NUMERIC(5,2) NOT NULL,
+  over_odds   NUMERIC(6,3),
+  under_odds  NUMERIC(6,3),
+  bookmaker   TEXT NOT NULL DEFAULT 'chance.cz',
+  is_closing  SMALLINT,
+  captured_at TIMESTAMP,
+  note        TEXT,
+  last_seen   TIMESTAMP NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (match_id, team_id, line, bookmaker)
+)
+"""
+
 INDEXES = (
     "CREATE INDEX IF NOT EXISTS idx_tm_team_kickoff ON pl_team_match (team_id, kickoff)",
     "CREATE INDEX IF NOT EXISTS idx_tm_kickoff ON pl_team_match (kickoff)",
@@ -186,6 +217,7 @@ INDEXES = (
     "CREATE INDEX IF NOT EXISTS idx_sub_match ON pl_match_sub (match_id)",
     "CREATE INDEX IF NOT EXISTS idx_lineup_match_team ON pl_lineup (match_id, team_id)",
     "CREATE INDEX IF NOT EXISTS idx_lineup_player ON pl_lineup (player_id)",
+    "CREATE INDEX IF NOT EXISTS idx_line_match ON pl_possession_line (match_id)",
 )
 
 GOAL_COLS = ("match_id", "team_id", "minute", "period", "goal_type",
@@ -196,6 +228,8 @@ SUB_COLS = ("match_id", "team_id", "minute", "period", "player_on_id",
 LINEUP_COLS = ("match_id", "team_id", "player_id", "position", "shirt_num",
                "is_captain", "is_starter", "line_index", "formation")
 PLAYER_COLS = ("player_id", "first_name", "last_name")
+LINE_COLS = ("match_id", "team_id", "line", "over_odds", "under_odds",
+             "bookmaker", "is_closing", "captured_at", "note")
 
 TEAM_COLS = ("team_id", "name", "short_name", "abbr", "stadium", "city", "capacity")
 MATCH_COLS = ("match_id", "season", "match_week", "kickoff", "ground", "period",
@@ -267,6 +301,7 @@ class Database:
             cur.execute(SUBS_DDL)
             cur.execute(LINEUP_DDL)
             cur.execute(PLAYERS_DDL)
+            cur.execute(LINES_DDL)
             for stmt in INDEXES:
                 cur.execute(stmt)
         self.conn.commit()
@@ -354,6 +389,10 @@ class Database:
 
     def upsert_players(self, rows):
         return self._upsert("pl_player", PLAYER_COLS, rows, ("player_id",))
+
+    def upsert_lines(self, rows):
+        return self._upsert("pl_possession_line", LINE_COLS, rows,
+                            ("match_id", "team_id", "line", "bookmaker"))
 
     def replace_match_events(self, match_id, goals, cards, subs):
         """Events are a full replacement per match, not an upsert.

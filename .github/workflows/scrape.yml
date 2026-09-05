@@ -27,7 +27,9 @@ permissions:
 jobs:
   scrape:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    # A warm run is seconds; a cold start with an empty database now has
+    # ~380 matches to fetch at 3 requests each, one second apart.
+    timeout-minutes: 60
 
     steps:
       - uses: actions/checkout@v4

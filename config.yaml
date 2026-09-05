@@ -6,7 +6,12 @@
 
 premier_league:
   # How many recent matches to store per team.
-  matches_per_team: 10
+  #
+  # 38 = a full season each. Possession is a stable team trait and rewards a
+  # long window, so the earlier cap of 10 was actively costing accuracy: it
+  # made the l20 form window identical to l10, because there were never more
+  # than ~10 matches to average.
+  matches_per_team: 38
 
   # Seasons to draw from, NEWEST FIRST, by start year (2026 = 2026/27).
   # The current season is walked first; earlier seasons are only touched if a
