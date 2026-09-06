@@ -14,8 +14,17 @@
 #
 # FORMAT 2 - compact, if you are typing by hand:
 #
-#   date        club   club   whose-possession   line   over   under
-#   2026-09-06  ARS    CHE    ARS                54.5   1.75   1.94
+#   date        club   club   whose-possession   line   O<over>  U<under>
+#   2026-09-06  ARS    CHE    ARS                54.5   O1.75    U1.94
+#
+# TAG THE PRICES with O and U, and their order stops mattering. chance.cz lists
+# UNDER first while an untagged pair here is read as OVER first, so an untagged
+# row is one transposition away from recording the opposite bet - and a swap
+# does not fail, it silently reverses which side the model backs.
+#
+# There is no reliable way to detect such a swap afterwards: whether OVER is
+# the longer price depends on where the line sits relative to that team's usual
+# possession, not on the line itself. Tagging removes the ambiguity instead.
 #
 # Club order does not matter; the fixture is found from the pair. Use
 # abbreviations (ARS, MCI, NFO) or names without spaces. Put "-" for a price

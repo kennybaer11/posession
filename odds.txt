@@ -1,10 +1,19 @@
-# Chance.cz possession lines. One price per line only - the side offered.
-# date        home   away   team   line   over   under
-2026-09-05    NEW    BOU    NEW    53.5   -      1.75
-2026-09-05    NFO    TOT    TOT    53.5   1.70   -
-2026-09-05    BRE    SUN    BRE    53.5   1.84   -
-2026-09-05    FUL    CRY    FUL    55.5   1.75   -
-2026-09-05    BHA    LEE    BHA    57.5   -      2.01
-2026-09-05    MCI    COV    MCI    65.5   1.70   -
-2026-09-06    ARS    CHE    ARS    54.5    1.75    1.94
-2026-09-06    EVE    MUN    MUN    56.5    1.65    2.08
+# Chance.cz possession lines.
+#
+# Two formats, mixable in this file:
+#   1. Paste a row straight from the site (tab-separated) - nothing to remember.
+#   2. Type it: date  club  club  whose-possession  line  O<over>  U<under>
+#
+# TAG THE PRICES with O and U. chance.cz lists UNDER first and an untagged pair
+# here is read as OVER first, so an untagged row is one transposition away from
+# recording the opposite bet. Tagged, the order stops mattering.
+#
+# date        club   club   team   line   over    under
+2026-09-05    NEW    BOU    NEW    53.5   -       U1.75
+2026-09-05    NFO    TOT    TOT    53.5   O1.70   -
+2026-09-05    BRE    SUN    BRE    53.5   O1.84   -
+2026-09-05    FUL    CRY    FUL    55.5   O1.75   -
+2026-09-05    BHA    LEE    BHA    57.5   -       U2.01
+2026-09-05    MCI    COV    MCI    65.5   O1.70   -
+2026-09-06    ARS    CHE    ARS    54.5   O1.75   U1.94
+2026-09-06    EVE    MUN    MUN    56.5   O1.65   U2.08

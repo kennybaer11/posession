@@ -117,8 +117,28 @@ def parse(path):
             print(f"  line {n}: need at least 6 fields, got {len(parts)}: {raw!r}")
             continue
         date, home, away, team, value = parts[:5]
-        over = parts[5] if len(parts) > 5 else "-"
-        under = parts[6] if len(parts) > 6 else "-"
+
+        # Prices may be tagged O1.75 / U1.94 in either order, which is the
+        # recommended form: chance.cz lists UNDER first and this format
+        # historically took OVER first, and a silent swap reverses which side
+        # a bet is on. Tagging removes the ambiguity rather than trying to
+        # detect it afterwards - which cannot be done reliably, since whether
+        # OVER is the longer price depends on where the line sits relative to
+        # that team's usual possession, not on the line alone.
+        over = under = None
+        untagged = []
+        for tok in parts[5:7]:
+            m = re.fullmatch(r"(?i)([ou])[:=]?(\d+(?:[.,]\d+)?)", tok)
+            if m:
+                if m.group(1).lower() == "o":
+                    over = _num(m.group(2))
+                else:
+                    under = _num(m.group(2))
+            else:
+                untagged.append(tok)
+        if untagged and over is None and under is None:
+            over = untagged[0] if len(untagged) > 0 else "-"
+            under = untagged[1] if len(untagged) > 1 else "-"
         rows.append({"n": n, "date": date, "home": home, "away": away,
                      "team": team, "line": _num(value),
                      "over": _num(over), "under": _num(under)})
@@ -207,7 +227,7 @@ def main():
         print("No lines in the file - nothing to import.")
         return 0
 
-    ready, problems = [], []
+    ready, problems, warnings = [], [], []
     for r in parsed:
         home_id = resolve(r["home"], index)
         away_id = resolve(r["away"], index)
@@ -252,6 +272,8 @@ def main():
               f"under {r['under_odds']}  [{both}]{flip}")
     for p in problems:
         print(f"  --   {p}")
+    for w in warnings:
+        print(f"  !!   {w}")
 
     if args.dry_run:
         print("\n--- dry run: nothing written ---")
