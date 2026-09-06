@@ -301,34 +301,43 @@ def _line_rows():
 
     out = []
     for r in rows:
-        naive = r["naive"] if r["naive"] is not None \
-            else fixture_naive.get(r["match_id"])
-        side = "OVER" if r["over_odds"] else "UNDER"
-        odds = float(r["over_odds"] or r["under_odds"] or 0) or None
+        naive = r["naive"] if r["naive"] is not None             else fixture_naive.get(r["match_id"])
+        over_odds = float(r["over_odds"]) if r["over_odds"] else None
+        under_odds = float(r["under_odds"]) if r["under_odds"] else None
         line = float(r["line"])
 
-        pred = p_side = edge = None
+        pred = p_over = None
+        side = None
+        p_side = edge = None
         rating, why = 0, "no prediction available"
+        book_over = margin = None
+
         if naive is not None:
             home_pred = float(naive) + BIAS
-            pred = home_pred if r["team_id"] == r["home_team_id"] \
-                else 100 - home_pred
+            pred = home_pred if r["team_id"] == r["home_team_id"]                 else 100 - home_pred
             p_over = float(1 - norm.cdf(line, pred, SIGMA))
-            p_side = p_over if side == "OVER" else 1 - p_over
-            if odds:
-                edge = p_side - (1.0 / odds)
-                rating, why = m.stake_rating(p_side, odds, graded)
+            side, p_side, edge, rating, why = m.choose_side(
+                p_over, over_odds, under_odds, graded)
+
+        # With both prices we can strip the margin out and see what the
+        # bookmaker actually thinks, rather than what the price alone implies.
+        if over_odds and under_odds:
+            book_over, _, margin = m.devig(over_odds, under_odds)
 
         actual = float(r["actual"]) if r["actual"] is not None else None
         hit = None
-        if actual is not None:
+        if actual is not None and side:
             hit = actual > line if side == "OVER" else actual < line
 
-        out.append({**r, "side": side, "odds": odds, "line": line,
-                    "pred": pred, "p_side": p_side, "edge": edge,
-                    "actual": actual, "hit": hit,
-                    "backed": edge is not None and edge > 0,
-                    "rating": rating, "why": why})
+        out.append({**r, "side": side, "over_odds": over_odds,
+                    "under_odds": under_odds, "odds": (
+                        over_odds if side == "OVER" else
+                        under_odds if side == "UNDER" else None),
+                    "line": line, "pred": pred, "p_over": p_over,
+                    "p_side": p_side, "edge": edge, "actual": actual,
+                    "hit": hit, "backed": bool(side) and (edge or 0) > 0,
+                    "rating": rating, "why": why,
+                    "book_over": book_over, "margin": margin})
     return out, graded
 
 

@@ -24,6 +24,7 @@ better than it is. If you only have one, leave the other blank as "-".
 
 import argparse
 import difflib
+import re
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -36,21 +37,91 @@ load_dotenv(BASE_DIR / ".env")
 from db import Database  # noqa: E402
 
 
+def _num(text):
+    """Czech decimals use a comma: 1,94 -> 1.94, '54,5 a vice' -> 54.5."""
+    if text is None:
+        return None
+    m = re.search(r"\d+(?:[.,]\d+)?", str(text))
+    return float(m.group(0).replace(",", ".")) if m else None
+
+
+def parse_chance(raw, n):
+    """A row pasted straight from chance.cz's table.
+
+    Tab-separated, in the site's own column order:
+
+        Day  Match  Bet  Under  Under-odd  Over  Over-odd
+        06.09.2026 <TAB> Arsenal - Chelsea <TAB> Procento drzeni mice Arsenal
+        v zapasu <TAB> Mene nez 54,5 <TAB> 1,94 <TAB> 54,5 a vice <TAB> 1,75
+
+    The club the line is about comes from the Bet column, not the Match column,
+    because they are not always the same club - and when they disagree the Bet
+    column is the one that says what you are actually betting on.
+    """
+    cells = [c.strip() for c in raw.split("\t") if c.strip()]
+    if len(cells) < 5:
+        return None
+
+    day, match, bet = cells[0], cells[1], cells[2]
+    rest = cells[3:]
+
+    if " - " not in match and " – " not in match:
+        return None
+    sep = " - " if " - " in match else " – "
+    home, away = (p.strip() for p in match.split(sep, 1))
+
+    # "Procento drzeni mice ARSENAL v zapasu" - the club sits between the
+    # phrase and the trailing "v zapasu".
+    team = re.sub(r"(?i)^.*?(?:m[ií][cč]e|possession)\s+", "", bet)
+    team = re.sub(r"(?i)\s+v\s+z[aá]pas.*$", "", team).strip() or home
+
+    # Remaining cells are (under-text, under-odd, over-text, over-odd), but a
+    # market may be offered one-sided, so read them by shape rather than index.
+    nums = [_num(c) for c in rest]
+    line = under = over = None
+    if len(nums) >= 4:
+        line, under, _, over = nums[0], nums[1], nums[2], nums[3]
+    elif len(nums) >= 2:
+        line, under = nums[0], nums[1]
+    if line is None:
+        return None
+
+    date = day.strip()
+    m = re.fullmatch(r"(\d{2})\.(\d{2})\.(\d{4})", date)
+    if m:
+        date = f"{m.group(3)}-{m.group(2)}-{m.group(1)}"
+
+    return {"n": n, "date": date, "home": home.replace(" ", ""),
+            "away": away.replace(" ", ""), "team": team.replace(" ", ""),
+            "line": line, "over": over, "under": under}
+
+
 def parse(path):
+    """Read either format: the compact one, or a paste from chance.cz."""
     rows = []
     for n, raw in enumerate(Path(path).read_text(encoding="utf-8").splitlines(), 1):
-        line = raw.split("#", 1)[0].strip()
-        if not line:
+        stripped = raw.strip()
+        if not stripped or stripped.startswith("#"):
             continue
-        parts = line.split()
+
+        if "\t" in raw:
+            row = parse_chance(raw, n)
+            if row:
+                rows.append(row)
+            else:
+                print(f"  line {n}: could not read as a chance.cz row: {raw[:70]!r}")
+            continue
+
+        parts = stripped.split("#", 1)[0].split()
         if len(parts) < 6:
             print(f"  line {n}: need at least 6 fields, got {len(parts)}: {raw!r}")
             continue
-        date, home, away, team, value = parts[0], parts[1], parts[2], parts[3], parts[4]
+        date, home, away, team, value = parts[:5]
         over = parts[5] if len(parts) > 5 else "-"
         under = parts[6] if len(parts) > 6 else "-"
         rows.append({"n": n, "date": date, "home": home, "away": away,
-                     "team": team, "line": value, "over": over, "under": under})
+                     "team": team, "line": _num(value),
+                     "over": _num(over), "under": _num(under)})
     return rows
 
 
@@ -156,13 +227,10 @@ def main():
             problems.append(f"line {r['n']}: {r['team']} did not play in that match")
             continue
 
-        def price(v):
-            return None if v in ("-", "", None) else float(v)
-
         ready.append({
             "match_id": match["match_id"], "team_id": team_id,
             "line": float(r["line"]),
-            "over_odds": price(r["over"]), "under_odds": price(r["under"]),
+            "over_odds": r["over"], "under_odds": r["under"],
             "bookmaker": args.bookmaker,
             "is_closing": 1 if args.closing else 0,
             "captured_at": datetime.now(timezone.utc).replace(tzinfo=None),

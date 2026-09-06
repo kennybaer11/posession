@@ -221,6 +221,39 @@ def evidence_cap(n_settled):
     return 10, "a substantial track record"
 
 
+def choose_side(p_over, over_odds, under_odds, n_settled=0):
+    """With both prices quoted, work out which side (if either) to back.
+
+    Each side is judged against its own price, and the better one wins. Usually
+    at most one can be positive: the bookmaker's margin means the two implied
+    probabilities sum to more than 1, so a genuine edge on both sides would
+    mean the market is priced wrongly in both directions at once - possible,
+    but far more often a sign the model is wrong.
+
+    Returns (side, probability, edge, rating, why). side is None when neither
+    price is worth taking, which is the common and correct answer.
+    """
+    options = []
+    if over_odds:
+        options.append(("OVER", p_over, float(over_odds)))
+    if under_odds:
+        options.append(("UNDER", 1.0 - p_over, float(under_odds)))
+    if not options:
+        return None, None, None, 0, "no price recorded"
+
+    best = max(options, key=lambda o: o[1] - implied(o[2]))
+    side, p, odds = best
+    edge = p - implied(odds)
+    if edge <= 0:
+        # Say how close the better side came, so "no bet" is informative
+        # rather than just a shrug.
+        return (None, p, edge, 0,
+                f"best side is {side} at {odds:.2f}, still {abs(edge):.1%} "
+                f"short of its {implied(odds):.1%} breakeven")
+    rating, why = stake_rating(p, odds, n_settled)
+    return side, p, edge, rating, why
+
+
 def stake_rating(p, odds, n_settled=0, kelly_fraction=0.25):
     """A 0-10 stake, and an honest account of what is limiting it.
 

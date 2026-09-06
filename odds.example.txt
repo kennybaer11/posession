@@ -1,33 +1,31 @@
-# Bookmaker possession lines, entered by hand.
+# Bookmaker possession lines. Two formats are accepted.
 #
 #   python import_odds.py odds.txt --dry-run     check the matching
 #   python import_odds.py odds.txt               load them
-#   python import_odds.py odds.txt --closing     mark as closing lines
 #
-# Columns, whitespace-separated:
+# FORMAT 1 - paste straight from chance.cz. Tab-separated, the site's own
+# column order, Czech decimal commas and wording all handled:
 #
-#   date         the match date, YYYY-MM-DD
-#   home         home club
-#   away         away club
-#   team         whose possession the line is about (usually the home side)
-#   line         the over/under number, e.g. 54.5
-#   over         decimal odds for OVER   ("-" if you don't have it)
-#   under        decimal odds for UNDER  ("-" if you don't have it)
+#   Day  Match  Bet  Under  Under-odd  Over  Over-odd
 #
-# Club names: write them however the bookmaker does. The importer matches
-# against full name, short name and abbreviation, then falls back to a fuzzy
-# match, so Arsenal / Brighton / Spurs / MUN all resolve. Avoid spaces inside
-# a name - "Man City" would be read as two columns; write ManCity or MCI.
+# Copy the row out of the table and paste it. The club the line is about is
+# read from the Bet column, not the Match column - those are not always the
+# same club, and the Bet column is the one that says what you are betting on.
 #
-# BOTH prices are wanted wherever you can get them. The two implied
-# probabilities sum to more than 1, and that excess is the bookmaker's margin.
-# Without the other side it cannot be stripped out, and the model gets compared
-# against a margin-inflated probability - which flatters it, in the direction
-# that costs you money.
+# FORMAT 2 - compact, if you are typing by hand:
 #
-# Older settled matches are worth far more than upcoming ones: those are what
-# make it possible to ask whether backing the model's edges would actually have
-# won. Twenty or thirty past lines would settle the question.
-
-# date        home      away      team      line   over   under
-2026-09-06    Arsenal   Chelsea   Arsenal   54.5   -      1.94
+#   date        club   club   whose-possession   line   over   under
+#   2026-09-06  ARS    CHE    ARS                54.5   1.75   1.94
+#
+# Club order does not matter; the fixture is found from the pair. Use
+# abbreviations (ARS, MCI, NFO) or names without spaces. Put "-" for a price
+# you do not have.
+#
+# BOTH PRICES ARE WORTH THE EXTRA COLUMN. They reveal the bookmaker's margin:
+# the two implied probabilities sum to more than 1, and the excess is the tax
+# you pay. On the first two-sided lines recorded here it came out at 8.7%,
+# which is high - a match-result market is usually 3-5%. With only one price
+# that number is invisible, and every edge looks better than it is.
+#
+# Settled matches are worth more than upcoming ones: they are what turns the
+# Bets page from a diary into evidence.

@@ -6,5 +6,6 @@
 2026-09-05    FUL    CRY    FUL    55.5   1.75   -
 2026-09-05    BHA    LEE    BHA    57.5   -      2.01
 2026-09-05    MCI    COV    MCI    65.5   1.70   -
-2026-09-06    EVE    MUN    MUN    56.5   -      2.08
-2026-09-06    ARS    CHE    ARS    54.5   -      1.94
+# Pasted straight from chance.cz (tab-separated, both prices).
+06.09.2026	Arsenal - Chelsea	Procento držení míče Arsenal v zápasu	Méně než 54,5	1,94	54,5 a více	1,75
+06.09.2026	Everton - Manchester United	Procento držení míče Manchester United v zápasu	Méně než 56,5	2,08	56,5 a více	1,65

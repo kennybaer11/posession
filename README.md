@@ -224,6 +224,24 @@ would mean putting `DATABASE_URL` on a third-party host.
 Links in the output are relative, so the site works under a Pages project
 subpath, at a domain root, or opened straight off disk.
 
+## Betting lines
+
+`pl_possession_line` holds bookmaker lines, entered by hand - chance.cz serves
+odds from a client-side app behind bot protection, so this is the one table the
+scraper cannot fill. `import_odds.py` reads either a row pasted straight from
+the site (tab-separated, Czech decimals and wording handled) or a compact
+hand-typed form; see `odds.example.txt`.
+
+Record both prices whenever the site shows them. They reveal the margin: the
+two implied probabilities sum to more than 1, and the excess is what you are up
+against. On the first two-sided lines here it was **8.7%** - high, where a
+match-result market is usually 3-5%. With one price that is invisible and every
+edge looks better than it is.
+
+The `/bets` page keeps the record; `/model` rates open lines out of 10, picking
+whichever side the prices favour, capped by how many bets the model has
+actually been graded on.
+
 ## Files
 
 | File | Purpose |
@@ -235,6 +253,8 @@ subpath, at a domain root, or opened straight off disk.
 | `db.py` | Postgres schema + upserts |
 | `queries.sql` | Health checks, form tables, training/prediction exports |
 | `app.py` | Local read-only web UI (`python app.py`) |
+| `model.py` | Possession model, backtest, stake rating |
+| `import_odds.py` | Loads bookmaker lines from `odds.txt` |
 | `export_static.py` | Renders the UI to static HTML for GitHub Pages |
 | `templates/`, `static/` | Pages and stylesheet for the UI |
 | `.github/workflows/scrape.yml` | The hourly job |

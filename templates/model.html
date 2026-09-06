@@ -159,8 +159,8 @@
       <thead>
         <tr>
           <th class="l">Kickoff</th><th class="l">Match</th><th class="l">Line is about</th>
-          <th>Line</th><th>Side</th><th>Odds</th><th>Model</th><th>P(side)</th>
-          <th>Edge</th><th>Stake</th><th class="l">Why</th>
+          <th>Line</th><th>Under</th><th>Over</th><th>Model</th>
+          <th>Market</th><th>Bet</th><th>Edge</th><th>Stake</th><th class="l">Why</th>
         </tr>
       </thead>
       <tbody>
@@ -170,10 +170,16 @@
           <td class="l">{{ r.home_abbr }} v {{ r.away_abbr }}</td>
           <td class="l">{{ r.team }}</td>
           <td class="num">{{ '%.1f'|format(r.line) }}</td>
-          <td><span class="chip">{{ r.side }}</span></td>
-          <td class="num">{{ '%.2f'|format(r.odds) if r.odds else '-' }}</td>
-          <td class="num muted">{{ '%.1f'|format(r.pred) if r.pred is not none else '-' }}</td>
-          <td class="num">{{ '%.0f%%'|format(r.p_side * 100) if r.p_side is not none else '-' }}</td>
+          <td class="num muted">{{ '%.2f'|format(r.under_odds) if r.under_odds else '-' }}</td>
+          <td class="num muted">{{ '%.2f'|format(r.over_odds) if r.over_odds else '-' }}</td>
+          <td class="num">{{ '%.1f'|format(r.pred) if r.pred is not none else '-' }}%</td>
+          <td class="num muted" title="bookmaker's own probability, margin removed">
+            {% if r.book_over is not none %}{{ '%.0f%%'|format(r.book_over * 100) }} over{% else %}&ndash;{% endif %}
+          </td>
+          <td>
+            {% if r.side %}<span class="chip {{ 'ok' if r.backed }}">{{ r.side }}</span>
+            {% else %}<span class="chip">no bet</span>{% endif %}
+          </td>
           <td class="num {{ 'good' if r.backed else 'bad' }}">
             {{ '%+.1f%%'|format(r.edge * 100) if r.edge is not none else '-' }}
           </td>
