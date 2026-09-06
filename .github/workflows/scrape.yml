@@ -49,6 +49,14 @@ jobs:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
         run: python main.py
 
+      - name: Import hand-entered odds
+        # odds.txt is edited straight in GitHub's web editor - paste a line,
+        # commit, and the next run loads it. Upserts, so re-running is safe,
+        # and an empty file is a no-op rather than a failure.
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: python import_odds.py odds.txt
+
       - name: Render the static site
         # Reads the database that was just updated and writes site/. The
         # credentials stay here, inside the Action - the published pages are

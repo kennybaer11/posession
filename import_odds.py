@@ -79,25 +79,35 @@ def resolve(name, index):
     return index[close[0]] if close else None
 
 
-def find_match(db, date, home_id, away_id):
-    """The match on that date between those two clubs, either way round."""
+def find_match(db, date, team_a, team_b):
+    """The match on that date between those two clubs, in EITHER order.
+
+    Order-agnostic on purpose. A bookmaker's listing does not always put the
+    home side first, and a hand-typed line is easy to write the other way
+    round - but "Newcastle possession under 53.5" means the same thing whoever
+    was at home. Insisting on the order would silently reject good data, so the
+    pair is matched and the real venue is read back from the fixture.
+    """
     with db.conn.cursor() as cur:
         cur.execute("""
             SELECT match_id, kickoff, home_team_id, away_team_id
             FROM pl_matches
             WHERE kickoff::date = %s::date
-              AND home_team_id = %s AND away_team_id = %s
-        """, (date, home_id, away_id))
+              AND ((home_team_id = %s AND away_team_id = %s)
+                OR (home_team_id = %s AND away_team_id = %s))
+        """, (date, team_a, team_b, team_b, team_a))
         row = cur.fetchone()
         if row:
             return row
-        # Tolerate a kickoff that crosses midnight in another timezone.
+        # Tolerate a kickoff that lands on the neighbouring day in another
+        # timezone: a 21:00 kickoff can be written as either date.
         cur.execute("""
             SELECT match_id, kickoff, home_team_id, away_team_id
             FROM pl_matches
-            WHERE home_team_id = %s AND away_team_id = %s
+            WHERE ((home_team_id = %s AND away_team_id = %s)
+                OR (home_team_id = %s AND away_team_id = %s))
               AND abs(EXTRACT(EPOCH FROM (kickoff - %s::timestamp))) < 129600
-        """, (home_id, away_id, date))
+        """, (team_a, team_b, team_b, team_a, date))
         return cur.fetchone()
 
 
@@ -114,10 +124,17 @@ def main():
     db.ensure_schema(with_views=False)
     index, names = team_lookup(db)
 
+    if not Path(args.path).exists():
+        print(f"{args.path} does not exist - nothing to import.")
+        return 0
+
     parsed = parse(args.path)
     if not parsed:
-        print("Nothing to import.")
-        return 1
+        # An empty odds file is the normal state between weekends, not an
+        # error. Failing here would turn every quiet run red, the same trap
+        # the scraper itself fell into.
+        print("No lines in the file - nothing to import.")
+        return 0
 
     ready, problems = [], []
     for r in parsed:
@@ -153,15 +170,18 @@ def main():
             "_label": f"{names[match['home_team_id']]} v "
                       f"{names[match['away_team_id']]} "
                       f"({match['kickoff']:%d %b %Y}) - {names[team_id]} "
+                      f"{'HOME' if team_id == match['home_team_id'] else 'away'} "
                       f"{r['line']}",
+            "_flipped": home_id != match["home_team_id"],
         })
 
     print(f"Parsed {len(parsed)} line(s): {len(ready)} matched, "
           f"{len(problems)} problem(s).\n")
     for r in ready:
-        both = "both prices" if r["over_odds"] and r["under_odds"] else "ONE PRICE ONLY"
+        both = "both prices" if r["over_odds"] and r["under_odds"] else "one price"
+        flip = "  [teams were listed the other way round]" if r["_flipped"] else ""
         print(f"  ok   {r['_label']}  over {r['over_odds']} / "
-              f"under {r['under_odds']}  [{both}]")
+              f"under {r['under_odds']}  [{both}]{flip}")
     for p in problems:
         print(f"  --   {p}")
 
@@ -169,10 +189,10 @@ def main():
         print("\n--- dry run: nothing written ---")
         return 0
     if not ready:
-        return 1
+        return 0 if not problems else 1
 
     for r in ready:
-        r.pop("_label")
+        r.pop("_label"); r.pop("_flipped")
     n = db.upsert_lines(ready)
     print(f"\nWrote {n} line(s) to pl_possession_line.")
     db.close()
