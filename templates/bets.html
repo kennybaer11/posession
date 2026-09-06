@@ -1,0 +1,131 @@
+{% extends "base.html" %}
+{% block title %}Bets &middot; PL data{% endblock %}
+{% block heading %}Bet record{% endblock %}
+
+{% block content %}
+
+<div class="note">
+  Every recorded line, what the model said about it, and how it settled. The point
+  is to build a track record <em>before</em> staking anything on one &mdash; a model's own
+  edge estimate is a claim about itself, and this is the only thing that can check it.
+  Predictions use the naive midpoint with a {{ bias }}-point bias correction and
+  &sigma; = {{ sigma }}, both measured over 334 walk-forward matches.
+</div>
+
+<div class="tiles" style="margin-bottom:22px">
+  <div class="tile"><div class="v num">{{ totals.recorded }}</div><div class="k">Lines recorded</div></div>
+  <div class="tile"><div class="v num">{{ totals.settled }}</div><div class="k">Settled</div></div>
+  <div class="tile">
+    <div class="v num">{{ totals.staked|int }}</div>
+    <div class="k">Backed by the model<br><span style="font-size:11px">positive edge only</span></div>
+  </div>
+  {# Colour and emphasis are withheld below 30 settled bets. A green +75% on a
+     single result reads as a verdict, and the number cannot support one. #}
+  {% set credible = totals.staked >= 30 %}
+  <div class="tile">
+    <div class="v num {{ ('good' if totals.pnl > 0 else 'bad') if credible and totals.pnl != 0 else 'muted' }}">
+      {{ '%+.2f'|format(totals.pnl) }}
+    </div>
+    <div class="k">Profit / loss (units)</div>
+  </div>
+  <div class="tile">
+    <div class="v num muted">
+      {% if totals.roi is not none %}{{ '%+.1f'|format(totals.roi * 100) }}%{% else %}&ndash;{% endif %}
+    </div>
+    <div class="k">
+      Return on stake
+      {% if not credible %}
+      <br><span style="font-size:11px">on {{ totals.staked|int }} bet{{ '' if totals.staked == 1 else 's' }} &mdash; not a result</span>
+      {% endif %}
+    </div>
+  </div>
+</div>
+
+{% if totals.settled < 100 %}
+<div class="note" style="border-left-color: var(--warn)">
+  <strong>{{ totals.settled }} settled — far too few to conclude anything.</strong>
+  Detecting a real 5% edge with any confidence takes something closer to 100–200
+  settled bets. Until then this page is a record, not a verdict, and a run of wins
+  is as likely to be luck as skill.
+  {% if totals.both_prices < totals.recorded %}
+  Note also that only {{ totals.both_prices }} of {{ totals.recorded }} lines have
+  <strong>both</strong> prices, so the bookmaker's margin cannot be stripped out of the
+  rest &mdash; every edge below is measured against an inflated probability, which
+  understates the true bar.
+  {% endif %}
+</div>
+{% endif %}
+
+<div class="panel">
+  <div class="tablewrap">
+    <table class="sortable">
+      <thead>
+        <tr>
+          <th class="l">Kickoff</th>
+          <th class="l">Match</th>
+          <th class="l">Line is about</th>
+          <th>Line</th>
+          <th>Side</th>
+          <th>Odds</th>
+          <th>Model</th>
+          <th>P(side)</th>
+          <th>Edge</th>
+          <th>Actual</th>
+          <th>Result</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in rows %}
+        <tr>
+          <td class="l muted" data-v="{{ r.kickoff.timestamp() }}">{{ r.kickoff.strftime('%d %b') }}</td>
+          <td class="l"><a href="{{ url_for('match', match_id=r.match_id) }}">{{ r.home_abbr }} v {{ r.away_abbr }}</a></td>
+          <td class="l">{{ r.team }}</td>
+          <td class="num">{{ '%.1f'|format(r.line) }}</td>
+          <td><span class="chip">{{ r.side }}</span></td>
+          <td class="num">{{ '%.2f'|format(r.odds) if r.odds else '-' }}</td>
+          <td class="num muted">{{ '%.1f'|format(r.pred) if r.pred is not none else '-' }}</td>
+          <td class="num">{{ '%.0f%%'|format(r.p_side * 100) if r.p_side is not none else '-' }}</td>
+          <td class="num {{ 'good' if r.backed else 'muted' }}"
+              data-v="{{ r.edge if r.edge is not none else -999 }}">
+            {{ '%+.1f%%'|format(r.edge * 100) if r.edge is not none else '-' }}
+            {%- if r.backed %} &starf;{% endif %}
+          </td>
+          <td class="num">{{ '%.1f'|format(r.actual) if r.actual is not none else '-' }}</td>
+          <td>
+            {% if r.hit is none %}<span class="chip">pending</span>
+            {% elif r.hit %}<span class="chip ok">won</span>
+            {% else %}<span class="chip no">lost</span>{% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% if not rows %}
+  <div class="empty">
+    No lines recorded yet. Add them to <code>odds.txt</code> and the next run will import them.
+  </div>
+  {% endif %}
+</div>
+
+<div class="panel">
+  <h2>Adding lines</h2>
+  <p class="muted" style="font-size:13.5px">
+    Edit <code>odds.txt</code> in GitHub's web editor, paste a row, commit. The hourly run
+    imports it. Columns are
+    <code>date &middot; club &middot; club &middot; whose-possession &middot; line &middot; over &middot; under</code>,
+    whitespace-separated, with <code>-</code> for a price you do not have. Club order does
+    not matter. Use the abbreviations below, or names without spaces.
+  </p>
+  <div class="featlist">
+    {% for a in ['ARS Arsenal','AVL Aston Villa','BOU Bournemouth','BRE Brentford',
+                 'BHA Brighton','CHE Chelsea','COV Coventry','CRY Crystal Palace',
+                 'EVE Everton','FUL Fulham','HUL Hull','IPS Ipswich','LEE Leeds',
+                 'LIV Liverpool','MCI Man City','MUN Man Utd','NEW Newcastle',
+                 'NFO Forest','SUN Sunderland','TOT Spurs'] %}
+      <code>{{ a }}</code>
+    {% endfor %}
+  </div>
+</div>
+
+{% endblock %}

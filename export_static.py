@@ -48,6 +48,7 @@ def targets():
         ("/matches", "matches.html"),
         ("/fixtures", "fixtures.html"),
         ("/model", "model.html"),
+        ("/bets", "bets.html"),
     ]
     with webapp.app.app_context():
         for r in webapp.query("SELECT DISTINCT season FROM pl_matches ORDER BY season"):

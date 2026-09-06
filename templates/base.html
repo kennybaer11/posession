@@ -15,6 +15,7 @@
     <a href="{{ url_for('matches') }}"  class="{{ 'on' if request.endpoint in ('matches','match') }}">Matches</a>
     <a href="{{ url_for('fixtures') }}" class="{{ 'on' if request.endpoint == 'fixtures' }}">Fixtures</a>
     <a href="{{ url_for('model') }}"    class="{{ 'on' if request.endpoint == 'model' }}">Model</a>
+    <a href="{{ url_for('bets') }}"     class="{{ 'on' if request.endpoint == 'bets' }}">Bets</a>
   </nav>
 </header>
 
