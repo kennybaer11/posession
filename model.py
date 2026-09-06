@@ -197,6 +197,60 @@ def kelly(p, odds):
     return (p * b - (1.0 - p)) / b
 
 
+# How many settled bets the model has actually been graded on, and the highest
+# stake rating that record can justify. An edge estimate is only as trustworthy
+# as the evidence that the model can find edges at all, and right now that
+# evidence is one settled selection. The ladder is deliberately steep at the
+# bottom: going from "no record" to "a handful of wins" should barely move the
+# stake, because a handful of wins is what luck looks like.
+EVIDENCE_LADDER = (
+    (10,   1, "almost no track record"),
+    (25,   2, "a very thin track record"),
+    (50,   3, "a thin track record"),
+    (100,  5, "a short track record"),
+    (200,  7, "a moderate track record"),
+    (10**9, 10, "a substantial track record"),
+)
+
+
+def evidence_cap(n_settled):
+    """Ceiling on the stake rating, from how much the model has been graded on."""
+    for threshold, cap, label in EVIDENCE_LADDER:
+        if n_settled < threshold:
+            return cap, label
+    return 10, "a substantial track record"
+
+
+def stake_rating(p, odds, n_settled=0, kelly_fraction=0.25):
+    """A 0-10 stake, and an honest account of what is limiting it.
+
+    Two independent things have to be true before staking much: the edge must
+    be large, AND the model must have shown it can find real edges. The first
+    is arithmetic; the second is a track record, and no amount of confidence in
+    a single number substitutes for it.
+
+    So the rating is the smaller of an edge score and an evidence cap. A 20%
+    edge on a model with one settled bet is not a 10 - it is a 1 with an
+    interesting hypothesis attached.
+    """
+    if p is None or not odds:
+        return 0, "no price"
+    edge = p - implied(odds)
+    if edge <= 0:
+        return 0, "no edge - the price is against you"
+
+    # Quarter Kelly is the practical ceiling for a model of uncertain quality,
+    # so map 0 -> 0.25 of bankroll onto 0 -> 10.
+    f = kelly(p, odds) * kelly_fraction
+    edge_score = max(1, min(10, round(f / 0.025)))
+
+    cap, label = evidence_cap(n_settled)
+    if cap < edge_score:
+        return cap, (f"edge alone suggests {edge_score}/10, capped at {cap} by "
+                     f"{label} ({n_settled} settled)")
+    return edge_score, f"edge of {edge:+.1%} at {odds:.2f}"
+
+
 def assess(mean, sigma, line, over_odds=None, under_odds=None, bankroll=None,
            kelly_fraction=0.25):
     """Everything needed to decide, in one dict."""

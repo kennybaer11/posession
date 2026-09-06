@@ -70,6 +70,7 @@
           <th>Model</th>
           <th>P(side)</th>
           <th>Edge</th>
+          <th>Stake</th>
           <th>Actual</th>
           <th>Result</th>
         </tr>
@@ -90,6 +91,8 @@
             {{ '%+.1f%%'|format(r.edge * 100) if r.edge is not none else '-' }}
             {%- if r.backed %} &starf;{% endif %}
           </td>
+          <td class="num {{ 'good' if r.rating >= 5 else ('warn' if r.rating >= 3 else 'muted') }}"
+              title="{{ r.why }}">{{ r.rating }}/10</td>
           <td class="num">{{ '%.1f'|format(r.actual) if r.actual is not none else '-' }}</td>
           <td>
             {% if r.hit is none %}<span class="chip">pending</span>

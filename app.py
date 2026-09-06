@@ -269,25 +269,18 @@ def fixtures():
     return render_template("fixtures.html", rows=rows)
 
 
-@app.route("/bets")
-def bets():
-    """Every recorded line, what the model said, and how it settled.
-
-    The point of this page is to build a track record before any money is
-    staked on one. A model's own edge estimate is a claim about itself; this
-    is the only thing that can check it.
-    """
+def _line_rows():
+    """Every recorded line with the model's view of it, settled or not."""
     from scipy.stats import norm
+    import model as m
 
-    # Measured over 334 walk-forward matches - see model.py.
     BIAS, SIGMA = 0.98, 8.40
-
     rows = query("""
-        SELECT l.line, l.over_odds, l.under_odds, l.bookmaker,
+        SELECT l.line, l.over_odds, l.under_odds,
                t.name AS team, l.team_id,
-               m.match_id, m.kickoff, m.period,
-               ht.abbr AS home_abbr, at_.abbr AS away_abbr,
-               m.home_team_id,
+               m.match_id, m.kickoff, ht.abbr AS home_abbr,
+               at_.abbr AS away_abbr, m.home_team_id,
+               ht.name AS home_name, at_.name AS away_name,
                f.poss_naive_l5 AS naive,
                tm.possession AS actual
         FROM pl_possession_line l
@@ -296,20 +289,17 @@ def bets():
         JOIN pl_teams ht  ON ht.team_id = m.home_team_id
         JOIN pl_teams at_ ON at_.team_id = m.away_team_id
         LEFT JOIN v_match_features f ON f.match_id = l.match_id
-        LEFT JOIN v_fixture_features vf ON vf.match_id = l.match_id
         LEFT JOIN pl_team_match tm ON tm.match_id = l.match_id
                                   AND tm.team_id = l.team_id
         ORDER BY m.kickoff DESC
     """)
-
-    # Fixtures have no v_match_features row, so pick their naive estimate up
-    # from the prediction view instead.
     fixture_naive = {r["match_id"]: r["poss_naive_l5"] for r in query(
         "SELECT match_id, poss_naive_l5 FROM v_fixture_features")}
 
+    # Grade first, so the stake ratings below know how much evidence exists.
+    graded = sum(1 for r in rows if r["actual"] is not None)
+
     out = []
-    staked = returned = 0.0
-    settled = won = 0
     for r in rows:
         naive = r["naive"] if r["naive"] is not None \
             else fixture_naive.get(r["match_id"])
@@ -318,43 +308,70 @@ def bets():
         line = float(r["line"])
 
         pred = p_side = edge = None
+        rating, why = 0, "no prediction available"
         if naive is not None:
             home_pred = float(naive) + BIAS
-            # The line can be about either side. Possession is zero-sum, so an
-            # away team's is 100 minus the home prediction.
             pred = home_pred if r["team_id"] == r["home_team_id"] \
                 else 100 - home_pred
             p_over = float(1 - norm.cdf(line, pred, SIGMA))
             p_side = p_over if side == "OVER" else 1 - p_over
             if odds:
                 edge = p_side - (1.0 / odds)
+                rating, why = m.stake_rating(p_side, odds, graded)
 
         actual = float(r["actual"]) if r["actual"] is not None else None
         hit = None
         if actual is not None:
             hit = actual > line if side == "OVER" else actual < line
-            settled += 1
-            won += bool(hit)
-            # Only count the ones the model would actually have backed.
-            if edge is not None and edge > 0 and odds:
-                staked += 1
-                returned += odds if hit else 0.0
 
-        out.append({
-            **r, "side": side, "odds": odds, "line": line, "pred": pred,
-            "p_side": p_side, "edge": edge, "actual": actual, "hit": hit,
-            "backed": edge is not None and edge > 0,
-        })
+        out.append({**r, "side": side, "odds": odds, "line": line,
+                    "pred": pred, "p_side": p_side, "edge": edge,
+                    "actual": actual, "hit": hit,
+                    "backed": edge is not None and edge > 0,
+                    "rating": rating, "why": why})
+    return out, graded
+
+
+def stake_guidance():
+    """Lines on matches that have not been played yet."""
+    rows, graded = _line_rows()
+    open_lines = [r for r in rows if r["actual"] is None]
+    open_lines.sort(key=lambda r: (-r["rating"],
+                                   -(r["edge"] if r["edge"] is not None else -9)))
+    return open_lines, graded
+
+
+@app.route("/bets")
+def bets():
+    """Every recorded line, what the model said, and how it settled.
+
+    The point of this page is to build a track record before any money is
+    staked on one. A model's own edge estimate is a claim about itself; this
+    is the only thing that can check it.
+    """
+    rows, graded = _line_rows()
+
+    staked = returned = 0.0
+    settled = won = 0
+    for r in rows:
+        if r["actual"] is None:
+            continue
+        settled += 1
+        won += bool(r["hit"])
+        if r["backed"] and r["odds"]:
+            staked += 1
+            returned += r["odds"] if r["hit"] else 0.0
 
     totals = {
-        "recorded": len(out), "settled": settled, "won": won,
+        "recorded": len(rows), "settled": settled, "won": won,
         "staked": staked, "returned": returned,
         "pnl": returned - staked,
         "roi": (returned - staked) / staked if staked else None,
-        "both_prices": sum(1 for r in out if r["over_odds"] and r["under_odds"]),
+        "both_prices": sum(1 for r in rows
+                           if r["over_odds"] and r["under_odds"]),
     }
-    return render_template("bets.html", rows=out, totals=totals,
-                           sigma=SIGMA, bias=BIAS)
+    return render_template("bets.html", rows=rows, totals=totals,
+                           sigma=8.40, bias=0.98)
 
 
 @app.route("/model")
@@ -406,6 +423,11 @@ def model():
         coverage = {"first": train["kickoff"].min(),
                     "last": train["kickoff"].max()}
 
+    # Open lines, with a stake rating. Kept on this page because it is the
+    # model's own recommendation; the Bets page is the record of how such
+    # recommendations turned out.
+    open_lines, graded = stake_guidance()
+
     # How much of the training set each h2h column actually covers - in a
     # single season most pairs have not met yet, so these are mostly empty.
     sparse = []
@@ -418,6 +440,7 @@ def model():
         n_fixtures=len(upcoming), n_features=len(feats), n_fit=len(fit),
         n_holdout=len(holdout), stats=stats, groups=ordered, coverage=coverage,
         baselines=loader.baselines(train), sparse=sparse,
+        open_lines=open_lines, graded=graded,
         preview=upcoming.head(10).to_dict("records") if len(upcoming) else [])
 
 

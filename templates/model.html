@@ -144,6 +144,64 @@
 </div>
 
 <div class="panel">
+  <h2>Stake guidance <span class="sub">&mdash; open lines, rated out of 10</span></h2>
+  <p class="muted" style="font-size:13px;margin-top:-6px">
+    Two separate things have to be true before staking much: the edge must be large,
+    <em>and</em> the model must have shown it can find real edges. The first is arithmetic;
+    the second is a track record. The rating is the smaller of the two, so a big edge
+    from a model with no record scores low &mdash; correctly. It is
+    <strong>{{ graded }}</strong> settled bet{{ '' if graded == 1 else 's' }} in, so the
+    ceiling is low for a while yet.
+  </p>
+  {% if open_lines %}
+  <div class="tablewrap">
+    <table>
+      <thead>
+        <tr>
+          <th class="l">Kickoff</th><th class="l">Match</th><th class="l">Line is about</th>
+          <th>Line</th><th>Side</th><th>Odds</th><th>Model</th><th>P(side)</th>
+          <th>Edge</th><th>Stake</th><th class="l">Why</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in open_lines %}
+        <tr>
+          <td class="l muted">{{ r.kickoff.strftime('%d %b %H:%M') }}</td>
+          <td class="l">{{ r.home_abbr }} v {{ r.away_abbr }}</td>
+          <td class="l">{{ r.team }}</td>
+          <td class="num">{{ '%.1f'|format(r.line) }}</td>
+          <td><span class="chip">{{ r.side }}</span></td>
+          <td class="num">{{ '%.2f'|format(r.odds) if r.odds else '-' }}</td>
+          <td class="num muted">{{ '%.1f'|format(r.pred) if r.pred is not none else '-' }}</td>
+          <td class="num">{{ '%.0f%%'|format(r.p_side * 100) if r.p_side is not none else '-' }}</td>
+          <td class="num {{ 'good' if r.backed else 'bad' }}">
+            {{ '%+.1f%%'|format(r.edge * 100) if r.edge is not none else '-' }}
+          </td>
+          <td class="num">
+            <strong class="{{ 'good' if r.rating >= 5 else ('warn' if r.rating >= 3 else 'muted') }}">
+              {{ r.rating }}/10
+            </strong>
+          </td>
+          <td class="l muted" style="white-space:normal;font-size:12px">{{ r.why }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <p class="muted" style="font-size:12.5px;margin-bottom:0">
+    <strong>0/10</strong> means the price is against you &mdash; not a close call, a bet to skip.
+    Anything above that is a fraction of what you would stake at full confidence, and
+    quarter-Kelly is treated as the ceiling even at 10/10, because Kelly assumes the
+    probability is exactly right and this one is an estimate.
+  </p>
+  {% else %}
+  <div class="empty">
+    No open lines recorded. Add them to <code>odds.txt</code> and they appear here.
+  </div>
+  {% endif %}
+</div>
+
+<div class="panel">
   <h2>Next fixtures <span class="sub">&mdash; with the naive prediction to beat</span></h2>
   <div class="tablewrap">
     <table>
