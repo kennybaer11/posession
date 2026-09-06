@@ -41,6 +41,64 @@
   </div>
 </div>
 
+<div class="panel" style="border-left:4px solid {{ 'var(--good)' if verdict.ready else 'var(--warn)' }}">
+  <h2>Should you be betting this yet?</h2>
+  <p style="font-size:19px;font-weight:640;margin:0 0 10px">
+    {% if verdict.ready %}
+      <span class="good">Yes &mdash; the record now supports it.</span>
+    {% else %}
+      <span class="warn">Not yet.</span>
+    {% endif %}
+  </p>
+  <p class="muted" style="font-size:13.5px;margin:0 0 14px">{{ verdict.reason }}.</p>
+
+  <table>
+    <tbody>
+      <tr>
+        <td class="l">Bets the model actually backed, settled</td>
+        <td class="num">{{ verdict.n }}</td>
+      </tr>
+      {% if verdict.n %}
+      <tr>
+        <td class="l">Won</td>
+        <td class="num">{{ verdict.wins }} ({{ '%.0f%%'|format(verdict.rate * 100) }})</td>
+      </tr>
+      <tr>
+        <td class="l">
+          Breakeven at these prices
+          <div class="muted" style="font-size:12px;white-space:normal">
+            The average of 1/odds across the bets taken &mdash; the rate that merely breaks even
+          </div>
+        </td>
+        <td class="num">{{ '%.0f%%'|format(verdict.breakeven * 100) }}</td>
+      </tr>
+      <tr>
+        <td class="l">
+          Standard errors clear of breakeven
+          <div class="muted" style="font-size:12px;white-space:normal">
+            Below 2 the result is within what luck produces
+          </div>
+        </td>
+        <td class="num {{ 'good' if verdict.z >= 2 else 'muted' }}">{{ '%.1f'|format(verdict.z) }}</td>
+      </tr>
+      {% endif %}
+    </tbody>
+  </table>
+
+  <p class="muted" style="font-size:12.5px;margin:14px 0 0">
+    <strong>The rule:</strong> bet when the model has beaten the market by more than luck
+    explains &mdash; not when it claims an edge. A model's own edge estimate is a claim
+    about itself; the only thing that can check it is a settled record. Two standard
+    errors is the usual bar, and at these prices that means roughly 100&ndash;200 settled
+    bets. That is not pessimism, it is what it costs to tell a real 5% edge from a coin
+    that landed well.
+  </p>
+  <p class="muted" style="font-size:12.5px;margin:8px 0 0">
+    You do <strong>not</strong> have to stake money to get there. Every recorded line is
+    graded whether or not a bet was placed, so the record builds itself for free.
+  </p>
+</div>
+
 {% if totals.settled < 100 %}
 <div class="note" style="border-left-color: var(--warn)">
   <strong>{{ totals.settled }} settled — far too few to conclude anything.</strong>

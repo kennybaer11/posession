@@ -221,6 +221,64 @@ def evidence_cap(n_settled):
     return 10, "a substantial track record"
 
 
+def verdict(results):
+    """Should you be betting this model yet? A rule, not an opinion.
+
+    `results` is a list of (won, odds) for every settled bet the model actually
+    backed. The question is not "did it profit" - over a handful of bets that is
+    mostly luck - but "has it profited by more than luck can explain".
+
+    Each bet at odds o needs a win rate of 1/o to break even, so the breakeven
+    for a mixed set is the average of those. Against that we test the observed
+    rate, using the standard error of a proportion. Two standard errors clear of
+    breakeven is the usual bar for calling a result real, and it is a high one:
+    at typical possession-market prices it means roughly 100-200 settled bets.
+
+    That number is not pessimism. It is what it costs to distinguish a genuine
+    5% edge from a coin that happened to land well, and no amount of confidence
+    in the model shortens it.
+    """
+    n = len(results)
+    if n == 0:
+        return {"n": 0, "ready": False,
+                "reason": "no settled bets yet - nothing has been tested"}
+
+    wins = sum(1 for won, _ in results if won)
+    breakeven = sum(implied(o) for _, o in results) / n
+    rate = wins / n
+    profit = sum((o - 1) if won else -1 for won, o in results)
+
+    se = math.sqrt(max(breakeven * (1 - breakeven), 1e-9) / n)
+    z = (rate - breakeven) / se if se else 0.0
+
+    # How many bets at the CURRENT rate before the result would clear 2 SE.
+    needed = None
+    if rate > breakeven:
+        gap = rate - breakeven
+        needed = int(math.ceil(4 * breakeven * (1 - breakeven) / (gap ** 2)))
+
+    ready = n >= 50 and z >= 2
+    if ready:
+        reason = (f"{wins}/{n} at {rate:.0%} against a {breakeven:.0%} "
+                  f"breakeven - {z:.1f} standard errors clear, which luck "
+                  f"does not explain")
+    elif n < 50:
+        reason = (f"only {n} settled bet{'' if n == 1 else 's'}. Below about 50 "
+                  f"the result is noise whichever way it falls")
+    elif rate <= breakeven:
+        reason = (f"{wins}/{n} at {rate:.0%}, below the {breakeven:.0%} "
+                  f"breakeven - the model is losing to the price")
+    else:
+        reason = (f"{wins}/{n} at {rate:.0%} against {breakeven:.0%} breakeven, "
+                  f"but only {z:.1f} standard errors clear"
+                  + (f"; about {needed} settled bets at this rate would settle it"
+                     if needed else ""))
+
+    return {"n": n, "wins": wins, "rate": rate, "breakeven": breakeven,
+            "profit": profit, "z": z, "ready": ready, "needed": needed,
+            "reason": reason}
+
+
 def choose_side(p_over, over_odds, under_odds, n_settled=0):
     """With both prices quoted, work out which side (if either) to back.
 

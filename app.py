@@ -371,6 +371,11 @@ def bets():
             staked += 1
             returned += r["odds"] if r["hit"] else 0.0
 
+    import model as m
+    graded_bets = [(bool(r["hit"]), r["odds"]) for r in rows
+                   if r["actual"] is not None and r["backed"] and r["odds"]]
+    call = m.verdict(graded_bets)
+
     totals = {
         "recorded": len(rows), "settled": settled, "won": won,
         "staked": staked, "returned": returned,
@@ -380,7 +385,7 @@ def bets():
                            if r["over_odds"] and r["under_odds"]),
     }
     return render_template("bets.html", rows=rows, totals=totals,
-                           sigma=8.40, bias=0.98)
+                           verdict=call, sigma=8.40, bias=0.98)
 
 
 @app.route("/model")
