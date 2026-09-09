@@ -269,6 +269,24 @@ def fixtures():
     return render_template("fixtures.html", rows=rows)
 
 
+def settles_over(actual, line):
+    """Does this figure settle as OVER at chance.cz?
+
+    The boundary belongs to OVER, not UNDER. Their two sides read "Mene nez
+    54,5" (less than 54.5) and "54,5 a vice" (54.5 AND MORE), so a figure
+    landing exactly on the line is a winner for the over.
+
+    Not a hypothetical: Arsenal returned exactly 54.5% against Chelsea on
+    6 September 2026 with the line at 54.5, and chance.cz settled it as over.
+    A strict > would have recorded that as a loss and quietly corrupted the
+    record the whole model is being judged on.
+
+    Possession is published to one decimal place, so an exact hit on a .5 line
+    is rare but perfectly reachable.
+    """
+    return actual >= line
+
+
 def _line_rows():
     """Every recorded line with the model's view of it, settled or not."""
     from scipy.stats import norm
@@ -327,7 +345,8 @@ def _line_rows():
         actual = float(r["actual"]) if r["actual"] is not None else None
         hit = None
         if actual is not None and side:
-            hit = actual > line if side == "OVER" else actual < line
+            hit = settles_over(actual, line) if side == "OVER" \
+                else not settles_over(actual, line)
 
         out.append({**r, "side": side, "over_odds": over_odds,
                     "under_odds": under_odds, "odds": (
