@@ -556,6 +556,24 @@ def model():
     train = loader.training_set(competition=lg)
     upcoming = loader.fixtures(competition=lg)
     feats = loader.feature_columns(train, upcoming)
+
+    # A league early in its season has no training rows at all: min_history
+    # asks for prior matches nobody has played yet. Show what the model WOULD
+    # use, derived from the fixture side, rather than rendering an empty page
+    # that looks broken.
+    speculative = False
+    if not feats and len(upcoming):
+        feats = loader.feature_columns(upcoming, upcoming)
+        speculative = bool(feats)
+
+    shortfall = None
+    if not len(train):
+        played = one("""SELECT count(*) AS n FROM pl_matches
+                        WHERE competition = %(c)s AND period = 'FullTime'""",
+                     {"c": lg})["n"]
+        cfg = loader.training_config()
+        shortfall = {"played": played, "min_history": cfg["min_history"],
+                     "season": cfg["season"]}
     fit, holdout = loader.time_split(train)
     target = loader.TARGET
 
@@ -615,6 +633,7 @@ def model():
         n_holdout=len(holdout), stats=stats, groups=ordered, coverage=coverage,
         baselines=loader.baselines(train), sparse=sparse,
         open_lines=open_lines, graded=graded,
+        speculative=speculative, shortfall=shortfall,
         preview=upcoming.head(10).to_dict("records") if len(upcoming) else [])
 
 

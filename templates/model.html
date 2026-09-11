@@ -101,6 +101,18 @@
 
 </div>
 
+{% if shortfall %}
+<div class="note" style="border-left-color: var(--warn)">
+  <strong>No training rows for this league yet.</strong>
+  {{ shortfall.played }} match{{ '' if shortfall.played == 1 else 'es' }} played, and
+  <code>min_history</code> is {{ shortfall.min_history }} &mdash; every row needs both
+  sides to have {{ shortfall.min_history }} earlier matches to average, which nobody has
+  until about matchday {{ shortfall.min_history + 1 }}. Nothing is broken; the season is
+  young. The figures below are what the model <em>will</em> use once there is something
+  to fit.
+</div>
+{% endif %}
+
 {% if n_features > n_train %}
 <div class="note" style="border-left-color: var(--warn)">
   <strong>{{ n_features }} features against {{ n_train }} rows.</strong> More columns than
@@ -126,7 +138,11 @@
 {% endif %}
 
 <div class="panel">
-  <h2>Feature inventory <span class="sub">&mdash; {{ n_features }} columns present in both training and fixtures</span></h2>
+  <h2>Feature inventory
+    <span class="sub">&mdash; {{ n_features }} columns
+    {%- if speculative %} the model would use, taken from the fixture side since there is
+    no training set yet{% else %} present in both training and fixtures{% endif %}</span>
+  </h2>
   <p class="muted" style="font-size:13px;margin-top:-6px">
     Minutes spent ahead, level and behind are deliberately <em>not</em> here. They are
     only known after the whistle, so using them to predict possession would be leakage.
