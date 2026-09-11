@@ -22,11 +22,21 @@
 {% endif %}
 
 <div class="panel">
-  <h2>Upload a spreadsheet</h2>
+  <h2>Paste rows, or upload a spreadsheet</h2>
   <form method="post" enctype="multipart/form-data">
-    <input type="file" name="sheet" accept=".xlsx,.xlsm,.csv,.tsv,.txt" required
-           style="font-size:13.5px;margin-bottom:14px">
-    <br>
+    <textarea name="pasted" rows="6" placeholder="Paste rows here - straight from
+chance.cz, from a spreadsheet, or typed:&#10;&#10;2026-09-12    ARS    CHE    ARS    54.5    O1.75    U1.94"
+      style="width:100%;padding:10px 12px;border:1px solid var(--line);border-radius:7px;
+             background:var(--bg);color:var(--ink);font-size:13px;
+             font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+             margin-bottom:12px;resize:vertical"></textarea>
+
+    <div class="muted" style="font-size:12.5px;margin-bottom:12px">
+      &mdash; or attach a file &mdash;
+      <input type="file" name="sheet" accept=".xlsx,.xlsm,.csv,.tsv,.txt"
+             style="font-size:13px;margin-left:8px">
+    </div>
+
     <button type="submit" name="action" value="preview"
             style="padding:9px 20px;border:none;border-radius:7px;background:var(--accent);
                    color:#fff;font-weight:600;font-size:14px;cursor:pointer">
@@ -34,11 +44,19 @@
     </button>
   </form>
   <p class="muted" style="font-size:13px;margin-bottom:0">
-    <code>.xlsx</code>, <code>.csv</code> or tab-separated text. Columns are matched
-    <strong>by their header name</strong>, not by position &mdash; Day / Match / Bet /
-    Under / Over, or the Czech equivalents chance.cz uses. Reorder or insert columns
-    freely; a positional reader would silently read the wrong field, and for odds
-    that means recording the opposite bet.
+    Pasting a selection out of a spreadsheet or the bookmaker's table works &mdash; that
+    arrives as tab-separated text, which is read the same way a file is.
+    <code>.xlsx</code>, <code>.csv</code> and tab-separated text are all accepted.
+    <br><br>
+    With a header row, columns are matched <strong>by name</strong> rather than position
+    &mdash; <code>Match</code> holding "Arsenal - Chelsea", or two separate club columns,
+    plus date / line / over / under, in English or the Czech chance.cz uses. Reorder or
+    insert columns freely; a positional reader would silently read the wrong field, and
+    for odds that means recording the opposite bet.
+    <br><br>
+    Without a header row, use the compact form:
+    <code>date &nbsp; club &nbsp; club &nbsp; team &nbsp; line &nbsp; O&lt;over&gt; &nbsp; U&lt;under&gt;</code>.
+    Tag the prices with O and U and their column order stops mattering.
   </p>
 </div>
 

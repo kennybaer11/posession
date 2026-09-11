@@ -695,15 +695,35 @@ def admin():
                 session.pop("upload_token", None)
                 session.pop("upload_name", None)
             else:
+                pasted = (request.form.get("pasted") or "").strip()
                 upload = request.files.get("sheet")
-                if not upload or not upload.filename:
-                    raise ValueError("Choose a file first.")
-                raw = upload.read()
-                parsed = odds_sheet.parse_bytes(raw, upload.filename)
+                if pasted:
+                    # Pasting from a spreadsheet or the bookmaker's table gives
+                    # tab-separated text, which is exactly what the file
+                    # importer already reads - so it goes through the same
+                    # parser rather than a second one that could disagree.
+                    raw = pasted.encode("utf-8")
+                    name = "pasted.tsv"
+                elif upload and upload.filename:
+                    raw = upload.read()
+                    name = upload.filename
+                else:
+                    raise ValueError("Paste some rows or choose a file.")
+                parsed = odds_sheet.parse_bytes(raw, name)
+                if not parsed:
+                    # A paste with no header row is the common case: people
+                    # copy the data rows and leave the titles behind. Fall back
+                    # to the text importer, which reads headerless lines.
+                    parsed = import_odds_parse_text(raw.decode("utf-8", "replace"))
                 if not parsed:
                     raise ValueError(
                         "No rows found. The sheet needs a header row naming "
                         "the columns.")
+                if not parsed:
+                    raise ValueError(
+                        "No rows understood. Include a header row naming the "
+                        "columns, or paste lines in the compact form: "
+                        "date  club  club  team  line  O<over>  U<under>")
                 preview, problems = io_mod.resolve_rows(db_handle(), parsed)
                 # The file is staged on disk, not in the session. Flask keeps
                 # session data in a cookie, and browsers silently drop cookies
@@ -732,6 +752,22 @@ def admin():
     return render_template("admin.html", preview=preview, problems=problems,
                            written=written, error=error, recent=recent,
                            user=session.get("admin"))
+
+
+def import_odds_parse_text(text):
+    """Parse pasted lines with the text importer, via a temporary file.
+
+    import_odds.parse reads a path rather than a string; rather than duplicate
+    its two format branches here - where the copy would drift - the paste is
+    written out and handed to the same function the command line uses.
+    """
+    import import_odds as io_mod
+    tmp = Path(tempfile.gettempdir()) / f"pl-odds-paste-{secrets.token_hex(8)}.txt"
+    try:
+        tmp.write_text(text, encoding="utf-8")
+        return io_mod.parse(str(tmp))
+    finally:
+        tmp.unlink(missing_ok=True)
 
 
 def _staged_path(token):

@@ -21,7 +21,12 @@ HEADERS = {
     "date": ("day", "date", "den", "datum", "datum zápasu"),
     "match": ("match", "zápas", "zapas", "utkání", "utkani"),
     "bet": ("bet", "sázka", "sazka", "trh", "market"),
-    "team": ("team", "tým", "tym", "klub", "club"),
+    # Whose possession the line is about.
+    "team": ("team", "tým", "tym", "whose", "side"),
+    # The two clubs, when they are in separate columns rather than one "Match"
+    # cell. A sheet may label them home/away, or simply repeat "club" twice -
+    # which is what the text format documents, so it is what people build.
+    "club": ("club", "klub", "home", "away", "domácí", "domaci", "hosté", "hoste"),
     "line": ("line", "hranice", "limit", "čára", "cara"),
     "under": ("under", "méně", "mene", "under odd", "kurz méně", "kurz mene"),
     "over": ("over", "více", "vice", "over odd", "kurz více", "kurz vice"),
@@ -76,13 +81,34 @@ def _map_headers(row):
     return found
 
 
+_TAGGED = re.compile(r"(?i)^\s*([ou])[:=]?\s*(\d+(?:[.,]\d+)?)\s*$")
+
+
 def _is_bare_number(value):
-    """A price is a number and nothing else; a line arrives wrapped in prose."""
+    """Is this cell a price rather than prose?
+
+    A price is a number, optionally tagged O1.84 / U1.94 the way the text
+    format allows. A line arrives wrapped in words ("Mene nez 54,5").
+    """
     if isinstance(value, (int, float)):
         return True
     if value is None:
         return False
-    return bool(re.fullmatch(r"\d+(?:[.,]\d+)?", str(value).strip()))
+    text = str(value).strip()
+    return bool(re.fullmatch(r"\d+(?:[.,]\d+)?", text) or _TAGGED.match(text))
+
+
+def _tagged_price(value):
+    """(side, price) for a tagged cell, else (None, price-or-None)."""
+    if isinstance(value, (int, float)):
+        return None, float(value)
+    m = _TAGGED.match(str(value or ""))
+    if m:
+        return m.group(1).lower(), float(m.group(2).replace(",", "."))
+    text = str(value or "").strip()
+    if re.fullmatch(r"\d+(?:[.,]\d+)?", text):
+        return None, float(text.replace(",", "."))
+    return None, None
 
 
 def _pick_price(grid, header_at, candidates):
@@ -129,21 +155,20 @@ def _team_from_bet(text, fallback):
 
 def _rows_from_grid(grid):
     """Turn a list-of-lists into parsed line dicts."""
-    header_at = None
-    columns = {}
+    header_at, columns = None, {}
     for i, row in enumerate(grid[:10]):
         found = _map_headers(row)
-        # A usable header row identifies at least a date and a line/match.
-        if "date" in found and ("line" in found or "match" in found):
+        # A usable header row identifies a date plus some way of naming the
+        # fixture - either one "Match" cell or two club columns.
+        if "date" in found and (found.get("match") or len(found.get("club", [])) >= 2):
             header_at, columns = i, found
             break
     if header_at is None:
         raise ValueError(
-            "No header row found. The sheet needs column titles - Day/Match/"
-            "Bet/Under/Over, or Czech equivalents - somewhere in the first "
-            "10 rows.")
+            "No usable header row found in the first 10 rows. The sheet needs "
+            "a date column plus either a 'Match' column holding "
+            "'Arsenal - Chelsea', or two club columns (home and away).")
 
-    # Resolve the two-columns-per-side ambiguity from the data.
     under_cols = columns.get("under", [])
     over_cols = columns.get("over", [])
     under_price = _pick_price(grid, header_at, under_cols)
@@ -151,6 +176,10 @@ def _rows_from_grid(grid):
     under_text = _pick_line_source(grid, header_at, under_cols, under_price)
     over_text = _pick_line_source(grid, header_at, over_cols, over_price)
     line_col = (columns.get("line") or [None])[0]
+    match_col = (columns.get("match") or [None])[0]
+    club_cols = columns.get("club", [])
+    team_col = (columns.get("team") or [None])[0]
+    bet_col = (columns.get("bet") or [None])[0]
 
     def at(row, i):
         return row[i] if i is not None and i < len(row) else None
@@ -162,18 +191,17 @@ def _rows_from_grid(grid):
             continue
 
         home = away = None
-        match_cell = at(row, (columns.get("match") or [None])[0])
-        if match_cell:
-            home, away = _split_match(str(match_cell))
+        if match_col is not None and at(row, match_col):
+            home, away = _split_match(str(at(row, match_col)))
+        elif len(club_cols) >= 2:
+            home, away = at(row, club_cols[0]), at(row, club_cols[1])
         if not (home and away):
             continue
 
-        team = _team_from_bet(at(row, (columns.get("bet") or [None])[0]), home)
-        if columns.get("team"):
-            team = at(row, columns["team"][0]) or team
+        team = at(row, team_col) if team_col is not None else None
+        if not team:
+            team = _team_from_bet(at(row, bet_col), home)
 
-        # The line may have its own column, or be embedded in the prose of
-        # either side ("Mene nez 54,5" / "54,5 a vice").
         line = _num(at(row, line_col))
         if line is None:
             line = _num(at(row, under_text))
@@ -182,15 +210,33 @@ def _rows_from_grid(grid):
         if line is None:
             continue
 
+        # Read the prices, letting an O/U tag override which column they sat
+        # in. A tagged cell says what it is, and that beats its position.
+        over = under = None
+        for idx in (over_price, under_price, over_text, under_text):
+            if idx is None:
+                continue
+            side, price = _tagged_price(at(row, idx))
+            if price is None:
+                continue
+            if side == "o":
+                over = price
+            elif side == "u":
+                under = price
+            elif idx == over_price:
+                over = price
+            elif idx == under_price:
+                under = price
+
         out.append({
             "n": n,
             "date": _date(raw_date),
-            "home": str(home).replace(" ", ""),
-            "away": str(away).replace(" ", ""),
-            "team": str(team).replace(" ", ""),
+            "home": str(home).strip().replace(" ", ""),
+            "away": str(away).strip().replace(" ", ""),
+            "team": str(team).strip().replace(" ", ""),
             "line": line,
-            "over": _num(at(row, over_price)),
-            "under": _num(at(row, under_price)),
+            "over": over,
+            "under": under,
         })
     return out
 
