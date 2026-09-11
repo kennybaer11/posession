@@ -313,6 +313,30 @@ for prices, `[data-my-selection-id*="BALL_POSSESSION"]` for the market,
 `span[data-m]` for match ids, and `[class*="MatchDetail-styled__Name"]` where
 only a class will do.
 
+## Odds pipeline
+
+```
+python odds_pipeline.py --dry-run    what it would scrape, costs nothing
+python odds_pipeline.py              run it, preview the import
+python odds_pipeline.py --write      run it and write the odds
+```
+
+Stage one scrapes the league pages for match URLs; stage two scrapes only the
+matches kicking off inside the window and reads their possession market. Job
+start URLs are overridden per run, so the saved sitemap is never rewritten and
+a half-finished run cannot leave it pointing at last week's fixtures.
+
+Which matches are "today or tomorrow" is decided from **our** kickoff times,
+not the scraped ones - see the timezone note above. That also caps the credit
+cost, since one match page is one credit.
+
+Fixtures are identified from the URL slug, matched against club names by
+longest phrase first: `real madrid` appears in
+`fotbal-real-madrid-rayo-vallecano` but `atletico madrid` does not, which is
+what separates clubs sharing a common word. Where two fixtures score equally
+the URL is reported as ambiguous rather than guessed - a wrong match files
+odds against the wrong fixture, and nothing afterwards would look broken.
+
 ## Files
 
 | File | Purpose |
@@ -328,6 +352,7 @@ only a class will do.
 | `import_odds.py` | Loads bookmaker lines from `odds.txt` |
 | `odds_sheet.py` | Reads odds from .xlsx / .csv / pasted text / webscraper.io JSON |
 | `webscraper_io.py` | Imports finished webscraper.io jobs |
+| `odds_pipeline.py` | Runs both scrapes and imports the result |
 | `make_admin.py` | Generates the admin login for `.env` |
 | `render.yaml`, `Procfile` | Deployment config for a live instance |
 | `export_static.py` | Renders the UI to static HTML for GitHub Pages |
