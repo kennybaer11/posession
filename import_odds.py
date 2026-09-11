@@ -194,6 +194,21 @@ def find_match(db, date, team_a, team_b):
     pair is matched and the real venue is read back from the fixture.
     """
     with db.conn.cursor() as cur:
+        if not date:
+            # No usable date - webscraper.io renders kickoff times in its own
+            # timezone, so the one it reports is wrong by hours and can name
+            # the wrong day. Two clubs meet twice a season, so the nearest
+            # fixture to now is the one being priced.
+            cur.execute("""
+                SELECT match_id, kickoff, home_team_id, away_team_id
+                FROM pl_matches
+                WHERE ((home_team_id = %s AND away_team_id = %s)
+                    OR (home_team_id = %s AND away_team_id = %s))
+                ORDER BY abs(EXTRACT(EPOCH FROM (kickoff - now())))
+                LIMIT 1
+            """, (team_a, team_b, team_b, team_a))
+            return cur.fetchone()
+
         cur.execute("""
             SELECT match_id, kickoff, home_team_id, away_team_id
             FROM pl_matches

@@ -283,6 +283,36 @@ third-party host, and free tiers sleep after idling, so the first request after
 a quiet spell takes about a minute. The published Pages site keeps working
 either way - it is a static snapshot and needs nothing running.
 
+## webscraper.io
+
+`webscraper_io.py` pulls finished Cloud Scraper jobs straight into the odds
+table, so a scrape does not have to be copied by hand:
+
+```
+python webscraper_io.py --list              recent jobs
+python webscraper_io.py --job 45692638      preview what it would import
+python webscraper_io.py --job 45692638 --write
+```
+
+Its output is also accepted by the file upload and the paste box, since all
+three share one parser.
+
+**The scraped kickoff time is wrong and is deliberately discarded.** The
+bookmaker prints times in the browser's timezone and webscraper.io's cloud
+runs nine hours behind Prague, so every time in the first real job was off by
+exactly that - and "Zitra" means tomorrow where the scraper sits, not where
+the match is. Near midnight that names the wrong day, which would file odds
+against the wrong fixture with nothing looking broken. Matches are found by
+club pair instead, taking the fixture nearest to now.
+
+Selectors are the other fragile part. chance.cz and tipsport.cz are
+styled-components apps whose class names (`fcscZm`, `cdbyBX`) are build
+hashes that change on deploy - and a stale one returns empty fields rather
+than an error. Prefer the semantic attributes: `[data-atid^="content||ODD||"]`
+for prices, `[data-my-selection-id*="BALL_POSSESSION"]` for the market,
+`span[data-m]` for match ids, and `[class*="MatchDetail-styled__Name"]` where
+only a class will do.
+
 ## Files
 
 | File | Purpose |
@@ -296,7 +326,8 @@ either way - it is a static snapshot and needs nothing running.
 | `app.py` | Local read-only web UI (`python app.py`) |
 | `model.py` | Possession model, backtest, stake rating |
 | `import_odds.py` | Loads bookmaker lines from `odds.txt` |
-| `odds_sheet.py` | Reads odds out of .xlsx / .csv uploads |
+| `odds_sheet.py` | Reads odds from .xlsx / .csv / pasted text / webscraper.io JSON |
+| `webscraper_io.py` | Imports finished webscraper.io jobs |
 | `make_admin.py` | Generates the admin login for `.env` |
 | `render.yaml`, `Procfile` | Deployment config for a live instance |
 | `export_static.py` | Renders the UI to static HTML for GitHub Pages |

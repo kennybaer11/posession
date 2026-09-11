@@ -241,6 +241,48 @@ def _rows_from_grid(grid):
     return out
 
 
+def parse_webscraper(rows):
+    """Rows from a webscraper.io scraping job.
+
+    The shape its Tipsport/Chance sitemap produces, one record per match:
+
+        {"web-scraper-start-url": ".../fotbal-sunderland-arsenal/8285756/...",
+         "mene": "Mene nez 56.5", "meneodd": "1.84",
+         "vice":  "56.5 a vice",  "viceodd": "1.84",
+         "text":  "Procento drzeni mice Arsenal v zapasu",
+         "home": "Sunderland", "away": "Arsenal",
+         "datum": "Zitra | 11:00"}
+
+    `datum` is deliberately discarded. The site prints kickoff times in the
+    BROWSER's timezone, and webscraper.io's cloud runs nine hours behind
+    Prague - every time in the sample was off by exactly that, and "Zitra"
+    means tomorrow where the scraper sits, not where the match is. Near
+    midnight that shifts the date, which would file odds against the wrong
+    fixture without anything looking wrong. The club pair identifies the match
+    well enough on its own.
+    """
+    out = []
+    for n, r in enumerate(rows, 1):
+        home, away = r.get("home"), r.get("away")
+        if not (home and away):
+            continue
+        team = _team_from_bet(r.get("text"), home)
+        line = _num(r.get("mene")) or _num(r.get("vice"))
+        if line is None:
+            continue
+        out.append({
+            "n": n,
+            "date": None,              # see above
+            "home": str(home).strip().replace(" ", ""),
+            "away": str(away).strip().replace(" ", ""),
+            "team": str(team).strip().replace(" ", ""),
+            "line": line,
+            "over": _num(r.get("viceodd")),
+            "under": _num(r.get("meneodd")),
+        })
+    return out
+
+
 def parse_bytes(data, filename=""):
     """Parse an uploaded file. Returns the same rows import_odds.parse does."""
     name = (filename or "").lower()
@@ -257,6 +299,26 @@ def parse_bytes(data, filename=""):
             ".xlsx, or export as CSV.")
 
     text = data.decode("utf-8-sig", errors="replace")
+
+    # webscraper.io exports JSON Lines - one object per line, not an array.
+    stripped = text.lstrip()
+    if stripped.startswith(("{", "[")):
+        import json as _json
+        rows = []
+        try:
+            parsed = _json.loads(text)
+            rows = parsed if isinstance(parsed, list) else [parsed]
+        except ValueError:
+            for line in text.splitlines():
+                line = line.strip()
+                if line.startswith("{"):
+                    try:
+                        rows.append(_json.loads(line))
+                    except ValueError:
+                        pass
+        if rows and any("web-scraper-order" in r or "meneodd" in r for r in rows):
+            return parse_webscraper(rows)
+
     sample = text[:4096]
     try:
         dialect = csv.Sniffer().sniff(sample, delimiters=",;\t")
