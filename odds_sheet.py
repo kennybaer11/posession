@@ -241,6 +241,51 @@ def _rows_from_grid(grid):
     return out
 
 
+_MARKET_RE = re.compile(
+    r"(?i)m[ií][cč]e\s+(?P<team>.+?)\s+v\s+z[aá]pas\w*"
+    r".*?m[ée]n[ěe]\s+ne[žz]\s*(?P<line>[\d.,]+)\s*(?P<under>[\d.,]+)"
+    r".*?(?P=line)\s*a\s*v[ií]ce\s*(?P<over>[\d.,]+)", re.S)
+
+
+def _fold_market_text(rows):
+    """Normalise the `market_text` sitemap shape into the `mene`/`vice` one.
+
+    Two sitemap layouts are in use. One puts each part in its own column -
+    mene / meneodd / vice / viceodd / home / away - and yields one row per
+    match. The other captures the whole market block as a single string:
+
+        "Procento drzeni mice Aston Villa v zapasu
+         Mene nez 54.5 1.84  54.5 a vice 1.84"
+
+    and, because its team and price selectors are both `multiple`, emits one
+    row per COMBINATION - four rows for one match. Everything needed is in
+    that one string, so it is parsed out and the duplicate rows collapse on
+    the start URL.
+    """
+    if not any(r.get("market_text") for r in rows):
+        return rows
+
+    folded = {}
+    for r in rows:
+        text = " ".join(str(r.get("market_text") or "").split())
+        m = _MARKET_RE.search(text)
+        if not m:
+            continue
+        url = r.get("web-scraper-start-url") or ""
+        folded.setdefault(url, {
+            "web-scraper-start-url": url,
+            # No home/away: the slug cannot be split into two clubs, since
+            # nothing marks where one ends. The URL is carried instead and the
+            # fixture is resolved from it by the phrase matcher in
+            # odds_pipeline, which is built for exactly this.
+            "home": None, "away": None, "url": url,
+            "text": f"drzeni mice {m.group('team')} v zapasu",
+            "mene": m.group("line"), "meneodd": m.group("under"),
+            "vice": m.group("line"), "viceodd": m.group("over"),
+        })
+    return list(folded.values()) or rows
+
+
 def parse_webscraper(rows):
     """Rows from a webscraper.io scraping job.
 
@@ -261,20 +306,23 @@ def parse_webscraper(rows):
     fixture without anything looking wrong. The club pair identifies the match
     well enough on its own.
     """
+    rows = _fold_market_text(rows)
     out = []
     for n, r in enumerate(rows, 1):
         home, away = r.get("home"), r.get("away")
-        if not (home and away):
+        url = r.get("url") or r.get("web-scraper-start-url")
+        if not (home and away) and not url:
             continue
-        team = _team_from_bet(r.get("text"), home)
+        team = _team_from_bet(r.get("text"), home or "")
         line = _num(r.get("mene")) or _num(r.get("vice"))
         if line is None:
             continue
         out.append({
             "n": n,
             "date": None,              # see above
-            "home": str(home).strip().replace(" ", ""),
-            "away": str(away).strip().replace(" ", ""),
+            "url": url,
+            "home": str(home).strip().replace(" ", "") if home else None,
+            "away": str(away).strip().replace(" ", "") if away else None,
             "team": str(team).strip().replace(" ", ""),
             "line": line,
             "over": _num(r.get("viceodd")),

@@ -231,6 +231,34 @@ def find_match(db, date, team_a, team_b):
         return cur.fetchone()
 
 
+def _all_fixtures(db):
+    with db.conn.cursor() as cur:
+        cur.execute("""
+            SELECT m.match_id, m.kickoff, ht.name AS home, at_.name AS away
+            FROM pl_matches m
+            JOIN pl_teams ht  ON ht.team_id = m.home_team_id
+            JOIN pl_teams at_ ON at_.team_id = m.away_team_id
+            WHERE m.kickoff > now() - INTERVAL '7 days'
+        """)
+        return cur.fetchall()
+
+
+def _match_from_url(url, fixtures):
+    """The fixture a match URL refers to, or None when it is ambiguous."""
+    import odds_pipeline as pipe
+    words = pipe._slug_words(url).split()
+    if not words:
+        return None
+    scored = sorted(((pipe.score_fixture(f, words), f) for f in fixtures),
+                    key=lambda x: -(x[0] or 0))
+    scored = [(s, f) for s, f in scored if s]
+    if not scored:
+        return None
+    if len(scored) > 1 and scored[0][0] == scored[1][0]:
+        return None          # ambiguous - say so rather than guess
+    return scored[0][1]
+
+
 def resolve_rows(db, parsed, bookmaker="chance.cz", closing=False):
     """Turn parsed rows into database rows, reporting what could not be matched.
 
@@ -238,8 +266,20 @@ def resolve_rows(db, parsed, bookmaker="chance.cz", closing=False):
     into disagreeing about what a given line means.
     """
     index, names = team_lookup(db)
+    fixtures = _all_fixtures(db)
     ready, problems = [], []
     for r in parsed:
+        # Rows that carry only a match URL are resolved by the phrase matcher,
+        # which handles clubs sharing words ("real madrid" against "atletico
+        # madrid") and the home-before-away ordering the slug encodes.
+        if r.get("url") and not (r.get("home") and r.get("away")):
+            hit = _match_from_url(r["url"], fixtures)
+            if not hit:
+                problems.append(f"row {r['n']}: could not identify the fixture "
+                                f"from {r['url'][-50:]}")
+                continue
+            r = dict(r, home=hit["home"], away=hit["away"])
+
         home_id = resolve(r["home"], index)
         away_id = resolve(r["away"], index)
         team_id = resolve(r["team"], index)
