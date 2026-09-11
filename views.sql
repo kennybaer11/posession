@@ -32,7 +32,7 @@ DROP VIEW IF EXISTS v_player_minutes CASCADE;
 --    Gives "against" values for every stat, not just the denormalised few.
 -- ---------------------------------------------------------------------------
 CREATE VIEW v_team_match AS
-SELECT s.match_id, s.kickoff, s.season, s.match_week,
+SELECT s.competition, s.match_id, s.kickoff, s.season, s.match_week,
        s.team_id, t.name AS team_name, t.abbr AS team_abbr,
        s.opponent_id, o.name AS opponent_name, o.abbr AS opponent_abbr,
        s.is_home, s.result, s.points,
@@ -436,7 +436,7 @@ WHERE m.period = 'FullTime';
 --    been played every completed match is legitimately in the past.
 -- ---------------------------------------------------------------------------
 CREATE VIEW v_team_form_current AS
-SELECT team_id, last_played, matches_used,
+SELECT competition, team_id, last_played, matches_used,
        xg_for_l5, xg_against_l5, xg_diff_l5, goals_for_l5, goals_against_l5,
        possession_l5, shots_l5, sot_l5, corners_l5, ppg_l5,
        xg_for_l10, xg_against_l10, ppg_l10, finishing_gap_l10,
@@ -447,7 +447,7 @@ SELECT team_id, last_played, matches_used,
        poss_lost_ctrl_l5, dispossessed_l5, ball_recoveries_l5,
        poss_won_mid_third_l5, passes_final_third_l5
 FROM (
-    SELECT s.team_id,
+    SELECT s.competition, s.team_id,
            s.kickoff AS last_played,
            COUNT(*)                  OVER w5  AS matches_used,
            AVG(s.xg)                 OVER w5  AS xg_for_l5,

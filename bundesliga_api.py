@@ -251,7 +251,7 @@ def team_match_rows(match, season, stats):
         row = {
             "competition": COMPETITION,
             "match_id": qualify(match["matchId"]),
-            "team_id": qualify(tid), "opponent_id": str(oid),
+            "team_id": qualify(tid), "opponent_id": qualify(oid),
             "is_home": is_home,
             "season": str(season),
             "match_week": match.get("matchday"),

@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block title %}{{ fixture.home_abbr }} v {{ fixture.away_abbr }} &middot; PL data{% endblock %}
+
+{% block content %}
+<div class="panel">
+  <div class="scoreline">
+    <div class="t h">{{ fixture.home_name }}</div>
+    <div class="s muted" style="font-size:20px">v</div>
+    <div class="t a">{{ fixture.away_name }}</div>
+  </div>
+  <div class="kickoff">
+    {{ fixture.kickoff.strftime('%A %d %B %Y, %H:%M') }}
+    &middot; {{ fixture.season|season }}
+    {% if fixture.match_week %}&middot; matchweek {{ fixture.match_week }}{% endif %}
+  </div>
+  <div class="empty">
+    Not played yet &mdash; stats appear here after the final whistle.
+  </div>
+</div>
+<p><a href="{{ url_for('bets', league=fixture.competition) }}">&larr; bet record</a></p>
+{% endblock %}

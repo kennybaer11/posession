@@ -49,6 +49,14 @@ jobs:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
         run: python main.py
 
+      - name: Scrape Bundesliga and LaLiga
+        # Separate from main.py: those two are page scrapes of a different
+        # shape, not the Premier League's JSON API. Settled matches are skipped
+        # like the PL's are, so a routine run costs only the matchday listings.
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: python scrape_league.py both
+
       - name: Import hand-entered odds
         # odds.txt is edited straight in GitHub's web editor - paste a line,
         # commit, and the next run loads it. Upserts, so re-running is safe,

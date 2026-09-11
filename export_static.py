@@ -42,21 +42,37 @@ def share_one_connection():
 
 def targets():
     """(url, output path) for every page, discovered from the database."""
-    pages = [
-        ("/", "index.html"),
-        ("/teams", "teams.html"),
-        ("/matches", "matches.html"),
-        ("/fixtures", "fixtures.html"),
-        ("/model", "model.html"),
-        ("/bets", "bets.html"),
-    ]
+    # The Premier League keeps the bare filenames so existing links still work;
+    # the other leagues get a prefixed copy of each page.
+    pages = []
+    for code, _ in webapp.LEAGUES:
+        pre = "" if code == "PL" else f"{code.lower()}-"
+        q = "" if code == "PL" else f"?league={code}"
+        pages += [
+            (f"/{q}", f"{pre}index.html"),
+            (f"/teams{q}", f"{pre}teams.html"),
+            (f"/matches{q}", f"{pre}matches.html"),
+            (f"/fixtures{q}", f"{pre}fixtures.html"),
+            (f"/model{q}", f"{pre}model.html"),
+            (f"/bets{q}", f"{pre}bets.html"),
+        ]
     with webapp.app.app_context():
-        for r in webapp.query("SELECT DISTINCT season FROM pl_matches ORDER BY season"):
-            pages.append((f"/matches?season={r['season']}",
-                          f"matches-{r['season']}.html"))
+        for r in webapp.query("SELECT DISTINCT competition, season FROM pl_matches "
+                              "ORDER BY competition, season"):
+            code, season = r["competition"], r["season"]
+            pre = "" if code == "PL" else f"{code.lower()}-"
+            q = f"?season={season}" + ("" if code == "PL" else f"&league={code}")
+            pages.append((f"/matches{q}", f"{pre}matches-{season}.html"))
         for r in webapp.query("SELECT team_id FROM pl_teams ORDER BY team_id"):
             pages.append((f"/team/{r['team_id']}", f"team/{r['team_id']}.html"))
-        for r in webapp.query("SELECT DISTINCT match_id FROM pl_team_match"):
+        # Played matches have a detail page. Upcoming ones with a recorded
+        # betting line need one too: the Bets page links every row, and a link
+        # to a page that was never rendered is a 404 on a site where every
+        # page returned 200 when it was built.
+        for r in webapp.query("""
+                SELECT DISTINCT match_id FROM pl_team_match
+                UNION
+                SELECT DISTINCT match_id FROM pl_possession_line"""):
             pages.append((f"/match/{r['match_id']}", f"match/{r['match_id']}.html"))
     return pages
 
@@ -71,17 +87,29 @@ def rewrite_links(html, depth):
     up = "../" * depth
 
     def to_static(url):
-        if url == "/":
-            return "index.html"
-        m = re.fullmatch(r"/matches\?season=([^&\"]+)", url)
-        if m:
-            return f"matches-{m.group(1)}.html"
+        """Map an app URL to the file targets() wrote it to.
+
+        The two must agree exactly: a mismatch produces links that 404 on a
+        site where every page returned 200 when it was rendered.
+        """
+        if url.startswith("/static/"):
+            return url[1:]
+
         m = re.fullmatch(r"/(team|match)/([^/?\"]+)", url)
         if m:
             return f"{m.group(1)}/{m.group(2)}.html"
-        if url.startswith("/static/"):
-            return url[1:]
-        return url.lstrip("/") + ".html"
+
+        path, _, qs = url.partition("?")
+        params = dict(p.split("=", 1) for p in qs.split("&") if "=" in p)
+        # The Premier League keeps bare filenames; the others are prefixed.
+        code = params.get("league", "PL")
+        prefix = "" if code == "PL" else f"{code.lower()}-"
+
+        name = path.strip("/") or "index"
+        season = params.get("season")
+        if name == "matches" and season:
+            name = f"matches-{season}"
+        return f"{prefix}{name}.html"
 
     def repl(match):
         attr, url = match.group(1), match.group(2)

@@ -10,13 +10,21 @@
 <header class="topbar">
   <a class="brand" href="{{ url_for('index') }}">PL<span>data</span></a>
   <nav>
-    <a href="{{ url_for('index') }}"    class="{{ 'on' if request.endpoint == 'index' }}">Overview</a>
-    <a href="{{ url_for('teams') }}"    class="{{ 'on' if request.endpoint in ('teams','team') }}">Teams</a>
-    <a href="{{ url_for('matches') }}"  class="{{ 'on' if request.endpoint in ('matches','match') }}">Matches</a>
-    <a href="{{ url_for('fixtures') }}" class="{{ 'on' if request.endpoint == 'fixtures' }}">Fixtures</a>
-    <a href="{{ url_for('model') }}"    class="{{ 'on' if request.endpoint == 'model' }}">Model</a>
-    <a href="{{ url_for('bets') }}"     class="{{ 'on' if request.endpoint == 'bets' }}">Bets</a>
+    <a href="{{ url_for('index', league=league) }}"    class="{{ 'on' if request.endpoint == 'index' }}">Overview</a>
+    <a href="{{ url_for('teams', league=league) }}"    class="{{ 'on' if request.endpoint in ('teams','team') }}">Teams</a>
+    <a href="{{ url_for('matches', league=league) }}"  class="{{ 'on' if request.endpoint in ('matches','match') }}">Matches</a>
+    <a href="{{ url_for('fixtures', league=league) }}" class="{{ 'on' if request.endpoint == 'fixtures' }}">Fixtures</a>
+    <a href="{{ url_for('model', league=league) }}"    class="{{ 'on' if request.endpoint == 'model' }}">Model</a>
+    <a href="{{ url_for('bets', league=league) }}"     class="{{ 'on' if request.endpoint == 'bets' }}">Bets</a>
   </nav>
+  <div class="leagues">
+    {% for code, name in leagues %}
+    <a href="{{ url_for(request.endpoint if request.endpoint in
+              ('index','teams','matches','fixtures','model','bets') else 'index',
+              league=code) }}"
+       class="{{ 'on' if code == league }}">{{ name }}</a>
+    {% endfor %}
+  </div>
 </header>
 
 <main>

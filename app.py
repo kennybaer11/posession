@@ -175,17 +175,44 @@ def _globals():
     return {"now": datetime.now(timezone.utc)}
 
 
+
+# -- leagues -----------------------------------------------------------------
+
+LEAGUES = (("PL", "Premier League"), ("LaLiga", "LaLiga"),
+           ("BL1", "Bundesliga"))
+LEAGUE_NAMES = dict(LEAGUES)
+
+
+def league():
+    """The league being viewed. Defaults to the Premier League.
+
+    Every page is scoped to one league rather than showing all three together:
+    possession baselines differ between them, so a combined table would invite
+    comparisons that are not like for like.
+    """
+    want = request.args.get("league", "PL")
+    return want if want in LEAGUE_NAMES else "PL"
+
+
+@app.context_processor
+def _league_globals():
+    return {"leagues": LEAGUES, "league": league(),
+            "league_name": LEAGUE_NAMES.get(league(), league())}
+
+
 # -- pages ------------------------------------------------------------------
 
 @app.route("/")
 def index():
+    lg = league()
     totals = one("""
-        SELECT (SELECT count(*) FROM pl_teams)                         AS teams,
-               (SELECT count(*) FROM pl_matches)                       AS matches,
-               (SELECT count(*) FROM pl_matches WHERE kickoff > now()) AS fixtures,
-               (SELECT count(*) FROM pl_team_match)                    AS stat_rows,
-               (SELECT count(*) FROM pl_team_appearance)               AS appearances
-    """)
+        SELECT (SELECT count(*) FROM pl_teams WHERE competition = %(c)s) AS teams,
+               (SELECT count(*) FROM pl_matches WHERE competition = %(c)s) AS matches,
+               (SELECT count(*) FROM pl_matches
+                 WHERE competition = %(c)s AND kickoff > now())          AS fixtures,
+               (SELECT count(*) FROM pl_team_match WHERE competition = %(c)s) AS stat_rows,
+               (SELECT count(*) FROM pl_team_appearance)                 AS appearances
+    """, {"c": lg})
 
     # Integrity checks worth surfacing: possession is zero-sum inside a match,
     # so a mean far from 50 means rows were dropped or paired wrongly.
@@ -196,16 +223,16 @@ def index():
                round(min(xg)::numeric, 2)                 AS min_xg,
                round(max(xg)::numeric, 2)                 AS max_xg,
                round(avg(xg)::numeric, 2)                 AS avg_xg
-        FROM pl_team_match
-    """)
+        FROM pl_team_match WHERE competition = %(c)s
+    """, {"c": lg})
 
     # A match should contribute exactly two stat rows. Anything else is a bug.
     orphans = one("""
         SELECT count(*) AS n FROM (
-            SELECT match_id FROM pl_team_match
+            SELECT match_id FROM pl_team_match WHERE competition = %(c)s
             GROUP BY match_id HAVING count(*) <> 2
         ) x
-    """)
+    """, {"c": lg})
 
     seasons = query("""
         SELECT season,
@@ -213,19 +240,22 @@ def index():
                count(*) FILTER (WHERE kickoff <= now()) AS played,
                min(kickoff)                             AS first_kickoff,
                max(kickoff)                             AS last_kickoff
-        FROM pl_matches GROUP BY season ORDER BY season DESC
-    """)
+        FROM pl_matches WHERE competition = %(c)s
+        GROUP BY season ORDER BY season DESC
+    """, {"c": lg})
 
     coverage = query("""
         SELECT t.team_id, t.name, t.abbr, count(tm.match_id) AS matches,
                max(tm.kickoff) AS last_played
         FROM pl_teams t
         LEFT JOIN pl_team_match tm ON tm.team_id = t.team_id
+        WHERE t.competition = %(c)s
         GROUP BY t.team_id, t.name, t.abbr
         ORDER BY matches ASC, t.name
-    """)
+    """, {"c": lg})
 
-    freshness = one("SELECT max(last_seen) AS last_scrape FROM pl_team_match")
+    freshness = one("SELECT max(last_seen) AS last_scrape FROM pl_team_match "
+                    "WHERE competition = %(c)s", {"c": lg})
 
     recent = query("""
         SELECT match_id, kickoff, season,
@@ -235,10 +265,10 @@ def index():
                max(team_name) FILTER (WHERE is_home = 0) AS away,
                max(goals_for) FILTER (WHERE is_home = 0) AS away_goals,
                max(xg_for)    FILTER (WHERE is_home = 0) AS away_xg
-        FROM v_team_match
+        FROM v_team_match WHERE competition = %(c)s
         GROUP BY match_id, kickoff, season
         ORDER BY kickoff DESC LIMIT 10
-    """)
+    """, {"c": lg})
 
     return render_template("index.html", totals=totals, health=health,
                            orphans=orphans["n"], seasons=seasons,
@@ -252,8 +282,9 @@ def teams():
         SELECT f.*, t.name, t.abbr, t.short_name
         FROM v_team_form_current f
         JOIN pl_teams t ON t.team_id = f.team_id
-        ORDER BY f.xg_diff_l5 DESC NULLS LAST
-    """)
+        WHERE t.competition = %(c)s
+        ORDER BY f.possession_l5 DESC NULLS LAST
+    """, {"c": league()})
     return render_template("teams.html", rows=rows)
 
 
@@ -294,11 +325,15 @@ def matches():
         GROUP BY match_id, kickoff, season, match_week
         ORDER BY kickoff DESC
     """
+    lg = league()
+    where = "WHERE competition = %(c)s"
+    params = {"c": lg}
     if season:
-        rows = query(sql.format(where="WHERE season = %s"), (season,))
-    else:
-        rows = query(sql.format(where=""))
-    seasons = query("SELECT DISTINCT season FROM pl_matches ORDER BY season DESC")
+        where += " AND season = %(s)s"
+        params["s"] = season
+    rows = query(sql.format(where=where), params)
+    seasons = query("SELECT DISTINCT season FROM pl_matches WHERE competition = %(c)s "
+                    "ORDER BY season DESC", {"c": lg})
     return render_template("matches.html", rows=rows, seasons=seasons,
                            current=season)
 
@@ -309,7 +344,20 @@ def match(match_id):
         "SELECT * FROM v_team_match WHERE match_id = %s ORDER BY is_home DESC",
         (match_id,))
     if len(sides) != 2:
-        abort(404)
+        # No stat line yet - an upcoming fixture that already has a betting
+        # line recorded against it. Show what is known rather than 404ing a
+        # page the Bets table links to.
+        fixture = one("""
+            SELECT m.match_id, m.kickoff, m.season, m.match_week, m.competition,
+                   ht.name AS home_name, ht.abbr AS home_abbr,
+                   at_.name AS away_name, at_.abbr AS away_abbr
+            FROM pl_matches m
+            JOIN pl_teams ht  ON ht.team_id = m.home_team_id
+            JOIN pl_teams at_ ON at_.team_id = m.away_team_id
+            WHERE m.match_id = %s""", (match_id,))
+        if not fixture:
+            abort(404)
+        return render_template("match_pending.html", fixture=fixture)
     home, away = sides
     state = {r["team_id"]: r for r in query(
         "SELECT * FROM v_match_game_state WHERE match_id = %s", (match_id,))}
@@ -343,7 +391,8 @@ def match(match_id):
 
 @app.route("/fixtures")
 def fixtures():
-    rows = query("SELECT * FROM v_fixture_features ORDER BY kickoff")
+    rows = query("SELECT * FROM v_fixture_features WHERE competition = %(c)s "
+                 "ORDER BY kickoff", {"c": league()})
     return render_template("fixtures.html", rows=rows)
 
 
@@ -387,10 +436,12 @@ def _line_rows():
         LEFT JOIN v_match_features f ON f.match_id = l.match_id
         LEFT JOIN pl_team_match tm ON tm.match_id = l.match_id
                                   AND tm.team_id = l.team_id
+        WHERE m.competition = %(c)s
         ORDER BY m.kickoff DESC
-    """)
+    """, {"c": league()})
     fixture_naive = {r["match_id"]: r["poss_naive_l5"] for r in query(
-        "SELECT match_id, poss_naive_l5 FROM v_fixture_features")}
+        "SELECT match_id, poss_naive_l5 FROM v_fixture_features "
+        "WHERE competition = %(c)s", {"c": league()})}
 
     # Grade first, so the stake ratings below know how much evidence exists.
     graded = sum(1 for r in rows if r["actual"] is not None)
@@ -490,8 +541,9 @@ def model():
     """Readiness of the modelling layer - no model is trained yet."""
     import load as loader
 
-    train = loader.training_set()
-    upcoming = loader.fixtures()
+    lg = league()
+    train = loader.training_set(competition=lg)
+    upcoming = loader.fixtures(competition=lg)
     feats = loader.feature_columns(train, upcoming)
     fit, holdout = loader.time_split(train)
     target = loader.TARGET
