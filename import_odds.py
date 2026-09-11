@@ -300,8 +300,6 @@ def main():
               f"under {r['under_odds']}  [{both}]{flip}")
     for p in problems:
         print(f"  --   {p}")
-    for w in warnings:
-        print(f"  !!   {w}")
 
     if args.dry_run:
         print("\n--- dry run: nothing written ---")
