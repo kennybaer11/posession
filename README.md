@@ -262,6 +262,27 @@ This exists only in the local app. `export_static.py` renders a fixed list of
 routes and `/admin` is not on it, so the published site stays a read-only
 snapshot with no login form on it.
 
+## Putting the admin on a live URL
+
+GitHub Pages serves files; it runs no code, so it cannot check a password or
+accept an upload. A reachable admin needs a server process, which means
+deploying this app.
+
+`render.yaml` and `Procfile` are set up for that. The four secrets are marked
+`sync: false`, so the host prompts for them and stores them itself rather than
+them sitting in a public repo.
+
+Set `DEPLOYED=1` on the host. That turns on three things that matter only once
+the login is exposed to the internet and would break local development if
+always on: a `Secure` session cookie, `ProxyFix` so Flask sees the real HTTPS
+scheme behind the host's proxy, and login throttling (8 attempts per IP per
+five minutes).
+
+Worth weighing before doing it: the Neon connection string moves onto a
+third-party host, and free tiers sleep after idling, so the first request after
+a quiet spell takes about a minute. The published Pages site keeps working
+either way - it is a static snapshot and needs nothing running.
+
 ## Files
 
 | File | Purpose |
@@ -277,6 +298,7 @@ snapshot with no login form on it.
 | `import_odds.py` | Loads bookmaker lines from `odds.txt` |
 | `odds_sheet.py` | Reads odds out of .xlsx / .csv uploads |
 | `make_admin.py` | Generates the admin login for `.env` |
+| `render.yaml`, `Procfile` | Deployment config for a live instance |
 | `export_static.py` | Renders the UI to static HTML for GitHub Pages |
 | `templates/`, `static/` | Pages and stylesheet for the UI |
 | `.github/workflows/scrape.yml` | The hourly job |

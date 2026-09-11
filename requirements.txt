@@ -17,3 +17,8 @@ scipy>=1.13
 
 # Spreadsheet upload in the local admin (odds_sheet.py)
 openpyxl>=3.1
+
+# Production server, for a deployed instance. The marker keeps pip from trying
+# to install it on Windows, where gunicorn does not run - local development
+# uses Flask's own server via `python app.py`.
+gunicorn>=23.0; sys_platform != "win32"

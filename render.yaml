@@ -1,0 +1,27 @@
+# Render blueprint. Push this and Render can build the service from it, rather
+# than needing the settings clicked in by hand.
+#
+# The four secrets are NOT here: sync:false means Render prompts for them and
+# stores them itself. Putting DATABASE_URL in a committed file would hand the
+# database to anyone who reads the repo - which is public.
+services:
+  - type: web
+    name: pl-data
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn app:app --workers 2 --threads 4 --timeout 120
+    healthCheckPath: /
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.12"
+      - key: DEPLOYED
+        value: "1"
+      - key: DATABASE_URL
+        sync: false
+      - key: ADMIN_USER
+        sync: false
+      - key: ADMIN_PASSWORD_HASH
+        sync: false
+      - key: SECRET_KEY
+        sync: false

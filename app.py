@@ -11,6 +11,7 @@ import os
 import re
 import secrets
 import tempfile
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -36,6 +37,44 @@ app.config["MAX_CONTENT_LENGTH"] = 4 * 1024 * 1024   # an odds sheet is tiny
 
 ADMIN_USER = os.getenv("ADMIN_USER")
 ADMIN_PASSWORD_HASH = os.getenv("ADMIN_PASSWORD_HASH")
+
+# Hardening that only matters once this is reachable from the internet, and
+# costs nothing locally. Set DEPLOYED=1 on the host.
+DEPLOYED = os.getenv("DEPLOYED", "").lower() in ("1", "true", "yes")
+app.config.update(
+    SESSION_COOKIE_HTTPONLY=True,   # JavaScript cannot read the session
+    SESSION_COOKIE_SAMESITE="Lax",  # not sent on cross-site POSTs
+    # Only over HTTPS when deployed. Setting this locally would break the
+    # session on plain-http://127.0.0.1, so it is conditional rather than
+    # always-on.
+    SESSION_COOKIE_SECURE=DEPLOYED,
+)
+
+if DEPLOYED:
+    # Behind a host's proxy, Flask sees plain HTTP and would build http://
+    # redirects and refuse to send a Secure cookie. This trusts the one proxy
+    # in front of the app to report the real scheme.
+    from werkzeug.middleware.proxy_fix import ProxyFix
+    app.wsgi_app = ProxyFix(app.wsgi_app, x_proto=1, x_host=1)
+
+# Login throttling. A password exposed to the internet gets guessed at, and
+# without a limit the only defence is password length. Keyed by IP, in memory:
+# good enough for a single small instance, and it resets on restart, which is
+# an acceptable trade for having no dependency.
+_LOGIN_ATTEMPTS = {}
+LOGIN_MAX_ATTEMPTS = 8
+LOGIN_WINDOW_SECONDS = 300
+
+
+def _login_blocked(ip):
+    now = time.time()
+    hits = [t for t in _LOGIN_ATTEMPTS.get(ip, []) if now - t < LOGIN_WINDOW_SECONDS]
+    _LOGIN_ATTEMPTS[ip] = hits
+    return len(hits) >= LOGIN_MAX_ATTEMPTS
+
+
+def _record_login_failure(ip):
+    _LOGIN_ATTEMPTS.setdefault(ip, []).append(time.time())
 
 
 def admin_configured():
@@ -532,7 +571,15 @@ def admin_login():
     if not admin_configured():
         return render_template("admin_setup.html"), 503
     error = None
+    ip = request.headers.get("X-Forwarded-For", request.remote_addr or "?")
+    ip = ip.split(",")[0].strip()
+
     if request.method == "POST":
+        if _login_blocked(ip):
+            return render_template(
+                "admin_login.html",
+                error="Too many attempts. Wait five minutes."), 429
+
         user = request.form.get("username", "")
         password = request.form.get("password", "")
         if user == ADMIN_USER and check_password_hash(ADMIN_PASSWORD_HASH,
@@ -544,7 +591,11 @@ def admin_login():
             # pointing elsewhere would turn the login into an open redirect.
             if not target.startswith("/"):
                 target = url_for("admin")
+            _LOGIN_ATTEMPTS.pop(ip, None)
             return redirect(target)
+        _record_login_failure(ip)
+        # One message for both cases: saying which was wrong tells an attacker
+        # whether the username exists.
         error = "Wrong username or password."
     return render_template("admin_login.html", error=error)
 
