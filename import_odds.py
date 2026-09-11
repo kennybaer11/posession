@@ -104,7 +104,21 @@ def parse(path):
         if not stripped or stripped.startswith("#"):
             continue
 
-        if "\t" in raw:
+        # Route on what the row IS, not on whether it contains a tab.
+        #
+        # Two traps, both hit in practice. Keying off the tab alone rejected
+        # good compact rows that happened to be tab-aligned, which is a natural
+        # way to type them. Keying off " - " alone then broke compact rows
+        # using a bare "-" for a missing price, since the surrounding spaces
+        # look identical to a match separator.
+        #
+        # A chance.cz paste is both tab-separated AND has a cell holding two
+        # club names either side of a dash. Requiring both is what separates
+        # "Arsenal - Chelsea" from "53.5   -   U1.75".
+        cells = [c.strip() for c in raw.split("\t")]
+        looks_like_chance = "\t" in raw and any(
+            re.search(r"[A-Za-z]{2,}.*\s[-–]\s.*[A-Za-z]{2,}", c) for c in cells)
+        if looks_like_chance:
             row = parse_chance(raw, n)
             if row:
                 rows.append(row)
