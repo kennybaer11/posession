@@ -14,3 +14,6 @@ Flask>=3.0,<4
 # Possession model and bet assessment (model.py)
 scikit-learn>=1.5
 scipy>=1.13
+
+# Spreadsheet upload in the local admin (odds_sheet.py)
+openpyxl>=3.1

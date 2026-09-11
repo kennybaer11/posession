@@ -242,6 +242,26 @@ The `/bets` page keeps the record; `/model` rates open lines out of 10, picking
 whichever side the prices favour, capped by how many bets the model has
 actually been graded on.
 
+## Admin (local only)
+
+`python app.py` then <http://127.0.0.1:5000/admin> uploads a spreadsheet of
+odds: `.xlsx`, `.csv` or tab-separated text. It shows what the file means in
+plain English and writes nothing until you confirm.
+
+Columns are matched **by header name**, not position - Day / Match / Bet /
+Under / Over, or the Czech equivalents chance.cz exports. Where a side has two
+columns (`Mene` holding "Mene nez 55,5" and `Under odd` holding the price) the
+price column is identified from the data rather than the header, since both
+answer to "under" and guessing from the name alone loses every price.
+
+Set up the login with `python make_admin.py`, which prints the three values for
+`.env`. With them unset, `/admin` refuses to run rather than running
+unprotected.
+
+This exists only in the local app. `export_static.py` renders a fixed list of
+routes and `/admin` is not on it, so the published site stays a read-only
+snapshot with no login form on it.
+
 ## Files
 
 | File | Purpose |
@@ -255,6 +275,8 @@ actually been graded on.
 | `app.py` | Local read-only web UI (`python app.py`) |
 | `model.py` | Possession model, backtest, stake rating |
 | `import_odds.py` | Loads bookmaker lines from `odds.txt` |
+| `odds_sheet.py` | Reads odds out of .xlsx / .csv uploads |
+| `make_admin.py` | Generates the admin login for `.env` |
 | `export_static.py` | Renders the UI to static HTML for GitHub Pages |
 | `templates/`, `static/` | Pages and stylesheet for the UI |
 | `.github/workflows/scrape.yml` | The hourly job |

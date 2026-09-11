@@ -8,16 +8,55 @@ layer about what a number means.
 """
 
 import os
+import re
+import secrets
+import tempfile
 from datetime import datetime, timezone
+from pathlib import Path
 
 import psycopg
 from psycopg.rows import dict_row
 from dotenv import load_dotenv
-from flask import Flask, g, render_template, request, abort
+from functools import wraps
+
+from flask import (Flask, abort, flash, g, redirect, render_template,
+                   request, session, url_for)
+from werkzeug.security import check_password_hash
 
 load_dotenv()
 
 app = Flask(__name__)
+
+# Sessions need a stable secret. A random one per process would log the admin
+# out on every restart, so this is read from the environment and only falls
+# back to a random value when unset - in which case the admin is unusable,
+# which is the right failure: a predictable default secret is worse.
+app.secret_key = os.getenv("SECRET_KEY") or os.urandom(32)
+app.config["MAX_CONTENT_LENGTH"] = 4 * 1024 * 1024   # an odds sheet is tiny
+
+ADMIN_USER = os.getenv("ADMIN_USER")
+ADMIN_PASSWORD_HASH = os.getenv("ADMIN_PASSWORD_HASH")
+
+
+def admin_configured():
+    return bool(ADMIN_USER and ADMIN_PASSWORD_HASH and os.getenv("SECRET_KEY"))
+
+
+def login_required(view):
+    """Gate a view behind the admin session.
+
+    Fails closed: with no credentials configured the admin is unreachable
+    rather than open. An unconfigured admin panel that anyone can use is a
+    worse outcome than one that does not work.
+    """
+    @wraps(view)
+    def wrapper(*args, **kwargs):
+        if not admin_configured():
+            return render_template("admin_setup.html"), 503
+        if not session.get("admin"):
+            return redirect(url_for("admin_login", next=request.path))
+        return view(*args, **kwargs)
+    return wrapper
 
 
 # -- database ---------------------------------------------------------------
@@ -479,3 +518,135 @@ def model():
 
 if __name__ == "__main__":
     app.run(debug=True, port=5000)
+
+
+# -- admin -------------------------------------------------------------------
+#
+# Deliberately NOT part of the published site. export_static.py renders a fixed
+# list of routes, and these are not on it, so nothing under /admin is ever
+# written into the static build - the Pages site stays a read-only snapshot
+# with no login form on it to attack.
+
+@app.route("/admin/login", methods=["GET", "POST"])
+def admin_login():
+    if not admin_configured():
+        return render_template("admin_setup.html"), 503
+    error = None
+    if request.method == "POST":
+        user = request.form.get("username", "")
+        password = request.form.get("password", "")
+        if user == ADMIN_USER and check_password_hash(ADMIN_PASSWORD_HASH,
+                                                      password):
+            session["admin"] = user
+            session.permanent = False
+            target = request.args.get("next") or url_for("admin")
+            # Only ever redirect within this app: an attacker-supplied ?next=
+            # pointing elsewhere would turn the login into an open redirect.
+            if not target.startswith("/"):
+                target = url_for("admin")
+            return redirect(target)
+        error = "Wrong username or password."
+    return render_template("admin_login.html", error=error)
+
+
+@app.route("/admin/logout")
+def admin_logout():
+    session.pop("admin", None)
+    return redirect(url_for("admin_login"))
+
+
+@app.route("/admin", methods=["GET", "POST"])
+@login_required
+def admin():
+    """Upload a spreadsheet of lines, review what it means, then commit it.
+
+    The preview is not decoration. A mis-read column reverses which side a bet
+    is recorded on, and that corrupts the record the model is judged by - so
+    nothing is written until the parsed rows have been shown as plain English.
+    """
+    import import_odds as io_mod
+    import odds_sheet
+
+    preview = problems = None
+    written = None
+    error = None
+
+    if request.method == "POST":
+        action = request.form.get("action")
+        try:
+            if action == "commit":
+                # Re-parse the stashed upload rather than trusting a round trip
+                # through the form: fewer places for the values to change.
+                token = session.get("upload_token")
+                name = session.get("upload_name", "")
+                path = _staged_path(token) if token else None
+                if not path or not path.exists():
+                    raise ValueError("Nothing staged - upload the file again.")
+                parsed = odds_sheet.parse_bytes(path.read_bytes(), name)
+                ready, problems = io_mod.resolve_rows(db_handle(), parsed)
+                for r in ready:
+                    r.pop("_label", None)
+                    r.pop("_flipped", None)
+                written = db_handle().upsert_lines(ready)
+                path.unlink(missing_ok=True)
+                session.pop("upload_token", None)
+                session.pop("upload_name", None)
+            else:
+                upload = request.files.get("sheet")
+                if not upload or not upload.filename:
+                    raise ValueError("Choose a file first.")
+                raw = upload.read()
+                parsed = odds_sheet.parse_bytes(raw, upload.filename)
+                if not parsed:
+                    raise ValueError(
+                        "No rows found. The sheet needs a header row naming "
+                        "the columns.")
+                preview, problems = io_mod.resolve_rows(db_handle(), parsed)
+                # The file is staged on disk, not in the session. Flask keeps
+                # session data in a cookie, and browsers silently drop cookies
+                # over about 4KB - a real spreadsheet is bigger than that, so
+                # stashing it there fails only in a real browser, never in a
+                # test.
+                token = secrets.token_urlsafe(16)
+                _staged_path(token).write_bytes(raw)
+                session["upload_token"] = token
+                session["upload_name"] = upload.filename
+        except Exception as exc:          # surfaced to the page, not swallowed
+            error = str(exc)
+
+    recent = query("""
+        SELECT l.line, l.over_odds, l.under_odds, l.captured_at, l.bookmaker,
+               t.name AS team, ht.abbr AS home_abbr, at_.abbr AS away_abbr,
+               m.kickoff
+        FROM pl_possession_line l
+        JOIN pl_teams t   ON t.team_id = l.team_id
+        JOIN pl_matches m ON m.match_id = l.match_id
+        JOIN pl_teams ht  ON ht.team_id = m.home_team_id
+        JOIN pl_teams at_ ON at_.team_id = m.away_team_id
+        ORDER BY l.captured_at DESC NULLS LAST, m.kickoff DESC
+        LIMIT 25
+    """)
+    return render_template("admin.html", preview=preview, problems=problems,
+                           written=written, error=error, recent=recent,
+                           user=session.get("admin"))
+
+
+def _staged_path(token):
+    """Where an uploaded sheet waits between preview and commit.
+
+    The token is generated here, never taken from the request, so a crafted
+    value cannot point this at another file.
+    """
+    safe = re.sub(r"[^A-Za-z0-9_-]", "", str(token))[:40]
+    staging = Path(tempfile.gettempdir()) / "pl-odds-staging"
+    staging.mkdir(exist_ok=True)
+    return staging / f"{safe}.upload"
+
+
+def db_handle():
+    """A Database wrapper around this request's connection, for the upserts."""
+    import db as db_mod
+    handle = db_mod.Database.__new__(db_mod.Database)
+    handle.conn = db()
+    handle.dsn = os.getenv("DATABASE_URL")
+    return handle

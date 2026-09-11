@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block title %}Sign in &middot; PL data{% endblock %}
+{% block heading %}Sign in{% endblock %}
+
+{% block content %}
+<div class="panel" style="max-width:380px">
+  {% if error %}
+  <div class="note" style="border-left-color: var(--bad)"><strong>{{ error }}</strong></div>
+  {% endif %}
+  <form method="post">
+    <label class="muted" style="font-size:13px;display:block;margin-bottom:4px">Username</label>
+    <input name="username" autocomplete="username" autofocus required
+           style="width:100%;padding:9px 11px;margin-bottom:14px;border:1px solid var(--line);
+                  border-radius:7px;background:var(--bg);color:var(--ink);font-size:14px">
+    <label class="muted" style="font-size:13px;display:block;margin-bottom:4px">Password</label>
+    <input name="password" type="password" autocomplete="current-password" required
+           style="width:100%;padding:9px 11px;margin-bottom:18px;border:1px solid var(--line);
+                  border-radius:7px;background:var(--bg);color:var(--ink);font-size:14px">
+    <button type="submit"
+            style="padding:9px 20px;border:none;border-radius:7px;background:var(--accent);
+                   color:#fff;font-weight:600;font-size:14px;cursor:pointer">Sign in</button>
+  </form>
+</div>
+<p class="muted" style="font-size:12.5px">
+  This page exists only in the local app. The published site is a static
+  snapshot with no login on it.
+</p>
+{% endblock %}

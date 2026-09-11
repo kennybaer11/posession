@@ -216,6 +216,55 @@ def find_match(db, date, team_a, team_b):
         return cur.fetchone()
 
 
+def resolve_rows(db, parsed, bookmaker="chance.cz", closing=False):
+    """Turn parsed rows into database rows, reporting what could not be matched.
+
+    Shared by the command line and the admin upload so the two cannot drift
+    into disagreeing about what a given line means.
+    """
+    index, names = team_lookup(db)
+    ready, problems = [], []
+    for r in parsed:
+        home_id = resolve(r["home"], index)
+        away_id = resolve(r["away"], index)
+        team_id = resolve(r["team"], index)
+        if not (home_id and away_id and team_id):
+            missing = [lbl for lbl, v in (("home", home_id), ("away", away_id),
+                                          ("team", team_id)) if not v]
+            problems.append(f"row {r['n']}: unknown club for {', '.join(missing)} "
+                            f"({r['home']} / {r['away']} / {r['team']})")
+            continue
+        match = find_match(db, r["date"], home_id, away_id)
+        if not match:
+            problems.append(f"row {r['n']}: no {r['home']} v {r['away']} "
+                            f"on {r['date']}")
+            continue
+        if team_id not in (match["home_team_id"], match["away_team_id"]):
+            problems.append(f"row {r['n']}: {r['team']} did not play in "
+                            f"{r['home']} v {r['away']}")
+            continue
+        if not (r["over"] or r["under"]):
+            problems.append(f"row {r['n']}: no price given")
+            continue
+
+        ready.append({
+            "match_id": match["match_id"], "team_id": team_id,
+            "line": float(r["line"]),
+            "over_odds": r["over"], "under_odds": r["under"],
+            "bookmaker": bookmaker,
+            "is_closing": 1 if closing else 0,
+            "captured_at": datetime.now(timezone.utc).replace(tzinfo=None),
+            "note": None,
+            "_label": f"{names[match['home_team_id']]} v "
+                      f"{names[match['away_team_id']]} "
+                      f"({match['kickoff']:%d %b %Y}) - {names[team_id]} "
+                      f"{'HOME' if team_id == match['home_team_id'] else 'away'} "
+                      f"{r['line']}",
+            "_flipped": home_id != match["home_team_id"],
+        })
+    return ready, problems
+
+
 def main():
     ap = argparse.ArgumentParser(description="Import possession lines.")
     ap.add_argument("path")
@@ -227,7 +276,6 @@ def main():
 
     db = Database()
     db.ensure_schema(with_views=False)
-    index, names = team_lookup(db)
 
     if not Path(args.path).exists():
         print(f"{args.path} does not exist - nothing to import.")
@@ -241,41 +289,7 @@ def main():
         print("No lines in the file - nothing to import.")
         return 0
 
-    ready, problems, warnings = [], [], []
-    for r in parsed:
-        home_id = resolve(r["home"], index)
-        away_id = resolve(r["away"], index)
-        team_id = resolve(r["team"], index)
-        if not (home_id and away_id and team_id):
-            missing = [lbl for lbl, v in (("home", home_id), ("away", away_id),
-                                          ("team", team_id)) if not v]
-            problems.append(f"line {r['n']}: unknown club for {', '.join(missing)} "
-                            f"({r['home']} / {r['away']} / {r['team']})")
-            continue
-        match = find_match(db, r["date"], home_id, away_id)
-        if not match:
-            problems.append(f"line {r['n']}: no {r['home']} v {r['away']} "
-                            f"on {r['date']}")
-            continue
-        if team_id not in (match["home_team_id"], match["away_team_id"]):
-            problems.append(f"line {r['n']}: {r['team']} did not play in that match")
-            continue
-
-        ready.append({
-            "match_id": match["match_id"], "team_id": team_id,
-            "line": float(r["line"]),
-            "over_odds": r["over"], "under_odds": r["under"],
-            "bookmaker": args.bookmaker,
-            "is_closing": 1 if args.closing else 0,
-            "captured_at": datetime.now(timezone.utc).replace(tzinfo=None),
-            "note": None,
-            "_label": f"{names[match['home_team_id']]} v "
-                      f"{names[match['away_team_id']]} "
-                      f"({match['kickoff']:%d %b %Y}) - {names[team_id]} "
-                      f"{'HOME' if team_id == match['home_team_id'] else 'away'} "
-                      f"{r['line']}",
-            "_flipped": home_id != match["home_team_id"],
-        })
+    ready, problems = resolve_rows(db, parsed, args.bookmaker, args.closing)
 
     print(f"Parsed {len(parsed)} line(s): {len(ready)} matched, "
           f"{len(problems)} problem(s).\n")

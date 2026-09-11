@@ -1,0 +1,133 @@
+{% extends "base.html" %}
+{% block title %}Admin &middot; PL data{% endblock %}
+{% block heading %}Import odds{% endblock %}
+
+{% block content %}
+
+<p class="muted" style="margin-top:-12px">
+  Signed in as <strong>{{ user }}</strong> &middot;
+  <a href="{{ url_for('admin_logout') }}">sign out</a>
+</p>
+
+{% if error %}
+<div class="note" style="border-left-color: var(--bad)"><strong>{{ error }}</strong></div>
+{% endif %}
+
+{% if written is not none %}
+<div class="note" style="border-left-color: var(--good)">
+  <strong>Imported {{ written }} line{{ '' if written == 1 else 's' }}.</strong>
+  They appear on the Model and Bets pages immediately, and reach the published
+  site on the next hourly run.
+</div>
+{% endif %}
+
+<div class="panel">
+  <h2>Upload a spreadsheet</h2>
+  <form method="post" enctype="multipart/form-data">
+    <input type="file" name="sheet" accept=".xlsx,.xlsm,.csv,.tsv,.txt" required
+           style="font-size:13.5px;margin-bottom:14px">
+    <br>
+    <button type="submit" name="action" value="preview"
+            style="padding:9px 20px;border:none;border-radius:7px;background:var(--accent);
+                   color:#fff;font-weight:600;font-size:14px;cursor:pointer">
+      Read it
+    </button>
+  </form>
+  <p class="muted" style="font-size:13px;margin-bottom:0">
+    <code>.xlsx</code>, <code>.csv</code> or tab-separated text. Columns are matched
+    <strong>by their header name</strong>, not by position &mdash; Day / Match / Bet /
+    Under / Over, or the Czech equivalents chance.cz uses. Reorder or insert columns
+    freely; a positional reader would silently read the wrong field, and for odds
+    that means recording the opposite bet.
+  </p>
+</div>
+
+{% if preview is not none %}
+<div class="panel">
+  <h2>
+    What this would import
+    <span class="sub">&mdash; {{ preview|length }} row{{ '' if preview|length == 1 else 's' }} understood{% if problems %}, {{ problems|length }} not{% endif %}</span>
+  </h2>
+
+  {% if preview %}
+  <div class="tablewrap">
+    <table>
+      <thead>
+        <tr><th class="l">Match</th><th class="l">Line is about</th><th>Line</th>
+            <th>Over</th><th>Under</th><th class="l">Note</th></tr>
+      </thead>
+      <tbody>
+        {% for r in preview %}
+        <tr>
+          <td class="l">{{ r._label.split(' - ')[0] }}</td>
+          <td class="l">{{ r._label.split(' - ')[1] if ' - ' in r._label else '' }}</td>
+          <td class="num">{{ '%.1f'|format(r.line) }}</td>
+          <td class="num">{{ '%.2f'|format(r.over_odds) if r.over_odds else '&ndash;'|safe }}</td>
+          <td class="num">{{ '%.2f'|format(r.under_odds) if r.under_odds else '&ndash;'|safe }}</td>
+          <td class="l muted" style="font-size:12px;white-space:normal">
+            {% if not (r.over_odds and r.under_odds) %}
+              <span class="chip wa">one price</span> margin cannot be removed
+            {% endif %}
+            {% if r._flipped %}<span class="chip">clubs listed the other way round</span>{% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <form method="post" style="margin-top:16px">
+    <button type="submit" name="action" value="commit"
+            style="padding:9px 20px;border:none;border-radius:7px;background:var(--good);
+                   color:#fff;font-weight:600;font-size:14px;cursor:pointer">
+      Looks right &mdash; import these {{ preview|length }}
+    </button>
+  </form>
+  <p class="muted" style="font-size:12.5px;margin-bottom:0">
+    Nothing has been written yet. Re-importing the same line updates it rather than
+    duplicating, so a correction is just another upload.
+  </p>
+  {% else %}
+  <div class="empty">No rows could be matched to a fixture.</div>
+  {% endif %}
+</div>
+{% endif %}
+
+{% if problems %}
+<div class="panel">
+  <h2>Rows that could not be used</h2>
+  <ul class="muted" style="font-size:13px;margin:0;padding-left:20px">
+    {% for p in problems %}<li>{{ p }}</li>{% endfor %}
+  </ul>
+</div>
+{% endif %}
+
+<div class="panel">
+  <h2>Recently imported</h2>
+  <div class="tablewrap">
+    <table>
+      <thead>
+        <tr><th class="l">Kickoff</th><th class="l">Match</th><th class="l">Team</th>
+            <th>Line</th><th>Over</th><th>Under</th><th class="l">Added</th></tr>
+      </thead>
+      <tbody>
+        {% for r in recent %}
+        <tr>
+          <td class="l muted">{{ r.kickoff.strftime('%d %b') }}</td>
+          <td class="l">{{ r.home_abbr }} v {{ r.away_abbr }}</td>
+          <td class="l">{{ r.team }}</td>
+          <td class="num">{{ '%.1f'|format(r.line) }}</td>
+          <td class="num muted">{{ '%.2f'|format(r.over_odds) if r.over_odds else '&ndash;'|safe }}</td>
+          <td class="num muted">{{ '%.2f'|format(r.under_odds) if r.under_odds else '&ndash;'|safe }}</td>
+          <td class="l muted" style="font-size:12px">
+            {{ r.captured_at.strftime('%d %b %H:%M') if r.captured_at else '&ndash;'|safe }}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% if not recent %}<div class="empty">Nothing imported yet.</div>{% endif %}
+</div>
+
+{% endblock %}

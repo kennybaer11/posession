@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% block title %}Admin not configured &middot; PL data{% endblock %}
+{% block heading %}Admin is not configured{% endblock %}
+
+{% block content %}
+<div class="note" style="border-left-color: var(--warn)">
+  The admin needs three values in <code>.env</code>, and refuses to run without
+  them. That is deliberate &mdash; an admin panel with a default password is worse
+  than one that does not work.
+</div>
+
+<div class="panel">
+  <h2>Generate the credentials</h2>
+  <p class="muted" style="font-size:13.5px">
+    Run this, then paste the three lines it prints into <code>.env</code>:
+  </p>
+  <pre style="background:var(--chip);padding:14px;border-radius:8px;overflow-x:auto;
+              font-size:12.5px;line-height:1.6"><code>.venv\Scripts\python.exe make_admin.py</code></pre>
+  <p class="muted" style="font-size:13px">
+    It asks for a username and password, hashes the password, and prints
+    <code>ADMIN_USER</code>, <code>ADMIN_PASSWORD_HASH</code> and
+    <code>SECRET_KEY</code>. The password itself is never stored &mdash; only a
+    hash of it, so the file cannot give it back if someone reads it.
+  </p>
+  <p class="muted" style="font-size:13px;margin-bottom:0">
+    Restart <code>python app.py</code> afterwards; the values are read at startup.
+  </p>
+</div>
+{% endblock %}
