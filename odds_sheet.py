@@ -241,49 +241,68 @@ def _rows_from_grid(grid):
     return out
 
 
-_MARKET_RE = re.compile(
-    r"(?i)m[ií][cč]e\s+(?P<team>.+?)\s+v\s+z[aá]pas\w*"
-    r".*?m[ée]n[ěe]\s+ne[žz]\s*(?P<line>[\d.,]+)\s*(?P<under>[\d.,]+)"
-    r".*?(?P=line)\s*a\s*v[ií]ce\s*(?P<over>[\d.,]+)", re.S)
+# "Mene nez 54.5" then "1.84" arrive concatenated as "Mene nez 54.51.84",
+# because innerText on the parent drops the boundary between the label and the
+# price. They are separable because an odd always ends in exactly two
+# decimals: anchoring on that leaves "54.5" as the line, and "511.85" splits
+# to 51 / 1.85 rather than the 511 / .85 a greedy read would take.
+# The label sits BEFORE the number on one side ("Mene nez 54.5") and
+# BETWEEN the two on the other ("54.5 a vice" then the odd), so anything
+# may separate them. The odd is pinned to the end at two decimals, which
+# forces the split: "511.85" backtracks to 51 / 1.85 rather than 511 / .85.
+_PRICE_RE = re.compile(
+    r"(?P<line>\d+(?:[.,]\d+)?)\D*?(?P<odd>\d+[.,]\d{2})\s*$")
+_TEAM_RE = re.compile(r"(?i)m[ií][cč]e\s+(?P<team>.+?)\s+v\s+z[aá]pas")
+
+
+def _start_url(row):
+    """webscraper.io names this key differently depending on where you read it.
+
+    The browser preview shows "web-scraper-start-url"; the API returns
+    "web_scraper_start_url". Checking only one silently matched nothing.
+    """
+    for key in ("web-scraper-start-url", "web_scraper_start_url",
+                "web-scraper-start-url-href", "url"):
+        if row.get(key):
+            return str(row[key])
+    return ""
 
 
 def _fold_market_text(rows):
-    """Normalise the `market_text` sitemap shape into the `mene`/`vice` one.
+    """Collapse the market_text sitemap layout into one row per match.
 
-    Two sitemap layouts are in use. One puts each part in its own column -
-    mene / meneodd / vice / viceodd / home / away - and yields one row per
-    match. The other captures the whole market block as a single string:
-
-        "Procento drzeni mice Aston Villa v zapasu
-         Mene nez 54.5 1.84  54.5 a vice 1.84"
-
-    and, because its team and price selectors are both `multiple`, emits one
-    row per COMBINATION - four rows for one match. Everything needed is in
-    that one string, so it is parsed out and the duplicate rows collapse on
-    the start URL.
+    That layout makes team and price selectors both `multiple`, so one match
+    becomes four rows - two naming a club, two carrying a price, each with the
+    others blank. The price rows are the useful ones: each states its own side
+    ("Mene nez ..." under, "... a vice" over), so the sides cannot be
+    transposed the way a positional read could transpose them.
     """
-    if not any(r.get("market_text") for r in rows):
+    if not any(r.get("prices") or r.get("market_text") for r in rows):
         return rows
 
     folded = {}
     for r in rows:
-        text = " ".join(str(r.get("market_text") or "").split())
-        m = _MARKET_RE.search(text)
+        price_text = " ".join(str(r.get("prices") or "").split())
+        if not price_text:
+            continue
+        m = _PRICE_RE.search(price_text)
         if not m:
             continue
-        url = r.get("web-scraper-start-url") or ""
-        folded.setdefault(url, {
-            "web-scraper-start-url": url,
-            # No home/away: the slug cannot be split into two clubs, since
-            # nothing marks where one ends. The URL is carried instead and the
-            # fixture is resolved from it by the phrase matcher in
-            # odds_pipeline, which is built for exactly this.
-            "home": None, "away": None, "url": url,
-            "text": f"drzeni mice {m.group('team')} v zapasu",
-            "mene": m.group("line"), "meneodd": m.group("under"),
-            "vice": m.group("line"), "viceodd": m.group("over"),
-        })
-    return list(folded.values()) or rows
+        url = _start_url(r)
+        entry = folded.setdefault(url, {"web-scraper-start-url": url,
+                                        "url": url, "home": None, "away": None})
+        line = m.group("line")
+        odd = m.group("odd")
+        if re.search(r"(?i)m[ée]n[ěe]", price_text):
+            entry["mene"], entry["meneodd"] = line, odd
+        else:
+            entry["vice"], entry["viceodd"] = line, odd
+
+        team = _TEAM_RE.search(" ".join(str(r.get("market_text") or "").split()))
+        if team and "text" not in entry:
+            entry["text"] = f"mice {team.group('team')} v zapasu"
+
+    return [v for v in folded.values() if v.get("mene") or v.get("vice")] or rows
 
 
 def parse_webscraper(rows):
@@ -310,7 +329,7 @@ def parse_webscraper(rows):
     out = []
     for n, r in enumerate(rows, 1):
         home, away = r.get("home"), r.get("away")
-        url = r.get("url") or r.get("web-scraper-start-url")
+        url = r.get("url") or _start_url(r)
         if not (home and away) and not url:
             continue
         team = _team_from_bet(r.get("text"), home or "")
