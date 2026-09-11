@@ -17,3 +17,11 @@
 2026-09-05    MCI    COV    MCI    65.5   O1.70   -
 2026-09-06    ARS    CHE    ARS    54.5   O1.75   U1.94
 2026-09-06    EVE    MUN    MUN    56.5   O1.65   U2.08
+2026-09-14	  LEE	   NEW	  NEW	   52.5	  O2.01	  U1.7
+2026-09-12	  LIV	   FUL	  LIV	   55.5	  O1.75	  U1.94
+2026-09-12	  BOU	   BRE	  BOU	   52.5	  O1.75	  U1.94
+2026-09-13	  MUN	   MCI	  MCI	   56.5	  O1.7	  U2.01
+2026-09-12	  SUN	   ARS	  ARS	   56.5	  O1.84	  U1.84
+2026-09-12	  TOT	   EVE	  TOT	   56.5	  O1.7	  U2.01
+2026-09-12	  CHE	   HUL	  CHE	   66.5	  O1.94	  U1.75
+2026-09-12	  AVL	   NFO	  AVL	   54.5	  O1.84	  U1.84
