@@ -41,6 +41,14 @@ premier_league:
 
   # --- modelling ----------------------------------------------------------
   training:
+    # Which league to model. "PL", "BL1", "LaLiga", or "all" to pool them.
+    #
+    # One at a time by default: possession baselines differ between leagues,
+    # and pooling without a league term drags each league's mean toward the
+    # others. Worse, the pooling would be invisible - the rows look identical
+    # once the competition column is ignored.
+    competition: PL
+
     # Which seasons the training set draws on: "current" (the first season
     # listed above), "all", or a specific start year like 2025.
     season: current

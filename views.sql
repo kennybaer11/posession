@@ -312,6 +312,7 @@ GROUP BY match_id, team_id;
 -- ---------------------------------------------------------------------------
 CREATE VIEW v_match_features AS
 SELECT
+    m.competition,
     m.match_id, m.kickoff, m.season, m.match_week, m.period,
     m.home_team_id, ht.name AS home_team, m.away_team_id, at.name AS away_team,
 
@@ -527,6 +528,7 @@ GROUP BY team_id;
 -- ---------------------------------------------------------------------------
 CREATE VIEW v_fixture_features AS
 SELECT
+    m.competition,
     m.match_id, m.kickoff, m.season, m.match_week,
     m.home_team_id, ht.name AS home_team,
     m.away_team_id, at.name AS away_team,

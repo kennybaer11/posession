@@ -48,6 +48,7 @@ def load_config(path):
 def team_row(t):
     stadium = t.get("stadium") or {}
     return {
+        "competition": "PL",
         "team_id": str(t["id"]),
         "name": t.get("name"),
         "short_name": t.get("shortName"),
@@ -61,6 +62,7 @@ def team_row(t):
 def match_row(m):
     home, away = m["homeTeam"], m["awayTeam"]
     return {
+        "competition": "PL",
         "match_id": str(m["matchId"]),
         "season": str(m.get("season") or ""),
         "match_week": m.get("matchWeek"),
@@ -99,6 +101,7 @@ def build_team_rows(match, stats_payload):
             points = 3 if result == "W" else (1 if result == "D" else 0)
 
         row = {
+            "competition": "PL",
             "match_id": str(match["matchId"]),
             "team_id": str(team["id"]),
             "opponent_id": str(opp["id"]),

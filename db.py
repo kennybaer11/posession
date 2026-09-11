@@ -231,8 +231,8 @@ PLAYER_COLS = ("player_id", "first_name", "last_name")
 LINE_COLS = ("match_id", "team_id", "line", "over_odds", "under_odds",
              "bookmaker", "is_closing", "captured_at", "note")
 
-TEAM_COLS = ("team_id", "name", "short_name", "abbr", "stadium", "city", "capacity")
-MATCH_COLS = ("match_id", "season", "match_week", "kickoff", "ground", "period",
+TEAM_COLS = ("competition", "team_id", "name", "short_name", "abbr", "stadium", "city", "capacity")
+MATCH_COLS = ("competition", "match_id", "season", "match_week", "kickoff", "ground", "period",
               "home_team_id", "away_team_id", "home_score", "away_score")
 APPEARANCE_COLS = ("match_id", "team_id", "competition_id", "competition", "season",
                    "kickoff", "is_home", "opponent_id", "opponent_name", "period",
@@ -305,9 +305,50 @@ class Database:
             for stmt in INDEXES:
                 cur.execute(stmt)
         self.conn.commit()
+        self.migrate_competitions()
         self.migrate_stat_columns()
         if with_views:
             self.ensure_views()
+
+    def migrate_competitions(self):
+        """Add the competition dimension to the per-league tables.
+
+        The schema began as Premier League only. Existing rows are backfilled
+        to 'PL' rather than being rewritten, so nothing already collected moves
+        or is reinterpreted.
+
+        Team and match ids are NOT namespaced. The Premier League's are small
+        integers and the German and Spanish feeds use DFL-/LaLiga-prefixed
+        strings, so they cannot collide; a prefix would only make every
+        existing id churn for no gain.
+        """
+        added = []
+        with self.conn.cursor() as cur:
+            # pl_team_appearance is deliberately absent: it already has a
+            # `competition` column naming the competition of that fixture
+            # (league, cup, Europe), which is what a rest-day calendar needs.
+            # Reusing the name for "which league does this club play in" would
+            # overload one column with two meanings.
+            for table in ("pl_teams", "pl_matches", "pl_team_match"):
+                cur.execute("""SELECT 1 FROM information_schema.columns
+                               WHERE table_name = %s AND column_name = 'competition'""",
+                            (table,))
+                if cur.fetchone():
+                    continue
+                cur.execute(f"ALTER TABLE {table} ADD COLUMN competition TEXT")
+                cur.execute(f"UPDATE {table} SET competition = 'PL' "
+                            f"WHERE competition IS NULL")
+                cur.execute(f"ALTER TABLE {table} "
+                            f"ALTER COLUMN competition SET DEFAULT 'PL'")
+                cur.execute(f"ALTER TABLE {table} "
+                            f"ALTER COLUMN competition SET NOT NULL")
+                cur.execute(f"CREATE INDEX IF NOT EXISTS "
+                            f"idx_{table}_competition ON {table} (competition)")
+                added.append(table)
+        self.conn.commit()
+        if added:
+            log.info("Added competition column to: %s", ", ".join(added))
+        return added
 
     def migrate_stat_columns(self):
         """Add stat columns that features.py has gained since the table was made.

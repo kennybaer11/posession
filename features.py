@@ -126,6 +126,10 @@ AGAINST_STATS = {
 
 # Match-level context stored alongside the stats.
 CONTEXT_COLUMNS = (
+    # competition is written explicitly rather than left to the column default.
+    # A default of 'PL' meant the first Bundesliga and LaLiga rows were all
+    # stored as Premier League - silently, because a default cannot fail.
+    "competition",
     "match_id", "team_id", "opponent_id", "is_home",
     "season", "match_week", "kickoff", "result", "points",
 )

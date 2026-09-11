@@ -42,6 +42,7 @@ def current_season():
 def training_config():
     cfg = _config().get("training") or {}
     return {
+        "competition": cfg.get("competition", "PL"),
         "season": cfg.get("season", "current"),
         "half_life_days": float(cfg.get("half_life_days", 30)),
         "min_history": int(cfg.get("min_history", 3)),
@@ -74,7 +75,8 @@ def decay_weights(kickoffs, half_life_days=30, reference=None):
     return 0.5 ** (age_days / float(half_life_days))
 
 
-def training_set(min_history=None, season="config", half_life_days=None):
+def training_set(min_history=None, season="config", half_life_days=None,
+                 competition="config"):
     """Played matches with each side's pre-kickoff form and the real outcome.
 
     min_history drops rows where a team had barely any prior matches to form an
@@ -89,6 +91,8 @@ def training_set(min_history=None, season="config", half_life_days=None):
     cfg = training_config()
     if season == "config":
         season = cfg["season"]
+    if competition == "config":
+        competition = cfg["competition"]
     if min_history is None:
         min_history = cfg["min_history"]
     if half_life_days is None:
@@ -99,6 +103,13 @@ def training_set(min_history=None, season="config", half_life_days=None):
         WHERE home_matches_before >= %(n)s AND away_matches_before >= %(n)s
     """
     params = {"n": min_history}
+    # One league at a time by default. Possession baselines differ between
+    # leagues, so pooling them without a league term would have each league's
+    # mean pulled toward the others - and the pooling would be invisible,
+    # because the rows look identical once the competition column is ignored.
+    if competition and competition != "all":
+        params["competition"] = competition
+        sql += " AND competition = %(competition)s"
     if season and season != "all":
         params["season"] = current_season() if season == "current" else str(season)
         sql += " AND season = %(season)s"
@@ -138,10 +149,17 @@ def baselines(train, target=TARGET):
     return {k: float(v) for k, v in out.items() if pd.notna(v)}
 
 
-def fixtures():
+def fixtures(competition="config"):
     """Upcoming matches, same feature names as the training set."""
-    return pd.read_sql("SELECT * FROM v_fixture_features ORDER BY kickoff",
-                       engine(), parse_dates=["kickoff"])
+    if competition == "config":
+        competition = training_config()["competition"]
+    sql = "SELECT * FROM v_fixture_features"
+    params = {}
+    if competition and competition != "all":
+        sql += " WHERE competition = %(competition)s"
+        params["competition"] = competition
+    return pd.read_sql(sql + " ORDER BY kickoff", engine(), params=params,
+                       parse_dates=["kickoff"])
 
 
 def feature_columns(train, upcoming):
@@ -154,7 +172,7 @@ def feature_columns(train, upcoming):
         "match_id", "kickoff", "season", "match_week", "period",
         "home_team_id", "away_team_id", "home_team", "away_team",
         "home_score", "away_score", "outcome", "total_goals",
-        "home_prev_competition", "away_prev_competition",
+        "home_prev_competition", "away_prev_competition", "competition",
         # Recency weight: numeric, and present only on the training side. It
         # would sail through the numeric check below and hand the model a
         # column that encodes how recent the match is.
