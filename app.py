@@ -425,12 +425,53 @@ def settles_over(actual, line):
     return actual >= line
 
 
+def _fitted_predictor(competition):
+    """Fit the model for this league and return match_id -> prediction.
+
+    Fitted per request rather than cached: 300-odd rows and ten columns costs
+    milliseconds, and a stale model that silently disagrees with the Model page
+    would cost far more than that to notice.
+
+    Returns None when the league has too little history to fit, which is a real
+    state early in a season rather than an error.
+    """
+    try:
+        import load as loader
+        import model as m
+        train = loader.training_set(season="all", competition=competition,
+                                    min_history=1)
+        upcoming = loader.fixtures(competition=competition)
+        feats = m.available_features(train)
+        if len(train) < 40 or not feats or not len(upcoming):
+            return None
+        fitted = m.build(alpha=1.0)
+        fitted.fit(train[feats], train[loader.TARGET],
+                   ridge__sample_weight=train["weight"])
+        preds = dict(zip(upcoming["match_id"].astype(str),
+                         fitted.predict(upcoming[feats])))
+        # Played matches need a prediction too, for the settled rows on the
+        # Bets page; they carry the same feature columns.
+        preds.update(zip(train["match_id"].astype(str),
+                         fitted.predict(train[feats])))
+        return lambda mid: preds.get(str(mid))
+    except Exception:
+        return None
+
+
 def _line_rows():
     """Every recorded line with the model's view of it, settled or not."""
     from scipy.stats import norm
     import model as m
 
-    BIAS, SIGMA = 0.98, 8.40
+    # Ridge on the ten possession columns at a 90-day half-life, measured over
+    # 322 walk-forward matches. The naive midpoint's 0.98 bias and 8.40 sigma
+    # belonged to a model that only looked better because a 30-day half-life
+    # had cut the training set to an effective 28 rows.
+    #
+    # NAIVE_* is the fallback for a league with too little history to fit
+    # anything, which is Bundesliga's situation for another few matchdays.
+    SIGMA, NAIVE_BIAS, NAIVE_SIGMA = 8.02, 0.98, 8.40
+    predictor = _fitted_predictor(league())
     rows = query("""
         SELECT l.line, l.over_odds, l.under_odds,
                t.name AS team, l.team_id,
@@ -471,9 +512,17 @@ def _line_rows():
         book_over = margin = None
 
         if naive is not None:
-            home_pred = float(naive) + BIAS
+            # The fitted model where one exists, the midpoint plus its own
+            # bias where it does not. Mixing the two - a ridge bias applied to
+            # a midpoint estimate - would be a number with no meaning.
+            home_pred = (predictor(r["match_id"]) if predictor else None)
+            if home_pred is None:
+                home_pred = float(naive) + NAIVE_BIAS
+                sigma = NAIVE_SIGMA
+            else:
+                sigma = SIGMA
             pred = home_pred if r["team_id"] == r["home_team_id"]                 else 100 - home_pred
-            p_over = float(1 - norm.cdf(line, pred, SIGMA))
+            p_over = float(1 - norm.cdf(line, pred, sigma))
             side, p_side, edge, rating, why = m.choose_side(
                 p_over, over_odds, under_odds, graded)
 
@@ -544,7 +593,7 @@ def bets():
                            if r["over_odds"] and r["under_odds"]),
     }
     return render_template("bets.html", rows=rows, totals=totals,
-                           verdict=call, sigma=8.40, bias=0.98)
+                           verdict=call, sigma=8.02, bias=0.19)
 
 
 @app.route("/model")

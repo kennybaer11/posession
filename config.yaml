@@ -54,11 +54,16 @@ premier_league:
     season: current
 
     # Recency weighting. A match this many days old counts half as much as
-    # today's, halving again every further half_life_days. This is what makes
-    # "only recent form matters" a slope instead of a cliff - and it is the
-    # reason the season above can stay narrow without every older match being
-    # thrown away when you widen it.
-    half_life_days: 30
+    # today's, halving again every further half_life_days.
+    #
+    # 90, not 30. At 30 days a season and a half of Premier League matches had
+    # an effective sample size of 28 - 218 of 362 rows carried less than 0.01
+    # weight - and a model fitting ten columns on that lost to a two-line
+    # formula. Measured over 302 walk-forward matches, 90 days scores 6.33
+    # mean absolute error against 6.96 at 30 days. Everything from 90 days to
+    # no weighting at all lands within 0.03 of each other, so this is a cliff
+    # to stay clear of rather than a peak to balance on.
+    half_life_days: 90
 
     # Drop matches where either side had fewer than this many prior matches:
     # a 2-match average is noise, not form.

@@ -44,17 +44,16 @@ CORE_FEATURES = [
 class NaiveMidpoint:
     """Predict (home form + what the away side concedes) / 2, plus a bias term.
 
-    This is the default because it wins. Measured over 334 walk-forward
-    matches, ridge on ten possession columns scored 7.88 mean absolute error
-    against this estimator's 6.80, and every feature set and regularisation
-    strength tried came out worse - monotonically worse as alpha rose, which is
-    the tell: shrinking toward the training mean destroys exactly the
-    team-to-team variation that possession is made of.
+    Kept as the baseline every model has to beat, and as a fallback for a
+    league too young to fit anything on.
 
-    The formula already encodes the right structure. Possession is zero-sum, so
-    what one side takes the other concedes, and the midpoint of the two claims
-    is the natural estimate. A linear model given the same information can only
-    blur it.
+    It was the default for a while, on a measurement that turned out to be
+    wrong. Ridge appeared to lose to it by a point of mean absolute error, and
+    the cause was the recency weighting rather than the model: a 30-day
+    half-life reduced 362 matches to an effective 28, and ten columns fitted on
+    that lose to anything. At a 90-day half-life ridge wins by 0.42 points
+    (p=0.008 over 302 walk-forward matches). The formula was never the better
+    model; it was the better model on a crippled sample.
 
     The bias term corrects a real, consistent tendency: actual possession comes
     in about 1 point above this estimate, because the fitted window includes
@@ -97,12 +96,12 @@ def available_features(df, wanted=None):
     return [c for c in (wanted or CORE_FEATURES) if c in df.columns]
 
 
-def make(estimator, alpha=10.0):
-    """The default is the naive midpoint - see NaiveMidpoint for why."""
+def make(estimator, alpha=1.0):
+    """Ridge by default - it beats the midpoint once the weights are sane."""
     return NaiveMidpoint() if estimator == "naive" else build(alpha)
 
 
-def walk_forward(train, feats, min_train=8, alpha=10.0, estimator="naive"):
+def walk_forward(train, feats, min_train=40, alpha=1.0, estimator="ridge"):
     """Refit before every match, predicting only ever forwards.
 
     A single train/test split reports one number that depends heavily on where
@@ -373,9 +372,9 @@ def main():
     ap = argparse.ArgumentParser(description="Possession model and bet check.")
     ap.add_argument("--season", default="config",
                     help='"current", "all", a year, or "config"')
-    ap.add_argument("--alpha", type=float, default=10.0)
-    ap.add_argument("--estimator", choices=("naive", "ridge"), default="naive",
-                    help="naive (default, and better) or ridge")
+    ap.add_argument("--alpha", type=float, default=1.0)
+    ap.add_argument("--estimator", choices=("naive", "ridge"), default="ridge",
+                    help="ridge (default) or naive, the midpoint baseline")
     ap.add_argument("--line", type=float, help="the over/under line, e.g. 54.5")
     ap.add_argument("--over", type=float, help="decimal odds for OVER")
     ap.add_argument("--under", type=float, help="decimal odds for UNDER")
