@@ -28,8 +28,15 @@ def scrape_bundesliga(season, matchdays, refresh, db):
     import bundesliga_api as bl
 
     api = bl.BundesligaAPI()
-    log.info("Bundesliga %s: reading matchdays...", season)
-    matches = api.season_matches(season, matchdays)
+    days = (list(range(1, matchdays + 1)) if matchdays
+            else matchday_window(db, bl.COMPETITION, cap=34))
+    log.info("Bundesliga %s: matchdays %s-%s", season, days[0], days[-1])
+    matches = []
+    for md in days:
+        rows = api.matchday(season, md)
+        if rows:
+            matches.extend(rows)
+            log.info("  matchday %s: %d match(es)", md, len(rows))
     log.info("%d match(es) listed", len(matches))
 
     # The season label the database uses is the starting year, matching how
@@ -63,8 +70,15 @@ def scrape_laliga(season, weeks, refresh, db):
     import laliga_api as ll
 
     api = ll.LaLigaAPI()
-    log.info("LaLiga %s: reading matchdays...", season)
-    matches = api.season_matches(weeks)
+    days = (list(range(1, weeks + 1)) if weeks
+            else matchday_window(db, ll.COMPETITION, cap=38))
+    log.info("LaLiga %s: weeks %s-%s", season, days[0], days[-1])
+    matches = []
+    for w in days:
+        rows = api.matchday(w)
+        if rows:
+            matches.extend(rows)
+            log.info("  week %s: %d match(es)", w, len(rows))
     log.info("%d match(es) listed", len(matches))
 
     teams, match_rows = {}, []
@@ -88,10 +102,37 @@ def scrape_laliga(season, weeks, refresh, db):
     return list(teams.values()), match_rows, stat_rows, failed, api.request_count
 
 
+def matchday_window(db, competition, span_back=1, span_forward=3, cap=38):
+    """Which matchdays are worth asking about.
+
+    Walking a whole season every hour costs 72 listing requests to discover
+    matches that settled weeks ago. Only a narrow window can actually change:
+    the matchday just gone (scores and stats still being revised), the current
+    one, and a few ahead whose fixtures may move.
+
+    Derived from the latest matchday already stored, so it follows the season
+    without being told where it is. An empty database returns the full range,
+    which is what a first backfill needs.
+    """
+    with db.conn.cursor() as cur:
+        cur.execute("""SELECT max(match_week) AS latest FROM pl_matches
+                       WHERE competition = %s AND kickoff <= now()""",
+                    (competition,))
+        row = cur.fetchone()
+    latest = (row or {}).get("latest")
+    if not latest:
+        return list(range(1, cap + 1))
+    lo = max(1, int(latest) - span_back)
+    hi = min(cap, int(latest) + span_forward)
+    return list(range(lo, hi + 1))
+
+
 def run(which, season, limit, refresh, dry_run, db):
+    # limit=None means "the window that can still change" - see
+    # matchday_window. Pass --weeks/--matchdays to force a full walk.
     if which == "bundesliga":
-        return scrape_bundesliga(season or "2026-2027", limit or 34, refresh, db)
-    return scrape_laliga(season or "2026", limit or 38, refresh, db)
+        return scrape_bundesliga(season or "2026-2027", limit, refresh, db)
+    return scrape_laliga(season or "2026", limit, refresh, db)
 
 
 def main():
@@ -99,7 +140,9 @@ def main():
     ap.add_argument("league", choices=("bundesliga", "laliga", "both"))
     ap.add_argument("--season", help="bundesliga: 2026-2027, laliga: 2026")
     ap.add_argument("--weeks", "--matchdays", type=int, dest="limit",
-                    help="how many matchdays to walk")
+                    help="walk matchdays 1..N. Omit to walk only the window "
+                         "that can still change, which is what a routine run "
+                         "wants.")
     ap.add_argument("--refresh", action="store_true",
                     help="re-fetch stats for matches already stored")
     ap.add_argument("--dry-run", action="store_true")
