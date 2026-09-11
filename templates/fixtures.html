@@ -5,6 +5,16 @@
 {% block content %}
 
 <div class="note">
+  {% if with_lines %}
+  <strong>{{ with_lines }} of {{ rows|length }} fixtures have a line recorded.</strong>
+  Where one does, the bet column shows which side the model prefers and how much of a
+  stake that is worth &mdash; capped by track record, which is {{ graded }} settled
+  bet{{ '' if graded == 1 else 's' }} so far.
+  {% else %}
+  <strong>No lines recorded for these fixtures yet.</strong> Add them through the admin
+  and the bet column fills in.
+  {% endif %}
+  <br><br>
   These are the prediction targets, with the same pre-kickoff features the model will
   see &mdash; from <strong>v_fixture_features</strong>. Nothing here uses information from after
   the whistle. <strong>xGD edge</strong> is the home side's L5 xG difference minus the away side's:
@@ -28,6 +38,7 @@
           <th>A rest</th>
           <th>H2H</th>
           <th>Hist</th>
+          <th class="l">Bet available</th>
         </tr>
       </thead>
       <tbody>
@@ -46,6 +57,28 @@
           <td class="num muted">{{ f.h2h_meetings or 0 }}</td>
           <td class="num muted" title="Matches of history behind each side's form">
             {{ f.home_matches_before }}/{{ f.away_matches_before }}
+          </td>
+          <td class="l" style="white-space:normal">
+            {% if f.lines %}
+              {% for l in f.lines %}
+                <div style="margin:2px 0">
+                  <span class="muted" style="font-size:12px">{{ l.team }}</span>
+                  <strong>{{ '%.1f'|format(l.line) }}</strong>
+                  {% if l.side %}
+                    <span class="chip {{ 'ok' if l.backed }}">{{ l.side }}</span>
+                    <span class="num {{ 'good' if l.backed else 'bad' }}"
+                          style="font-size:12px">{{ '%+.1f%%'|format(l.edge * 100) }}</span>
+                    <strong class="{{ 'good' if l.rating >= 5 else ('warn' if l.rating >= 3 else 'muted') }}"
+                            style="font-size:12px">{{ l.rating }}/10</strong>
+                  {% else %}
+                    <span class="chip">no bet</span>
+                    <span class="muted" style="font-size:11.5px">price is against you</span>
+                  {% endif %}
+                </div>
+              {% endfor %}
+            {% else %}
+              <span class="muted" style="font-size:12px">&ndash;</span>
+            {% endif %}
           </td>
         </tr>
         {% endfor %}

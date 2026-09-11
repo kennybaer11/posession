@@ -393,7 +393,18 @@ def match(match_id):
 def fixtures():
     rows = query("SELECT * FROM v_fixture_features WHERE competition = %(c)s "
                  "ORDER BY kickoff", {"c": league()})
-    return render_template("fixtures.html", rows=rows)
+
+    # Whether a line has been recorded against each fixture, and what the model
+    # makes of it. Taken from the same helper the Model and Bets pages use, so
+    # the three cannot show different verdicts for one match.
+    open_lines, graded = stake_guidance()
+    by_match = {}
+    for r in open_lines:
+        by_match.setdefault(r["match_id"], []).append(r)
+
+    rows = [dict(r, lines=by_match.get(r["match_id"], [])) for r in rows]
+    return render_template("fixtures.html", rows=rows, graded=graded,
+                           with_lines=sum(1 for r in rows if r["lines"]))
 
 
 def settles_over(actual, line):
