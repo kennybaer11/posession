@@ -14,8 +14,16 @@ name: Scrape possession odds
 # line; it is trying to be there when the line first appears.
 on:
   schedule:
-    - cron: "40 7 * * *"    # morning, before the weekend afternoon kickoffs
-    - cron: "40 17 * * *"   # evening, catching lines posted during the day
+    # UTC. 10:00 and 13:00 in Prague through the summer, 09:00 and 12:00 once
+    # the clocks go back - GitHub cron has no timezone, so the local times
+    # shift by an hour in late October rather than the runs moving.
+    #
+    # Both sit ahead of every kickoff. Saturday's Bundesliga matches start at
+    # 13:30 UTC and the Premier League at 15:00, and a run that fires after
+    # kickoff reads a closed or in-play market instead of the opening line,
+    # which is the only price worth recording.
+    - cron: "0 8 * * *"     # 10:00 Prague
+    - cron: "0 11 * * *"    # 13:00 Prague
   workflow_dispatch:
     inputs:
       hours:
