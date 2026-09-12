@@ -78,7 +78,10 @@ jobs:
           # read obviously rather than cleverly.
           ARGS="--skip-priced"
           if [ "${{ inputs.refresh }}" = "true" ]; then ARGS=""; fi
-          python odds_pipeline.py --hours "${{ inputs.hours || '72' }}" $ARGS --write | tee run.log
+          # 2>&1 matters: the pipeline reports through logging, which writes
+          # to stderr, and a pipe carries only stdout. Without it run.log is
+          # empty and the count below finds nothing.
+          python odds_pipeline.py --hours "${{ inputs.hours || '72' }}" $ARGS --write 2>&1 | tee run.log
 
           # Rebuilding ~540 pages to publish nothing is a waste of several
           # minutes, and most runs do land nothing: the fixtures still being
@@ -87,7 +90,11 @@ jobs:
           # Read the count rather than testing for "Wrote 0", because the
           # pipeline has early exits - no fixtures due, nothing to scrape -
           # that print no Wrote line at all. Absent means nothing landed.
-          WROTE=$(grep -oE "Wrote [0-9]+ line" run.log | grep -oE "[0-9]+" | tail -1)
+          # `|| true` is load-bearing. grep exits 1 when it matches nothing,
+          # pipefail propagates that, and set -e then kills the step before
+          # the :-0 default can apply - crashing on exactly the no-Wrote-line
+          # case this is meant to handle.
+          WROTE=$(grep -oE "Wrote [0-9]+ line" run.log | grep -oE "[0-9]+" | tail -1 || true)
           WROTE="${WROTE:-0}"
           echo "Imported $WROTE line(s)." >> "$GITHUB_STEP_SUMMARY"
           if [ "$WROTE" -gt 0 ]; then
