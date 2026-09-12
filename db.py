@@ -207,6 +207,36 @@ CREATE TABLE IF NOT EXISTS pl_possession_line (
 )
 """
 
+# What each odds run did. Written by odds_pipeline.py, read by the Scraper
+# page - the only record of whether a scheduled run fired, what it cost, and
+# whether anything reached the database. webscraper.io keeps its own job list,
+# but it cannot know whether a scraped market resolved to a fixture and was
+# stored, which is the half that actually matters.
+SCRAPE_RUN_DDL = """
+CREATE TABLE IF NOT EXISTS pl_scrape_run (
+  run_id       BIGSERIAL PRIMARY KEY,
+  started_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  finished_at  TIMESTAMPTZ,
+  source       TEXT,              -- 'github-actions' or 'local'
+  hours        INTEGER,
+  skip_priced  BOOLEAN,
+  stage1_job   TEXT,
+  stage2_job   TEXT,
+  fixtures     INTEGER,           -- in the kickoff window
+  pages        INTEGER,           -- match pages actually scraped
+  unmatched    INTEGER,
+  ambiguous    INTEGER,
+  superseded   INTEGER,
+  rows_back    INTEGER,           -- rows stage 2 returned
+  resolved     INTEGER,           -- lines that found their fixture
+  problems     INTEGER,
+  written      INTEGER,           -- lines that reached the database
+  credits      INTEGER,           -- remaining, read after the run
+  status       TEXT NOT NULL DEFAULT 'running',
+  detail       TEXT               -- problems, or the traceback on a crash
+)
+"""
+
 INDEXES = (
     "CREATE INDEX IF NOT EXISTS idx_tm_team_kickoff ON pl_team_match (team_id, kickoff)",
     "CREATE INDEX IF NOT EXISTS idx_tm_kickoff ON pl_team_match (kickoff)",
@@ -218,6 +248,7 @@ INDEXES = (
     "CREATE INDEX IF NOT EXISTS idx_lineup_match_team ON pl_lineup (match_id, team_id)",
     "CREATE INDEX IF NOT EXISTS idx_lineup_player ON pl_lineup (player_id)",
     "CREATE INDEX IF NOT EXISTS idx_line_match ON pl_possession_line (match_id)",
+    "CREATE INDEX IF NOT EXISTS idx_run_started ON pl_scrape_run (started_at DESC)",
 )
 
 GOAL_COLS = ("match_id", "team_id", "minute", "period", "goal_type",
@@ -302,6 +333,7 @@ class Database:
             cur.execute(LINEUP_DDL)
             cur.execute(PLAYERS_DDL)
             cur.execute(LINES_DDL)
+            cur.execute(SCRAPE_RUN_DDL)
             for stmt in INDEXES:
                 cur.execute(stmt)
         self.conn.commit()
@@ -434,6 +466,40 @@ class Database:
     def upsert_lines(self, rows):
         return self._upsert("pl_possession_line", LINE_COLS, rows,
                             ("match_id", "team_id", "line", "bookmaker"))
+
+    def start_run(self, **fields):
+        """Open a run row and return its id.
+
+        Written before the scrape rather than after, so a run that crashes or
+        is killed mid-way still leaves a trace. A row stuck at 'running' is
+        itself the finding - it means the process died without reporting.
+        """
+        cols = [k for k in fields if fields[k] is not None]
+        sql = (f"INSERT INTO pl_scrape_run ({', '.join(cols)}) "
+               f"VALUES ({', '.join('%(' + c + ')s' for c in cols)}) "
+               f"RETURNING run_id")
+        with self.conn.cursor() as cur:
+            cur.execute(sql, fields)
+            run_id = cur.fetchone()["run_id"]
+        self.conn.commit()
+        return run_id
+
+    def finish_run(self, run_id, **fields):
+        """Record how a run ended. Never raises: a failure to log must not
+        turn a successful scrape into a failed one."""
+        if not run_id:
+            return
+        fields.setdefault("status", "ok")
+        sets = ", ".join(f"{k} = %({k})s" for k in fields)
+        try:
+            self.ensure_connection()
+            with self.conn.cursor() as cur:
+                cur.execute(f"UPDATE pl_scrape_run SET finished_at = NOW(), "
+                            f"{sets} WHERE run_id = %(run_id)s",
+                            {**fields, "run_id": run_id})
+            self.conn.commit()
+        except Exception:
+            log.warning("could not record run %s", run_id, exc_info=True)
 
     def replace_match_events(self, match_id, goals, cards, subs):
         """Events are a full replacement per match, not an upsert.

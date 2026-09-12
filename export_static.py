@@ -98,6 +98,8 @@ def targets():
     # The Bets page alone spans every league, so it gets one more copy.
     # to_static() maps ?league=all to the "all-" prefix without being told.
     pages.append(("/bets?league=all", "all-bets.html"))
+    # Not per-league: the scraper serves every competition at once.
+    pages.append(("/status", "status.html"))
 
     with webapp.app.app_context():
         for r in webapp.query("SELECT DISTINCT competition, season FROM pl_matches "

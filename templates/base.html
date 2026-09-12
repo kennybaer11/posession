@@ -16,6 +16,7 @@
     <a href="{{ url_for('fixtures', league=league) }}" class="{{ 'on' if request.endpoint == 'fixtures' }}">Fixtures</a>
     <a href="{{ url_for('model', league=league) }}"    class="{{ 'on' if request.endpoint == 'model' }}">Model</a>
     <a href="{{ url_for('bets', league=league) }}"     class="{{ 'on' if request.endpoint == 'bets' }}">Bets</a>
+    <a href="{{ url_for('status') }}"                  class="{{ 'on' if request.endpoint == 'status' }}">Scraper</a>
   </nav>
   <div class="leagues">
     {% for code, name in leagues %}

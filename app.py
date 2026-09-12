@@ -158,6 +158,25 @@ def _signed(value, places=2):
     return f"{float(value):+.{places}f}"
 
 
+@app.template_filter("ago")
+def _ago(value, now=None):
+    """"in 2h 40m" / "18m ago", for a timezone-aware timestamp."""
+    if not value:
+        return "-"
+    now = now or datetime.now(timezone.utc)
+    if value.tzinfo is None:
+        value = value.replace(tzinfo=timezone.utc)
+    secs = (value - now).total_seconds()
+    ahead, secs = secs > 0, abs(secs)
+    if secs < 90:
+        return "just now"
+    d, rem = divmod(int(secs), 86400)
+    h, rem = divmod(rem, 3600)
+    mins = rem // 60
+    part = (f"{d}d {h}h" if d else f"{h}h {mins}m" if h else f"{mins}m")
+    return f"in {part}" if ahead else f"{part} ago"
+
+
 @app.template_filter("season")
 def _season(value):
     """season is a text column holding the start year: 2025 -> 2025/26."""
@@ -590,6 +609,89 @@ def stake_guidance():
     open_lines.sort(key=lambda r: (-r["rating"],
                                    -(r["edge"] if r["edge"] is not None else -9)))
     return open_lines, graded
+
+
+# -- scraper status ---------------------------------------------------------
+
+WORKFLOW = Path(__file__).resolve().parent / ".github" / "workflows" / "odds.yml"
+
+
+def next_scrapes(n=4, now=None):
+    """When the odds workflow is next due, read from its own cron lines.
+
+    Parsed from the workflow rather than restated here. A schedule written in
+    two places drifts, and a status page that confidently names a time nothing
+    runs at is worse than one that says nothing.
+
+    GitHub's scheduler is best-effort - runs are routinely minutes late and can
+    be dropped under load - so these are "due at", not "will run at".
+    """
+    import re
+    from datetime import date, time as _time, timedelta
+    try:
+        text = WORKFLOW.read_text(encoding="utf-8")
+    except OSError:
+        return []
+    slots = sorted({(int(h), int(m)) for m, h in
+                    re.findall(r'cron:\s*"(\d+)\s+(\d+)\s+\*\s+\*\s+\*"', text)})
+    if not slots:
+        return []
+    now = now or datetime.now(timezone.utc)
+    out = []
+    for day in range(3):
+        d = now.date() + timedelta(days=day)
+        for h, mi in slots:
+            when = datetime.combine(d, _time(h, mi), tzinfo=timezone.utc)
+            if when > now:
+                out.append(when)
+    return sorted(out)[:n]
+
+
+@app.route("/status")
+def status():
+    """What the odds scraper has been doing, and whether it worked.
+
+    The question this answers is not "did webscraper.io run" - their dashboard
+    shows that - but "did anything reach the database". A job can finish
+    perfectly and still store nothing, because the market was not offered or
+    the slug matched no fixture, and only this side knows which.
+    """
+    runs = query("""
+        SELECT * FROM pl_scrape_run ORDER BY started_at DESC LIMIT 25
+    """)
+    last = runs[0] if runs else None
+
+    coverage = query("""
+        SELECT m.competition,
+               count(*) AS fixtures,
+               count(*) FILTER (WHERE EXISTS (
+                   SELECT 1 FROM pl_possession_line l
+                   WHERE l.match_id = m.match_id)) AS priced
+        FROM pl_matches m
+        WHERE m.kickoff BETWEEN now() AND now() + INTERVAL '72 hours'
+        GROUP BY 1 ORDER BY 1
+    """)
+    unpriced = query("""
+        SELECT m.kickoff, m.competition, ht.name AS home, at_.name AS away
+        FROM pl_matches m
+        JOIN pl_teams ht  ON ht.team_id = m.home_team_id
+        JOIN pl_teams at_ ON at_.team_id = m.away_team_id
+        WHERE m.kickoff BETWEEN now() AND now() + INTERVAL '72 hours'
+          AND NOT EXISTS (SELECT 1 FROM pl_possession_line l
+                          WHERE l.match_id = m.match_id)
+        ORDER BY m.kickoff
+    """)
+
+    # A run started by the runner proves the schedule is armed - that the
+    # secret is present and the cron fired. Nothing else on this page can.
+    ci_runs = [r for r in runs if r["source"] == "github-actions"]
+    return render_template(
+        "status.html", runs=runs, last=last, coverage=coverage,
+        unpriced=unpriced, upcoming=next_scrapes(),
+        ci_runs=len(ci_runs), last_ci=(ci_runs[0] if ci_runs else None),
+        now=datetime.now(timezone.utc),
+        totals={"fixtures": sum(c["fixtures"] for c in coverage),
+                "priced": sum(c["priced"] for c in coverage)})
 
 
 @app.route("/bets")

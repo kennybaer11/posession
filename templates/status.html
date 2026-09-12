@@ -1,0 +1,215 @@
+{% extends "base.html" %}
+{% block title %}Scraper &middot; PL data{% endblock %}
+{% block heading %}Scraper status{% endblock %}
+
+{% block content %}
+
+<div class="note">
+  What the odds scraper has been doing, and whether it worked. The question here is not
+  "did webscraper.io run" &mdash; their dashboard answers that &mdash; but
+  <strong>did anything reach the database</strong>. A job can finish perfectly and still
+  store nothing, because the market was not offered or the slug matched no fixture, and
+  only this side knows which. All times are UTC, and anything relative &mdash; "in 2h",
+  "18m ago" &mdash; is counted from the render time in the footer, not from now. The
+  published site is rebuilt hourly, so relative figures can be up to an hour stale.
+</div>
+
+<div class="tiles" style="margin-bottom:22px">
+  <div class="tile">
+    <div class="v num">{{ upcoming[0].strftime('%H:%M') if upcoming else '-' }}</div>
+    <div class="k">Next run due{% if upcoming %} &middot; {{ upcoming[0]|ago(now) }}{% endif %}</div>
+  </div>
+  <div class="tile">
+    <div class="v num {{ 'good' if last and last.status in ('ok', 'idle') else ('bad' if last and last.status == 'error' else 'warn') }}">
+      {{ last.status if last else 'none' }}
+    </div>
+    <div class="k">Last run{% if last %} &middot; {{ last.started_at|ago(now) }}{% endif %}</div>
+  </div>
+  <div class="tile">
+    <div class="v num">{{ last.credits if last and last.credits is not none else '-' }}</div>
+    <div class="k">Page credits left</div>
+  </div>
+  <div class="tile">
+    <div class="v num">{{ totals.priced }}/{{ totals.fixtures }}</div>
+    <div class="k">Fixtures priced, next 72h</div>
+  </div>
+</div>
+
+{% if not runs %}
+<div class="note" style="border-left-color: var(--warn)">
+  <strong>No runs recorded yet.</strong> The run log starts from the first scrape after
+  this page was added, so it is empty until the next one fires.
+</div>
+{% elif not last_ci %}
+<div class="note" style="border-left-color: var(--warn)">
+  <strong>No run has come from GitHub Actions yet.</strong> Every run so far was started by
+  hand. A scheduled run appears here once the workflow fires with
+  <code>WEBSCRAPER_TOKEN</code> set &mdash; until one does, nothing on this page proves the
+  schedule is actually armed.
+</div>
+{% endif %}
+
+<div class="cols2">
+
+  <div class="panel">
+    <h2>Scheduled <span class="sub">&mdash; from the workflow's own cron</span></h2>
+    {% if upcoming %}
+    <table>
+      <tbody>
+        {% for t in upcoming %}
+        <tr>
+          <td class="l">{{ t.strftime('%a %d %b, %H:%M') }} UTC</td>
+          <td class="num muted">{{ t|ago(now) }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    <p class="muted" style="font-size:12.5px;margin-bottom:0">
+      Read from <code>.github/workflows/odds.yml</code> rather than repeated here, so the
+      two cannot drift. GitHub's scheduler is best-effort &mdash; runs are routinely a few
+      minutes late and can be skipped under load &mdash; so these are <em>due at</em>, not
+      <em>will run at</em>.
+    </p>
+    {% else %}
+    <div class="empty">No cron schedule found in the workflow.</div>
+    {% endif %}
+  </div>
+
+  <div class="panel">
+    <h2>Last run <span class="sub">&mdash; where the pages went</span></h2>
+    {% if last %}
+    <table>
+      <tbody>
+        <tr><td class="l">Started</td>
+            <td class="num muted">{{ last.started_at.strftime('%d %b %H:%M') }}</td></tr>
+        <tr><td class="l">Started by</td>
+            <td class="num muted">{{ 'GitHub Actions' if last.source == 'github-actions' else 'hand' }}</td></tr>
+        <tr><td class="l">Fixtures in the window</td>
+            <td class="num">{{ last.fixtures if last.fixtures is not none else '-' }}</td></tr>
+        <tr><td class="l">Match pages scraped
+            <div class="muted" style="font-size:12px;white-space:normal">one credit each</div></td>
+            <td class="num">{{ last.pages if last.pages is not none else '-' }}</td></tr>
+        <tr><td class="l">Rows returned</td>
+            <td class="num">{{ last.rows_back if last.rows_back is not none else '-' }}</td></tr>
+        <tr><td class="l">Lines resolved to a fixture</td>
+            <td class="num">{{ last.resolved if last.resolved is not none else '-' }}</td></tr>
+        <tr><td class="l"><strong>Written to the database</strong></td>
+            <td class="num"><strong>{{ last.written if last.written is not none else '-' }}</strong></td></tr>
+        {% if last.unmatched %}
+        <tr><td class="l">URLs matching no fixture
+            <div class="muted" style="font-size:12px;white-space:normal">
+              other leagues and later rounds on the same listing page &mdash; expected
+            </div></td>
+            <td class="num muted">{{ last.unmatched }}</td></tr>
+        {% endif %}
+        {% if last.ambiguous %}
+        <tr><td class="l bad">Ambiguous slugs <div class="muted" style="font-size:12px;white-space:normal">
+            reported, never guessed at</div></td>
+            <td class="num bad">{{ last.ambiguous }}</td></tr>
+        {% endif %}
+        {% if last.superseded %}
+        <tr><td class="l">Superseded claims
+            <div class="muted" style="font-size:12px;white-space:normal">
+              a weaker URL wanting a fixture another URL matched better
+            </div></td>
+            <td class="num muted">{{ last.superseded }}</td></tr>
+        {% endif %}
+        {% if last.problems %}
+        <tr><td class="l bad">Problems</td><td class="num bad">{{ last.problems }}</td></tr>
+        {% endif %}
+      </tbody>
+    </table>
+    {% if last.detail %}
+    <p class="muted" style="font-size:12px;white-space:pre-wrap;margin-bottom:0">{{ last.detail }}</p>
+    {% endif %}
+    {% else %}
+    <div class="empty">Nothing recorded yet.</div>
+    {% endif %}
+  </div>
+
+</div>
+
+<div class="panel">
+  <h2>Recent runs</h2>
+  <div class="tablewrap">
+    <table>
+      <thead>
+        <tr>
+          <th class="l">Started</th><th class="l">By</th><th class="l">Status</th>
+          <th>Fixtures</th><th>Pages</th><th>Rows</th><th>Resolved</th>
+          <th>Written</th><th>Credits</th><th class="l">Notes</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in runs %}
+        <tr>
+          <td class="l muted">{{ r.started_at.strftime('%d %b %H:%M') }}</td>
+          <td class="l muted">{{ 'CI' if r.source == 'github-actions' else 'hand' }}</td>
+          <td class="l">
+            <span class="chip {{ 'ok' if r.status.startswith('ok') else '' }}">{{ r.status }}</span>
+          </td>
+          <td class="num muted">{{ r.fixtures if r.fixtures is not none else '-' }}</td>
+          <td class="num">{{ r.pages if r.pages is not none else '-' }}</td>
+          <td class="num muted">{{ r.rows_back if r.rows_back is not none else '-' }}</td>
+          <td class="num muted">{{ r.resolved if r.resolved is not none else '-' }}</td>
+          <td class="num {{ 'good' if r.written else 'muted' }}">
+            {{ r.written if r.written is not none else '-' }}
+          </td>
+          <td class="num muted">{{ r.credits if r.credits is not none else '-' }}</td>
+          <td class="l muted" style="white-space:normal;font-size:12px">{{ (r.detail or '')[:90] }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% if not runs %}<div class="empty">No runs recorded yet.</div>{% endif %}
+  <p class="muted" style="font-size:12.5px;margin-bottom:0">
+    A row stuck at <code>running</code> means the process died without reporting &mdash;
+    the row is written before the scrape starts precisely so that leaves a trace.
+    <code>idle</code> means there was nothing to do, which is a normal outcome rather than
+    a failure.
+  </p>
+</div>
+
+<div class="panel">
+  <h2>Coverage <span class="sub">&mdash; fixtures kicking off in the next 72 hours</span></h2>
+  <table>
+    <tbody>
+      {% for c in coverage %}
+      <tr>
+        <td class="l">{{ c.competition }}</td>
+        <td style="width:55%">
+          <div class="bar"><div class="fill {{ 'a' if c.priced == c.fixtures else 'h' }}"
+               style="width: {{ (100 * c.priced / c.fixtures)|round(1) if c.fixtures else 0 }}%"></div></div>
+        </td>
+        <td class="num">{{ c.priced }}/{{ c.fixtures }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% if not coverage %}<div class="empty">No fixtures in the window.</div>{% endif %}
+
+  {% if unpriced %}
+  <h3 style="margin-top:18px">Still without odds ({{ unpriced|length }})</h3>
+  <p class="muted" style="font-size:13px;margin-top:-6px">
+    These are retried every run. Most are not a failure: the bookmaker simply does not
+    offer a possession market on them, and some never will. A page with no market returns
+    one or two rows instead of four, which is how the pipeline tells the difference.
+  </p>
+  <div class="tablewrap">
+    <table>
+      <tbody>
+        {% for f in unpriced %}
+        <tr>
+          <td class="l muted" style="width:130px">{{ f.kickoff.strftime('%d %b %H:%M') }}</td>
+          <td class="l muted" style="width:90px">{{ f.competition }}</td>
+          <td class="l">{{ f.home }} v {{ f.away }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endif %}
+</div>
+
+{% endblock %}

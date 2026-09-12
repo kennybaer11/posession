@@ -334,6 +334,36 @@ def main():
     db = Database()
     db.ensure_schema(with_views=False)
 
+    # Opened before anything is scraped, so a run that dies mid-way still
+    # leaves a row. GITHUB_ACTIONS is set by the runner and nothing else.
+    run_id = db.start_run(
+        source="github-actions" if os.getenv("GITHUB_ACTIONS") else "local",
+        hours=args.hours, skip_priced=bool(args.skip_priced))
+    try:
+        return _run(args, db, run_id)
+    except Exception as exc:
+        import traceback
+        db.finish_run(run_id, status="error",
+                      detail=traceback.format_exc()[-2000:])
+        log.error("run failed: %s", exc)
+        raise
+    finally:
+        db.close()
+
+
+def credits_left():
+    """Remaining page credits, or None if the account cannot be read.
+
+    Recorded per run so the Scraper page can show what each one cost without
+    the page itself needing the API token.
+    """
+    try:
+        return _req("GET", "/account").json()["data"]["page_credits"]
+    except Exception:
+        return None
+
+
+def _run(args, db, run_id):
     fixtures = upcoming_fixtures(db, args.hours, args.skip_priced)
     log.info("%d fixture(s) kicking off in the next %dh%s", len(fixtures),
              args.hours, " without odds" if args.skip_priced else "")
@@ -342,6 +372,8 @@ def main():
                  f["home"][:22], f["away"][:22], f["competition"])
     if not fixtures:
         log.info("Nothing due - stopping before spending any credits.")
+        db.finish_run(run_id, fixtures=0, pages=0, written=0,
+                      status="idle", detail="no fixtures in the window")
         return 0
 
     # -- stage 1: which match pages exist --------------------------------
@@ -350,7 +382,7 @@ def main():
         log.info("reusing stage-1 job %s", links_job)
     elif args.dry_run:
         log.info("dry run: would start stage-1 job on sitemap %s", LINKS_SITEMAP)
-        db.close()
+        db.finish_run(run_id, fixtures=len(fixtures), status="dry-run")
         return 0
     else:
         links_job = start_job(LINKS_SITEMAP, request_interval=args.interval,
@@ -377,12 +409,18 @@ def main():
 
     if not chosen:
         log.info("Nothing to scrape.")
-        db.close()
+        db.finish_run(run_id, fixtures=len(fixtures), stage1_job=str(links_job),
+                      pages=0, written=0, unmatched=len(unmatched),
+                      ambiguous=len(ambiguous), superseded=len(superseded),
+                      status="idle", detail="no URL matched a fixture")
         return 0
     if args.dry_run:
         log.info("dry run: would scrape %d page(s) = %d credit(s)",
                  len(chosen), len(chosen))
-        db.close()
+        db.finish_run(run_id, fixtures=len(fixtures), stage1_job=str(links_job),
+                      pages=len(chosen), unmatched=len(unmatched),
+                      ambiguous=len(ambiguous), superseded=len(superseded),
+                      status="dry-run")
         return 0
 
     # -- stage 2: the possession markets ---------------------------------
@@ -421,16 +459,29 @@ def main():
     for p in problems:
         log.info("   --  %s", p)
 
+    # Everything the run learned, recorded whichever way it ends. Kept in one
+    # place so a preview and a write are described identically apart from the
+    # count - the Scraper page should not have to guess which it is reading.
+    tally = dict(fixtures=len(fixtures), stage1_job=str(links_job),
+                 stage2_job=str(match_job), pages=len(chosen),
+                 unmatched=len(unmatched), ambiguous=len(ambiguous),
+                 superseded=len(superseded), rows_back=len(rows),
+                 resolved=len(ready), problems=len(problems),
+                 detail="; ".join(str(p) for p in problems)[:2000] or None)
+
     if not args.write:
         log.info("preview only - pass --write to import")
-        db.close()
+        db.finish_run(run_id, written=0, status="preview",
+                      credits=credits_left(), **tally)
         return 0
 
     for r in ready:
         r.pop("_label", None)
         r.pop("_flipped", None)
-    log.info("Wrote %d line(s).", db.upsert_lines(ready))
-    db.close()
+    written = db.upsert_lines(ready)
+    log.info("Wrote %d line(s).", written)
+    db.finish_run(run_id, written=written, credits=credits_left(),
+                  status="ok" if not problems else "ok-with-problems", **tally)
     return 0
 
 
