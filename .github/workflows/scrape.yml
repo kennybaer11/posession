@@ -94,6 +94,12 @@ jobs:
     # that actually collects the data.
     needs: scrape
     runs-on: ubuntu-latest
+    # GitHub runs one Pages deployment at a time and fails the loser. The odds
+    # workflow publishes this same site when it imports a line, so both deploy
+    # jobs share this group and queue instead of colliding.
+    concurrency:
+      group: pages
+      cancel-in-progress: false
     environment:
       name: github-pages
       url: ${{ steps.deploy.outputs.page_url }}

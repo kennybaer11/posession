@@ -3,12 +3,12 @@ name: Scrape possession odds
 # Separate from the data scrape, and far rarer, because this one costs money.
 # webscraper.io bills a credit per page: the league listings each run, plus one
 # for every match page opened. The data scrape is free and runs hourly; this
-# cannot.
+# cannot. A measured run is 10 credits - 3 listings and 7 match pages.
 #
-# Twice a day with --skip-priced works out around 20 credits, because a fixture
-# whose odds are already recorded is never re-opened. Only the unpriced ones
-# are retried, which is the point - Chance adds the possession market to some
-# matches closer to kickoff, and a few never get one at all.
+# Twice a day with --skip-priced stays cheap, because a fixture whose odds are
+# already recorded is never re-opened. Only the unpriced ones are retried,
+# which is the point - Chance adds the possession market to some matches closer
+# to kickoff, and a few never get one at all.
 #
 # Opening odds are what we want anyway. This is not trying to track a moving
 # line; it is trying to be there when the line first appears.
@@ -32,6 +32,8 @@ concurrency:
 
 permissions:
   contents: read
+  pages: write            # this workflow publishes the site when odds land
+  id-token: write         # required by actions/deploy-pages
 
 jobs:
   odds:
@@ -48,6 +50,11 @@ jobs:
       WS_SITEMAP_LINKS: ${{ vars.WS_SITEMAP_LINKS || '1529498' }}
       WS_SITEMAP_MATCHES: ${{ vars.WS_SITEMAP_MATCHES || '1529506' }}
 
+    outputs:
+      # Empty when the scrape was skipped for want of a token, which is also a
+      # reason not to publish.
+      changed: ${{ steps.scrape.outputs.changed }}
+
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -57,9 +64,13 @@ jobs:
       - run: pip install -r requirements.txt
 
       - name: Scrape and import odds
+        id: scrape
         # Skipped rather than failed when the token is absent, so the schedule
         # is harmless until the secret is added.
         if: ${{ env.WEBSCRAPER_TOKEN != '' }}
+        # Named explicitly to get pipefail: the default shell does not set it,
+        # so `python ... | tee` would report tee's success and hide a crash.
+        shell: bash
         run: |
           # --skip-priced unless the run was dispatched asking for a refresh.
           # Built in the shell rather than an expression ternary, because a
@@ -67,10 +78,56 @@ jobs:
           # read obviously rather than cleverly.
           ARGS="--skip-priced"
           if [ "${{ inputs.refresh }}" = "true" ]; then ARGS=""; fi
-          python odds_pipeline.py --hours "${{ inputs.hours || '72' }}" $ARGS --write
+          python odds_pipeline.py --hours "${{ inputs.hours || '72' }}" $ARGS --write | tee run.log
+
+          # Rebuilding ~540 pages to publish nothing is a waste of several
+          # minutes, and most runs do land nothing: the fixtures still being
+          # retried are the ones the bookmaker has not priced. The pipeline
+          # reports what it wrote, so believe it.
+          # Read the count rather than testing for "Wrote 0", because the
+          # pipeline has early exits - no fixtures due, nothing to scrape -
+          # that print no Wrote line at all. Absent means nothing landed.
+          WROTE=$(grep -oE "Wrote [0-9]+ line" run.log | grep -oE "[0-9]+" | tail -1)
+          WROTE="${WROTE:-0}"
+          echo "Imported $WROTE line(s)." >> "$GITHUB_STEP_SUMMARY"
+          if [ "$WROTE" -gt 0 ]; then
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "No new odds, so the site does not need rebuilding." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Render the static site
+        # Only when odds actually landed - otherwise the hourly scrape's own
+        # export is already publishing the same pages.
+        if: ${{ steps.scrape.outputs.changed == 'true' }}
+        run: python export_static.py site
+
+      - name: Upload the site
+        if: ${{ steps.scrape.outputs.changed == 'true' }}
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
 
       - name: Say why nothing ran
         if: ${{ env.WEBSCRAPER_TOKEN == '' }}
         run: |
           echo "WEBSCRAPER_TOKEN is not set, so no odds were scraped." >> $GITHUB_STEP_SUMMARY
           echo "Add it under Settings -> Secrets and variables -> Actions." >> $GITHUB_STEP_SUMMARY
+
+  publish:
+    needs: odds
+    if: ${{ needs.odds.outputs.changed == 'true' }}
+    runs-on: ubuntu-latest
+    # GitHub runs one Pages deployment at a time and fails the loser. The
+    # hourly scrape publishes the same site, so both deploy jobs share this
+    # group and queue instead of colliding.
+    concurrency:
+      group: pages
+      cancel-in-progress: false
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - id: deploy
+        uses: actions/deploy-pages@v4
