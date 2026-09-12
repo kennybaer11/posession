@@ -125,8 +125,15 @@ def _slug_words(url):
     return slug.replace("-", " ").lower()
 
 
-def upcoming_fixtures(db, hours):
-    """Fixtures kicking off within the window, from OUR data."""
+def upcoming_fixtures(db, hours, skip_priced=False):
+    """Fixtures kicking off within the window, from OUR data.
+
+    skip_priced drops the ones we already hold a line for, which is what makes
+    a repeat run nearly free: one match page is one credit, so re-scraping a
+    fixture whose odds are already recorded spends money to learn nothing.
+    Fixtures the bookmaker does not price are deliberately still included -
+    they carry no line, and a market can appear closer to kickoff.
+    """
     with db.conn.cursor() as cur:
         cur.execute("""
             SELECT m.match_id, m.kickoff, m.competition,
@@ -135,8 +142,10 @@ def upcoming_fixtures(db, hours):
             JOIN pl_teams ht  ON ht.team_id = m.home_team_id
             JOIN pl_teams at_ ON at_.team_id = m.away_team_id
             WHERE m.kickoff BETWEEN now() AND now() + (%s * INTERVAL '1 hour')
+              AND (NOT %s OR NOT EXISTS (SELECT 1 FROM pl_possession_line l
+                                         WHERE l.match_id = m.match_id))
             ORDER BY m.kickoff
-        """, (hours,))
+        """, (hours, skip_priced))
         return cur.fetchall()
 
 
@@ -247,6 +256,15 @@ def pick_urls(link_rows, fixtures):
     other. An ambiguous slug is reported rather than guessed at, because the
     cost of guessing wrong is odds recorded against the wrong match, which is
     invisible afterwards and poisons the one record the model is judged by.
+
+    Two fixtures never share a URL, and no fixture is claimed twice. The second
+    rule is the one that earns its keep: the league page lists matches beyond
+    our window, and a URL for one of those has nothing to compete against. On
+    "elche-real-madrid" the home side matched Real Sociedad on the bare prefix
+    "real" and the away side matched Atletico on "madrid", scoring 6 against no
+    rival - enough to file one match's odds against another. The real Real
+    Sociedad v Atletico URL scores 20 on both names in full, so ranking the
+    claims and keeping the best resolves it without needing a score threshold.
     """
     urls = []
     for r in link_rows:
@@ -256,7 +274,7 @@ def pick_urls(link_rows, fixtures):
                 urls.append(str(u))
                 break
 
-    chosen, unmatched, ambiguous = [], [], []
+    claims, unmatched, ambiguous, superseded = [], [], [], []
     for url in dict.fromkeys(urls):           # de-dupe, keep order
         words = _slug_words(url).split()
         if not words:
@@ -269,8 +287,22 @@ def pick_urls(link_rows, fixtures):
             ambiguous.append((url, [f["home"] + " v " + f["away"]
                                     for _, f in scored[:3]]))
         else:
-            chosen.append((url, scored[0][1]))
-    return chosen, unmatched, ambiguous
+            claims.append((scored[0][0], url, scored[0][1]))
+
+    # One fixture, one URL: strongest claim wins, the rest are reported as
+    # losers rather than silently dropped, because a fixture attracting two
+    # URLs usually means the slug vocabulary needs an alias, not a stronger
+    # filter.
+    chosen, seen = [], {}
+    for score, url, fix in sorted(claims, key=lambda c: -c[0]):
+        key = fix["match_id"]
+        if key in seen:
+            superseded.append((url, fix["home"] + " v " + fix["away"],
+                               score, seen[key]))
+            continue
+        seen[key] = score
+        chosen.append((url, fix))
+    return chosen, unmatched, ambiguous, superseded
 
 
 def main():
@@ -279,10 +311,16 @@ def main():
                     help="how far ahead to look for fixtures (default 48)")
     ap.add_argument("--dry-run", action="store_true",
                     help="show which matches would be scraped, spend nothing")
+    ap.add_argument("--skip-priced", action="store_true",
+                    help="ignore fixtures whose odds are already recorded, so "
+                         "a repeat run only pays for what is missing")
     ap.add_argument("--write", action="store_true",
                     help="write the odds (otherwise the import is a preview)")
     ap.add_argument("--links-job", type=int,
                     help="reuse a finished stage-1 job instead of running one")
+    ap.add_argument("--matches-job", type=int,
+                    help="reuse a finished stage-2 job: re-runs the import "
+                         "against a scrape already paid for")
     ap.add_argument("--matches-sitemap", type=int, default=MATCH_SITEMAP,
                     help="sitemap id for the match-detail scrape")
     ap.add_argument("--interval", type=int, default=2000,
@@ -296,8 +334,9 @@ def main():
     db = Database()
     db.ensure_schema(with_views=False)
 
-    fixtures = upcoming_fixtures(db, args.hours)
-    log.info("%d fixture(s) kicking off in the next %dh", len(fixtures), args.hours)
+    fixtures = upcoming_fixtures(db, args.hours, args.skip_priced)
+    log.info("%d fixture(s) kicking off in the next %dh%s", len(fixtures),
+             args.hours, " without odds" if args.skip_priced else "")
     for f in fixtures[:12]:
         log.info("   %s  %s v %s  [%s]", f["kickoff"].strftime("%d %b %H:%M"),
                  f["home"][:22], f["away"][:22], f["competition"])
@@ -322,12 +361,15 @@ def main():
     link_rows = job_rows(links_job)
     log.info("stage 1 returned %d row(s)", len(link_rows))
 
-    chosen, unmatched, ambiguous = pick_urls(link_rows, fixtures)
+    chosen, unmatched, ambiguous, superseded = pick_urls(link_rows, fixtures)
     log.info("%d match URL(s) line up with a fixture in the window; "
-             "%d did not match any; %d ambiguous",
-             len(chosen), len(unmatched), len(ambiguous))
+             "%d did not match any; %d ambiguous; %d superseded",
+             len(chosen), len(unmatched), len(ambiguous), len(superseded))
     for url, cands in ambiguous:
         log.warning("   AMBIGUOUS %s -> %s", url[-40:], " | ".join(cands))
+    for url, label, score, winner in superseded:
+        log.warning("   SUPERSEDED %s claimed %s at %d, kept the %d match",
+                    url[-40:], label, score, winner)
     for url, f in chosen:
         log.info("   %s v %s  ->  %s", f["home"][:20], f["away"][:20], url[-46:])
     for u in unmatched[:5]:
@@ -344,19 +386,29 @@ def main():
         return 0
 
     # -- stage 2: the possession markets ---------------------------------
-    if not args.matches_sitemap:
+    if not args.matches_sitemap and not args.matches_job:
         raise SystemExit(
             "No match-detail sitemap id. Pass --matches-sitemap or set "
             "WS_SITEMAP_MATCHES in .env.")
-    urls = [u for u, _ in chosen]
-    match_job = start_job(args.matches_sitemap, start_urls=urls,
-                          request_interval=args.interval,
-                          custom_id="stage2-markets")
-    log.info("stage 2 queued as job %s for %d page(s)", match_job, len(urls))
-    wait_for(match_job)
+    if args.matches_job:
+        match_job = args.matches_job
+        log.info("reusing stage-2 job %s", match_job)
+    else:
+        urls = [u for u, _ in chosen]
+        match_job = start_job(args.matches_sitemap, start_urls=urls,
+                              request_interval=args.interval,
+                              custom_id="stage2-markets")
+        log.info("stage 2 queued as job %s for %d page(s)", match_job, len(urls))
+        wait_for(match_job)
 
     rows = job_rows(match_job)
     log.info("stage 2 returned %d row(s)", len(rows))
+
+    # Stage 2 takes minutes, and the connection opened at the top has been
+    # sitting idle inside a transaction the whole time. Neon closes those, so
+    # without this the scrape completes, the credits are spent, and the import
+    # dies on the first query.
+    db.ensure_connection()
 
     import odds_sheet
     import import_odds as io_mod
