@@ -25,19 +25,58 @@ load_dotenv(BASE_DIR / ".env")
 import app as webapp  # noqa: E402  (must follow load_dotenv)
 
 
+_conn = None
+
+
 def share_one_connection():
     """Render every page over a single database connection.
 
     app.db() opens one connection per request and closes it on teardown, which
-    is right for a web server and wrong here: a full build is ~140 pages, and
-    140 fresh TLS handshakes to a US-East database from Europe costs more than
+    is right for a web server and wrong here: a full build is ~540 pages, and
+    540 fresh TLS handshakes to a US-East database from Europe costs more than
     all the queries put together. The pages are read-only, so one connection
     for the whole build is safe.
+
+    Safe, but not immortal: one connection held across a build that takes
+    minutes is exactly what Neon's pooler drops. Calling this again replaces a
+    dead handle, which is what render() does rather than let one drop cascade.
     """
-    conn = webapp.psycopg.connect(webapp.os.environ["DATABASE_URL"],
-                                  row_factory=webapp.dict_row)
-    webapp.db = lambda: conn
-    return conn
+    global _conn
+    if _conn is not None:
+        try:
+            _conn.close()
+        except Exception:
+            pass
+    _conn = webapp.psycopg.connect(webapp.os.environ["DATABASE_URL"],
+                                   row_factory=webapp.dict_row)
+    webapp.db = lambda: _conn
+    return _conn
+
+
+def render(client, url):
+    """Fetch one page, reconnecting once if the connection died under us.
+
+    Without this, a single dropped connection does not fail one page - it
+    fails every page after it, because they all share the handle. A build that
+    reached the slowest page and then reported 525 failures was one dead
+    socket, not 525 broken pages.
+    """
+    try:
+        resp = client.get(url)
+        if resp.status_code == 200:
+            return resp, None
+        reason = f"HTTP {resp.status_code}"
+    except Exception as exc:                     # noqa: BLE001 - reported below
+        reason = f"{type(exc).__name__}: {exc}"
+
+    print(f"  reconnecting after {reason}  ({url})")
+    share_one_connection()
+    try:
+        resp = client.get(url)
+        return resp, (None if resp.status_code == 200
+                      else f"{reason}, then HTTP {resp.status_code}")
+    except Exception as exc:                     # noqa: BLE001
+        return None, f"{reason}, then {type(exc).__name__}: {exc}"
 
 
 def targets():
@@ -127,14 +166,16 @@ def main(outdir="site"):
     out.mkdir(parents=True)
 
     share_one_connection()
+    # A build should say why a page broke, not swallow it into a 500.
+    webapp.app.config["PROPAGATE_EXCEPTIONS"] = True
     client = webapp.app.test_client()
     pages = targets()
     written = failed = 0
 
     for url, rel in pages:
-        resp = client.get(url)
-        if resp.status_code != 200:
-            print(f"  FAILED {resp.status_code}  {url}")
+        resp, reason = render(client, url)
+        if reason is not None:
+            print(f"  FAILED {url}  {reason}")
             failed += 1
             continue
         dest = out / rel
