@@ -194,6 +194,21 @@ def league():
     return want if want in LEAGUE_NAMES else "PL"
 
 
+ALL = "all"
+
+
+def scope():
+    """The league scope for the Bets page, which alone may span all three.
+
+    Every other page stays single-league on purpose: possession baselines
+    differ between competitions, so a combined teams or matches table invites
+    comparisons that are not like for like. A settled bet is different. It is
+    just a bet, and the track record reads better whole than cut into three
+    short pieces - especially while each piece is only a handful of rows.
+    """
+    return ALL if request.args.get("league") == ALL else league()
+
+
 @app.context_processor
 def _league_globals():
     return {"leagues": LEAGUES, "league": league(),
@@ -458,10 +473,15 @@ def _fitted_predictor(competition):
         return None
 
 
-def _line_rows():
-    """Every recorded line with the model's view of it, settled or not."""
+def _line_rows(want=None):
+    """Every recorded line with the model's view of it, settled or not.
+
+    want is a competition code, or ALL to span every league.
+    """
     from scipy.stats import norm
     import model as m
+
+    want = want or league()
 
     # Ridge on the ten possession columns at a 90-day half-life, measured over
     # 322 walk-forward matches. The naive midpoint's 0.98 bias and 8.40 sigma
@@ -471,11 +491,14 @@ def _line_rows():
     # NAIVE_* is the fallback for a league with too little history to fit
     # anything, which is Bundesliga's situation for another few matchdays.
     SIGMA, NAIVE_BIAS, NAIVE_SIGMA = 8.02, 0.98, 8.40
-    predictor = _fitted_predictor(league())
+    comps = ([c for c, _ in LEAGUES] if want == ALL else [want])
+    # One fit per league in scope. A league with too little history returns
+    # None and its rows fall back to the midpoint - which the rows now say.
+    predictors = {c: _fitted_predictor(c) for c in comps}
     rows = query("""
         SELECT l.line, l.over_odds, l.under_odds,
                t.name AS team, l.team_id,
-               m.match_id, m.kickoff, ht.abbr AS home_abbr,
+               m.match_id, m.kickoff, m.competition, ht.abbr AS home_abbr,
                at_.abbr AS away_abbr, m.home_team_id,
                ht.name AS home_name, at_.name AS away_name,
                f.poss_naive_l5 AS naive,
@@ -488,14 +511,21 @@ def _line_rows():
         LEFT JOIN v_match_features f ON f.match_id = l.match_id
         LEFT JOIN pl_team_match tm ON tm.match_id = l.match_id
                                   AND tm.team_id = l.team_id
-        WHERE m.competition = %(c)s
+        WHERE m.competition = ANY(%(cs)s)
         ORDER BY m.kickoff DESC
-    """, {"c": league()})
+    """, {"cs": comps})
     fixture_naive = {r["match_id"]: r["poss_naive_l5"] for r in query(
         "SELECT match_id, poss_naive_l5 FROM v_fixture_features "
-        "WHERE competition = %(c)s", {"c": league()})}
+        "WHERE competition = ANY(%(cs)s)", {"cs": comps})}
 
     # Grade first, so the stake ratings below know how much evidence exists.
+    # Counted per league, not across the scope: a rating is a claim about this
+    # model in this competition, and pooling three leagues' settled bets would
+    # let the Premier League's record vouch for a Bundesliga prediction.
+    graded_by = {}
+    for r in rows:
+        if r["actual"] is not None:
+            graded_by[r["competition"]] = graded_by.get(r["competition"], 0) + 1
     graded = sum(1 for r in rows if r["actual"] is not None)
 
     out = []
@@ -510,6 +540,9 @@ def _line_rows():
         p_side = edge = None
         rating, why = 0, "no prediction available"
         book_over = margin = None
+        predictor = predictors.get(r["competition"])
+        graded_here = graded_by.get(r["competition"], 0)
+        fallback = False
 
         if naive is not None:
             # The fitted model where one exists, the midpoint plus its own
@@ -519,12 +552,13 @@ def _line_rows():
             if home_pred is None:
                 home_pred = float(naive) + NAIVE_BIAS
                 sigma = NAIVE_SIGMA
+                fallback = True
             else:
                 sigma = SIGMA
             pred = home_pred if r["team_id"] == r["home_team_id"]                 else 100 - home_pred
             p_over = float(1 - norm.cdf(line, pred, sigma))
             side, p_side, edge, rating, why = m.choose_side(
-                p_over, over_odds, under_odds, graded)
+                p_over, over_odds, under_odds, graded_here)
 
         # With both prices we can strip the margin out and see what the
         # bookmaker actually thinks, rather than what the price alone implies.
@@ -544,7 +578,7 @@ def _line_rows():
                     "line": line, "pred": pred, "p_over": p_over,
                     "p_side": p_side, "edge": edge, "actual": actual,
                     "hit": hit, "backed": bool(side) and (edge or 0) > 0,
-                    "rating": rating, "why": why,
+                    "rating": rating, "why": why, "fallback": fallback,
                     "book_over": book_over, "margin": margin})
     return out, graded
 
@@ -566,7 +600,8 @@ def bets():
     staked on one. A model's own edge estimate is a claim about itself; this
     is the only thing that can check it.
     """
-    rows, graded = _line_rows()
+    want = scope()
+    rows, graded = _line_rows(want)
 
     staked = returned = 0.0
     settled = won = 0
@@ -593,7 +628,10 @@ def bets():
                            if r["over_odds"] and r["under_odds"]),
     }
     return render_template("bets.html", rows=rows, totals=totals,
-                           verdict=call, sigma=8.02, bias=0.19)
+                           verdict=call, sigma=8.02, bias=0.19,
+                           scope=want, all_leagues=(want == ALL),
+                           league_names=LEAGUE_NAMES,
+                           fallback_n=sum(1 for r in rows if r["fallback"]))
 
 
 @app.route("/model")
@@ -682,6 +720,7 @@ def model():
         n_holdout=len(holdout), stats=stats, groups=ordered, coverage=coverage,
         baselines=loader.baselines(train), sparse=sparse,
         open_lines=open_lines, graded=graded,
+        fallback_n=sum(1 for r in open_lines if r["fallback"]),
         speculative=speculative, shortfall=shortfall,
         preview=upcoming.head(10).to_dict("records") if len(upcoming) else [])
 

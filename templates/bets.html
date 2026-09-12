@@ -8,8 +8,9 @@
   Every recorded line, what the model said about it, and how it settled. The point
   is to build a track record <em>before</em> staking anything on one &mdash; a model's own
   edge estimate is a claim about itself, and this is the only thing that can check it.
-  Predictions use the naive midpoint with a {{ bias }}-point bias correction and
-  &sigma; = {{ sigma }}, both measured over 334 walk-forward matches.
+  Predictions come from the fitted model where a league has enough history for one,
+  at &sigma; = {{ sigma }}. Rows marked <sup class="warn">*</sup> came from the naive
+  midpoint instead, because that league cannot fit a model yet &mdash; see below the table.
 </div>
 
 <div class="tiles" style="margin-bottom:22px">
@@ -115,11 +116,18 @@
 {% endif %}
 
 <div class="panel">
+  <div style="margin-bottom:12px">
+    <a class="chip {{ 'ok' if all_leagues }}" href="{{ url_for('bets', league='all') }}">All leagues</a>
+    {% for code, name in leagues %}
+    <a class="chip {{ 'ok' if scope == code }}" href="{{ url_for('bets', league=code) }}">{{ name }}</a>
+    {% endfor %}
+  </div>
   <div class="tablewrap">
     <table class="sortable">
       <thead>
         <tr>
           <th class="l">Kickoff</th>
+          {% if all_leagues %}<th class="l">League</th>{% endif %}
           <th class="l">Match</th>
           <th class="l">Line is about</th>
           <th>Line</th>
@@ -137,6 +145,7 @@
         {% for r in rows %}
         <tr>
           <td class="l muted" data-v="{{ r.kickoff.timestamp() }}">{{ r.kickoff.strftime('%d %b') }}</td>
+          {% if all_leagues %}<td class="l muted">{{ league_names.get(r.competition, r.competition) }}</td>{% endif %}
           <td class="l"><a href="{{ url_for('match', match_id=r.match_id) }}">{{ r.home_abbr }} v {{ r.away_abbr }}</a></td>
           <td class="l">{{ r.team }}</td>
           <td class="num">{{ '%.1f'|format(r.line) }}</td>
@@ -145,7 +154,8 @@
             {% else %}<span class="chip">no bet</span>{% endif %}
           </td>
           <td class="num">{{ '%.2f'|format(r.odds) if r.odds else '-' }}</td>
-          <td class="num muted">{{ '%.1f'|format(r.pred) if r.pred is not none else '-' }}</td>
+          <td class="num muted">{{ '%.1f'|format(r.pred) if r.pred is not none else '-'
+            }}{% if r.fallback %}<sup class="warn" title="No fitted model for this league yet - naive midpoint">*</sup>{% endif %}</td>
           <td class="num">{{ '%.0f%%'|format(r.p_side * 100) if r.p_side is not none else '-' }}</td>
           <td class="num {{ 'good' if r.backed else 'muted' }}"
               data-v="{{ r.edge if r.edge is not none else -999 }}">
@@ -166,6 +176,17 @@
       </tbody>
     </table>
   </div>
+  {% if fallback_n %}
+  <p class="muted" style="font-size:12.5px;margin-bottom:0">
+    <sup class="warn">*</sup> <strong>{{ fallback_n }} row{{ '' if fallback_n == 1 else 's' }}
+    did not come from a fitted model.</strong> Their league has too little history to fit one,
+    so the figure is the naive midpoint &mdash; the side's own recent possession averaged
+    against what its opponent concedes, on as few as two matches each. The midpoint pulls
+    hard towards 50, so it understates a mismatch: a strong side away at a weak one reads
+    lower than it should, and the edge against a bookmaker's line can come out the wrong
+    way round entirely. Treat the Bet, Edge and Stake columns on these rows as unproven.
+  </p>
+  {% endif %}
   {% if not rows %}
   <div class="empty">
     No lines recorded yet. Add them to <code>odds.txt</code> and the next run will import them.

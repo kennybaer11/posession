@@ -188,7 +188,8 @@
           <td class="num">{{ '%.1f'|format(r.line) }}</td>
           <td class="num muted">{{ '%.2f'|format(r.under_odds) if r.under_odds else '-' }}</td>
           <td class="num muted">{{ '%.2f'|format(r.over_odds) if r.over_odds else '-' }}</td>
-          <td class="num">{{ '%.1f'|format(r.pred) if r.pred is not none else '-' }}%</td>
+          <td class="num">{{ '%.1f'|format(r.pred) if r.pred is not none else '-'
+            }}%{% if r.fallback %}<sup class="warn" title="No fitted model for this league yet - naive midpoint">*</sup>{% endif %}</td>
           <td class="num muted" title="bookmaker's own probability, margin removed">
             {% if r.book_over is not none %}{{ '%.0f%%'|format(r.book_over * 100) }} over{% else %}&ndash;{% endif %}
           </td>
@@ -210,6 +211,18 @@
       </tbody>
     </table>
   </div>
+  {% if fallback_n %}
+  <p class="muted" style="font-size:12.5px">
+    <sup class="warn">*</sup> <strong>{{ fallback_n }} row{{ '' if fallback_n == 1 else 's' }}
+    here did not come from a fitted model.</strong> This league has too little history to fit
+    one, so the figure is the naive midpoint: the side's own recent possession averaged
+    against what its opponent concedes &mdash; on as few as two matches each. That formula
+    shrinks towards 50 by construction, so it understates a mismatch. A strong side away at a
+    weak one reads too low, and the edge it implies against a bookmaker's line can point the
+    wrong way entirely. The Bet, Edge and Stake columns on these rows are arithmetic, not a
+    tested prediction.
+  </p>
+  {% endif %}
   <p class="muted" style="font-size:12.5px;margin-bottom:0">
     <strong>0/10</strong> means the price is against you &mdash; not a close call, a bet to skip.
     Anything above that is a fraction of what you would stake at full confidence, and
