@@ -186,6 +186,14 @@ BL_STAT_MAP = {
     "tackles_won":       "tacklesWon",
 }
 
+# passAccuracy is published as a percentage (80, 88) where every other feed
+# gives a count of completed passes, and pass_accuracy_l5 divides the count by
+# the volume. Multiplying back is exact to within rounding: the feed rounds the
+# percentage to a whole number, so 350 passes at 80% recovers 280 where the
+# true figure might be 279 or 281. That error is a fraction of a percent of a
+# ratio already averaged over five matches.
+BL_DERIVED = {"passes_accurate": ("passes", "passAccuracy")}
+
 BL_AGAINST = {
     "possession_against": "ballPossessionRatio",
     "xg_against":         "XGoals",
@@ -264,5 +272,9 @@ def team_match_rows(match, season, stats):
             row[col] = _side(stats, key, side)
         for col, key in BL_AGAINST.items():
             row[col] = _side(stats, key, other)
+        for col, (vol_key, pct_key) in BL_DERIVED.items():
+            vol, pct = _side(stats, vol_key, side), _side(stats, pct_key, side)
+            row[col] = (round(float(vol) * float(pct) / 100.0)
+                        if vol is not None and pct is not None else None)
         rows.append(row)
     return rows
