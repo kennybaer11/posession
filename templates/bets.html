@@ -3,6 +3,7 @@
 {% block heading %}Bet record{% endblock %}
 
 {% block content %}
+{% with tabs_all = true, tabs_active = scope %}{% include "_leaguetabs.html" %}{% endwith %}
 
 <div class="note">
   Every recorded line, what the model said about it, and how it settled. The point
@@ -116,12 +117,6 @@
 {% endif %}
 
 <div class="panel">
-  <div style="margin-bottom:12px">
-    <a class="chip {{ 'ok' if all_leagues }}" href="{{ url_for('bets', league='all') }}">All leagues</a>
-    {% for code, name in leagues %}
-    <a class="chip {{ 'ok' if scope == code }}" href="{{ url_for('bets', league=code) }}">{{ name }}</a>
-    {% endfor %}
-  </div>
   <div class="tablewrap">
     <table class="sortable">
       <thead>

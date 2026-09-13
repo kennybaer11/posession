@@ -431,7 +431,7 @@ def fixtures():
     # Whether a line has been recorded against each fixture, and what the model
     # makes of it. Taken from the same helper the Model and Bets pages use, so
     # the three cannot show different verdicts for one match.
-    open_lines, graded = stake_guidance()
+    open_lines, graded = stake_guidance(league())
     by_match = {}
     for r in open_lines:
         by_match.setdefault(r["match_id"], []).append(r)
@@ -459,6 +459,56 @@ def settles_over(actual, line):
     return actual >= line
 
 
+# Below this many training rows a league falls back to the naive midpoint.
+# Roughly four rows per feature - a rule of thumb, not a measured threshold.
+MIN_FIT_ROWS = 40
+
+# What the fit actually trains on, and therefore what the readiness table has
+# to count. Not config.yaml's min_history, which is 3 and meant for analysis:
+# counting that instead reported 0 Bundesliga rows next to a rule applied to
+# 16, so the table described a decision nobody was making.
+FIT_MIN_HISTORY = 1
+
+
+def league_status():
+    """Per-league modelling readiness, for the all-leagues Model view.
+
+    Counted in SQL rather than by loading each league's training frame: the
+    page only needs to say which leagues are modelled and which are not, and
+    three pandas loads plus three fits to answer that would double the cost of
+    the slowest page on the site.
+    """
+    rows = {r["competition"]: r for r in query("""
+        SELECT competition,
+               count(*) FILTER (WHERE home_matches_before >= %(n)s
+                                  AND away_matches_before >= %(n)s
+                                  AND home_possession IS NOT NULL) AS train_rows,
+               count(*) AS all_rows
+        FROM v_match_features GROUP BY competition
+    """, {"n": FIT_MIN_HISTORY})}
+    lines = {r["competition"]: r for r in query("""
+        SELECT m.competition,
+               count(*) AS lines,
+               count(*) FILTER (WHERE tm.possession IS NOT NULL) AS settled
+        FROM pl_possession_line l
+        JOIN pl_matches m ON m.match_id = l.match_id
+        LEFT JOIN pl_team_match tm ON tm.match_id = l.match_id
+                                  AND tm.team_id = l.team_id
+        GROUP BY 1
+    """)}
+    out = []
+    for code, name in LEAGUES:
+        n = (rows.get(code) or {}).get("train_rows") or 0
+        out.append({
+            "code": code, "name": name, "rows": n,
+            "needed": MIN_FIT_ROWS,
+            "fitted": n >= MIN_FIT_ROWS,
+            "lines": (lines.get(code) or {}).get("lines") or 0,
+            "settled": (lines.get(code) or {}).get("settled") or 0,
+        })
+    return out
+
+
 def _fitted_predictor(competition):
     """Fit the model for this league and return match_id -> prediction.
 
@@ -473,10 +523,10 @@ def _fitted_predictor(competition):
         import load as loader
         import model as m
         train = loader.training_set(season="all", competition=competition,
-                                    min_history=1)
+                                    min_history=FIT_MIN_HISTORY)
         upcoming = loader.fixtures(competition=competition)
         feats = m.available_features(train)
-        if len(train) < 40 or not feats or not len(upcoming):
+        if len(train) < MIN_FIT_ROWS or not feats or not len(upcoming):
             return None
         fitted = m.build(alpha=1.0)
         fitted.fit(train[feats], train[loader.TARGET],
@@ -602,9 +652,9 @@ def _line_rows(want=None):
     return out, graded
 
 
-def stake_guidance():
+def stake_guidance(want=None):
     """Lines on matches that have not been played yet."""
-    rows, graded = _line_rows()
+    rows, graded = _line_rows(want)
     open_lines = [r for r in rows if r["actual"] is None]
     open_lines.sort(key=lambda r: (-r["rating"],
                                    -(r["edge"] if r["edge"] is not None else -9)))
@@ -741,6 +791,24 @@ def model():
     """Readiness of the modelling layer - no model is trained yet."""
     import load as loader
 
+    # All-leagues is a different page, not a wider version of this one. The
+    # training set, the feature inventory and the baselines are each about one
+    # league's own data, and stacking three leagues' rows into them would
+    # describe a model that does not exist. What DOES span leagues is the stake
+    # guidance and the question of which leagues are modelled at all, so that
+    # is what the combined view shows.
+    want = scope()
+    if want == ALL:
+        open_lines, graded = stake_guidance(ALL)
+        return render_template(
+            "model.html", all_leagues=True, scope=ALL,
+            statuses=league_status(), open_lines=open_lines, graded=graded,
+            fallback_n=sum(1 for r in open_lines if r["fallback"]),
+            league_names=LEAGUE_NAMES,
+            n_train=0, n_features=0, n_fit=0, n_holdout=0, n_fixtures=0,
+            baselines=None, stats=None, coverage=None, shortfall=None,
+            sparse=None, groups={}, speculative=False, preview=[])
+
     lg = league()
     train = loader.training_set(competition=lg)
     upcoming = loader.fixtures(competition=lg)
@@ -807,7 +875,7 @@ def model():
     # Open lines, with a stake rating. Kept on this page because it is the
     # model's own recommendation; the Bets page is the record of how such
     # recommendations turned out.
-    open_lines, graded = stake_guidance()
+    open_lines, graded = stake_guidance(lg)
 
     # How much of the training set each h2h column actually covers - in a
     # single season most pairs have not met yet, so these are mostly empty.
@@ -822,6 +890,8 @@ def model():
         n_holdout=len(holdout), stats=stats, groups=ordered, coverage=coverage,
         baselines=loader.baselines(train), sparse=sparse,
         open_lines=open_lines, graded=graded,
+        all_leagues=False, scope=lg, statuses=None,
+        league_names=LEAGUE_NAMES,
         fallback_n=sum(1 for r in open_lines if r["fallback"]),
         speculative=speculative, shortfall=shortfall,
         preview=upcoming.head(10).to_dict("records") if len(upcoming) else [])

@@ -3,7 +3,50 @@
 {% block heading %}Model{% endblock %}
 
 {% block content %}
+{% with tabs_all = true, tabs_active = scope %}{% include "_leaguetabs.html" %}{% endwith %}
 
+{% if all_leagues %}
+<div class="note">
+  <strong>Every league's open lines in one place.</strong> The panels below this one are
+  missing on purpose: a training set, a feature inventory and an error baseline each
+  describe <em>one</em> league's own data, and stacking three leagues' rows into them would
+  describe a model that does not exist. Pick a league above for those. What genuinely spans
+  leagues is the guidance, and which leagues are modelled at all.
+</div>
+
+<div class="panel">
+  <h2>Modelling readiness <span class="sub">&mdash; which leagues have enough history to fit</span></h2>
+  <div class="tablewrap">
+    <table>
+      <thead>
+        <tr><th class="l">League</th><th>Training rows</th><th>Needed</th>
+            <th class="l">Predictions from</th><th>Lines recorded</th><th>Settled</th></tr>
+      </thead>
+      <tbody>
+        {% for st in statuses %}
+        <tr>
+          <td class="l"><a href="{{ url_for('model', league=st.code) }}">{{ st.name }}</a></td>
+          <td class="num {{ 'good' if st.fitted else 'warn' }}">{{ st.rows }}</td>
+          <td class="num muted">{{ st.needed }}</td>
+          <td class="l">
+            {% if st.fitted %}<span class="chip ok">fitted model</span>
+            {% else %}<span class="chip wa">naive midpoint</span>{% endif %}
+          </td>
+          <td class="num muted">{{ st.lines }}</td>
+          <td class="num muted">{{ st.settled }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <p class="muted" style="font-size:12.5px;margin-bottom:0">
+    A league under {{ statuses[0].needed if statuses else 40 }} rows falls back to the naive
+    midpoint &mdash; the side's own recent possession averaged against what its opponent
+    concedes. Those rows are marked <sup class="warn">*</sup> below. The threshold is about
+    four rows per feature, a rule of thumb rather than a measured cliff.
+  </p>
+</div>
+{% else %}
 <div class="note">
   <strong>Target: home possession %.</strong> Possession is zero-sum inside a match, so
   this one number defines the whole result &mdash; the away side is 100 minus it. This is a
@@ -159,6 +202,8 @@
   {% endfor %}
 </div>
 
+{% endif %}
+
 <div class="panel">
   <h2>Stake guidance <span class="sub">&mdash; open lines, rated out of 10</span></h2>
   <p class="muted" style="font-size:13px;margin-top:-6px">
@@ -174,7 +219,9 @@
     <table>
       <thead>
         <tr>
-          <th class="l">Kickoff</th><th class="l">Match</th><th class="l">Line is about</th>
+          <th class="l">Kickoff</th>
+          {% if all_leagues %}<th class="l">League</th>{% endif %}
+          <th class="l">Match</th><th class="l">Line is about</th>
           <th>Line</th><th>Under</th><th>Over</th><th>Model</th>
           <th>Market</th><th>Bet</th><th>Edge</th><th>Stake</th><th class="l">Why</th>
         </tr>
@@ -183,6 +230,7 @@
         {% for r in open_lines %}
         <tr>
           <td class="l muted">{{ r.kickoff.strftime('%d %b %H:%M') }}</td>
+          {% if all_leagues %}<td class="l muted">{{ league_names.get(r.competition, r.competition) }}</td>{% endif %}
           <td class="l">{{ r.home_abbr }} v {{ r.away_abbr }}</td>
           <td class="l">{{ r.team }}</td>
           <td class="num">{{ '%.1f'|format(r.line) }}</td>
@@ -236,6 +284,7 @@
   {% endif %}
 </div>
 
+{% if not all_leagues %}
 <div class="panel">
   <h2>Next fixtures <span class="sub">&mdash; with the naive prediction to beat</span></h2>
   <div class="tablewrap">
@@ -262,5 +311,6 @@
   </div>
   {% if not preview %}<div class="empty">No fixtures stored.</div>{% endif %}
 </div>
+{% endif %}
 
 {% endblock %}

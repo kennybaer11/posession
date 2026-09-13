@@ -18,14 +18,6 @@
     <a href="{{ url_for('bets', league=league) }}"     class="{{ 'on' if request.endpoint == 'bets' }}">Bets</a>
     <a href="{{ url_for('status') }}"                  class="{{ 'on' if request.endpoint == 'status' }}">Scraper</a>
   </nav>
-  <div class="leagues">
-    {% for code, name in leagues %}
-    <a href="{{ url_for(request.endpoint if request.endpoint in
-              ('index','teams','matches','fixtures','model','bets') else 'index',
-              league=code) }}"
-       class="{{ 'on' if code == league }}">{{ name }}</a>
-    {% endfor %}
-  </div>
 </header>
 
 <main>

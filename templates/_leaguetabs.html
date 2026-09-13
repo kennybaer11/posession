@@ -1,0 +1,23 @@
+{#
+  League scope tabs, rendered inside the page.
+
+  tabs_all   include an "All leagues" tab. Only pages that actually serve every
+             league at once pass this - offering it where the page would
+             silently fall back to one league would make the tab lie.
+  tabs_active which tab is current; defaults to the page's league.
+#}
+{% set _all = tabs_all | default(false) %}
+{% set _active = tabs_active | default(league) %}
+{% set _ep = request.endpoint if request.endpoint in
+             ('index', 'teams', 'matches', 'fixtures', 'model', 'bets')
+             else 'index' %}
+<div class="leaguetabs">
+  {% if _all %}
+  <a href="{{ url_for(_ep, league='all') }}"
+     class="{{ 'on' if _active == 'all' }}">All leagues</a>
+  {% endif %}
+  {% for code, name in leagues %}
+  <a href="{{ url_for(_ep, league=code) }}"
+     class="{{ 'on' if _active == code }}">{{ name }}</a>
+  {% endfor %}
+</div>

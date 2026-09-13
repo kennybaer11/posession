@@ -3,6 +3,7 @@
 {% block heading %}Matches{% endblock %}
 
 {% block content %}
+{% include "_leaguetabs.html" %}
 
 <div class="filters">
   <a href="{{ url_for('matches') }}" class="{{ 'on' if not current }}">All seasons</a>
