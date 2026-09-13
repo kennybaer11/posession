@@ -22,8 +22,12 @@ on:
     # 13:30 UTC and the Premier League at 15:00, and a run that fires after
     # kickoff reads a closed or in-play market instead of the opening line,
     # which is the only price worth recording.
-    - cron: "0 8 * * *"     # 10:00 Prague
-    - cron: "0 11 * * *"    # 13:00 Prague
+    # Seven past, not on the hour. GitHub's shared runners queue hardest at
+    # :00, and a schedule there is delayed longest or dropped outright - the
+    # hourly data scrape has sat at :17 for the same reason. The first run at
+    # "0 8" never arrived at all; 22 minutes past due it had not been created.
+    - cron: "7 8 * * *"     # 10:07 Prague
+    - cron: "7 11 * * *"    # 13:07 Prague
   workflow_dispatch:
     inputs:
       hours:
