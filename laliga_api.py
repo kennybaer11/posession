@@ -128,8 +128,14 @@ LL_STAT_MAP = {
     "shots_on_target":     "ontarget_scoring_att",
     "shots_off_target":    "shot_off_target",
     "shots_blocked":       "blocked_scoring_att",
-    "shots_inside_box":    "att_ibox_target",
-    "corners":             "won_corners",
+    # attempts_ibox is every attempt from inside the box; att_ibox_target is
+    # only those on target, and is what shots_ibox_target means. Mapping this
+    # column to the narrower stat made LaLiga's shots_inside_box quietly
+    # smaller than the Premier League's for the same match.
+    "shots_inside_box":    "attempts_ibox",
+    # corners taken, not corners won - the Premier League column is cornerTaken
+    # and won_corners belongs to corners_won, which is now mapped separately.
+    "corners":             "corner_taken",
     "crosses":             "total_cross",
     "crosses_accurate":    "accurate_cross",
     "pen_area_entries":    "pen_area_entries",
@@ -158,6 +164,37 @@ LL_STAT_MAP = {
     "goals_open_play":     "goals_openplay",
     "shots_open_play":     "att_openplay",
     "long_own_to_opp":     "long_pass_own_to_opp",
+
+    # The feed publishes 170 stats and we were reading 35. These are the ones
+    # whose Opta name matches a column the schema already has, so they cost
+    # nothing to fill and let a feature be tested across all three leagues
+    # instead of the Premier League alone.
+    "shots_outside_box":   "attempts_obox",
+    "shots_ibox_target":   "att_ibox_target",
+    "shots_headed":        "att_hd_total",
+    "big_chances_scored":  "big_chance_scored",
+    "big_chances_missed":  "big_chance_missed",
+    "big_chances_created": "big_chance_created",
+    "final_third_entries": "final_third_entries",
+    "touches_opp_box":     "touches_in_opp_box",
+    "blocks":              "outfielder_block",
+    "corners_won":         "won_corners",
+    "corners_lost":        "lost_corners",
+    "corners_into_box":    "total_corners_intobox",
+    "passes_fwd_zone":     "total_fwd_zone_pass",
+    "passes_fwd_zone_acc": "accurate_fwd_zone_pass",
+    "passes_back_zone":    "total_back_zone_pass",
+    "passes_back_zone_acc": "accurate_back_zone_pass",
+    "passes_forward":      "fwd_pass",
+    "passes_backward":     "backward_pass",
+    "long_balls_acc":      "accurate_long_balls",
+    "long_own_to_opp_acc": "long_pass_own_to_opp_success",
+    "ball_recoveries":     "ball_recovery",
+    "take_ons":            "total_contest",
+    "take_ons_won":        "won_contest",
+    "aerials_lost":        "aerial_lost",
+    "duels_lost":          "duel_lost",
+    "interceptions_won":   "interception_won",
 }
 
 LL_AGAINST = {
