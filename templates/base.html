@@ -14,8 +14,12 @@
     <a href="{{ url_for('teams', league=league) }}"    class="{{ 'on' if request.endpoint in ('teams','team') }}">Teams</a>
     <a href="{{ url_for('matches', league=league) }}"  class="{{ 'on' if request.endpoint in ('matches','match') }}">Matches</a>
     <a href="{{ url_for('fixtures', league=league) }}" class="{{ 'on' if request.endpoint == 'fixtures' }}">Fixtures</a>
-    <a href="{{ url_for('model', league=league) }}"    class="{{ 'on' if request.endpoint == 'model' }}">Model</a>
-    <a href="{{ url_for('bets', league=league) }}"     class="{{ 'on' if request.endpoint == 'bets' }}">Bets</a>
+    {# These two serve every league at once, so the menu lands on that view
+       rather than silently picking the Premier League. The others carry the
+       league you were looking at, because they have no combined view to go
+       to - see _leaguetabs.html. #}
+    <a href="{{ url_for('model', league='all') }}"     class="{{ 'on' if request.endpoint == 'model' }}">Model</a>
+    <a href="{{ url_for('bets', league='all') }}"      class="{{ 'on' if request.endpoint == 'bets' }}">Bets</a>
     <a href="{{ url_for('status') }}"                  class="{{ 'on' if request.endpoint == 'status' }}">Scraper</a>
   </nav>
 </header>
