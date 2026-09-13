@@ -99,6 +99,7 @@ def targets():
     # to_static() maps ?league=all to the "all-" prefix without being told.
     pages.append(("/bets?league=all", "all-bets.html"))
     pages.append(("/model?league=all", "all-model.html"))
+    pages.append(("/fixtures?league=all", "all-fixtures.html"))
     # Not per-league: the scraper serves every competition at once.
     pages.append(("/status", "status.html"))
 

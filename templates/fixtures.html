@@ -3,7 +3,17 @@
 {% block heading %}Upcoming fixtures{% endblock %}
 
 {% block content %}
-{% include "_leaguetabs.html" %}
+{% with tabs_all = true, tabs_active = scope %}{% include "_leaguetabs.html" %}{% endwith %}
+
+{% if all_leagues %}
+<div class="note">
+  <strong>The next {{ horizon }} days across all three leagues.</strong> This view is
+  horizon-limited where the per-league tabs are not: Bundesliga and LaLiga each store a
+  whole season of fixtures &mdash; 281 and 332 against the Premier League's 21 &mdash; so
+  showing everything here would be 634 rows of mostly May. Pick a league above for its
+  full list.
+</div>
+{% endif %}
 
 <div class="note">
   {% if with_lines %}
@@ -28,6 +38,7 @@
       <thead>
         <tr>
           <th class="l">Kickoff</th>
+          {% if all_leagues %}<th class="l">League</th>{% endif %}
           <th>MW</th>
           <th class="l">Home</th>
           <th class="l">Away</th>
@@ -46,6 +57,7 @@
         {% for f in rows %}
         <tr>
           <td class="l muted" data-v="{{ f.kickoff.timestamp() }}">{{ f.kickoff.strftime('%d %b, %H:%M') }}</td>
+          {% if all_leagues %}<td class="l muted">{{ league_names.get(f.competition, f.competition) }}</td>{% endif %}
           <td class="num muted">{{ f.match_week or '-' }}</td>
           <td class="l"><a href="{{ url_for('team', team_id=f.home_team_id) }}">{{ f.home_team }}</a></td>
           <td class="l"><a href="{{ url_for('team', team_id=f.away_team_id) }}">{{ f.away_team }}</a></td>

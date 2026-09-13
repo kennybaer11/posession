@@ -13,8 +13,8 @@
     <a href="{{ url_for('index', league=league) }}"    class="{{ 'on' if request.endpoint == 'index' }}">Overview</a>
     <a href="{{ url_for('teams', league=league) }}"    class="{{ 'on' if request.endpoint in ('teams','team') }}">Teams</a>
     <a href="{{ url_for('matches', league=league) }}"  class="{{ 'on' if request.endpoint in ('matches','match') }}">Matches</a>
-    <a href="{{ url_for('fixtures', league=league) }}" class="{{ 'on' if request.endpoint == 'fixtures' }}">Fixtures</a>
-    {# These two serve every league at once, so the menu lands on that view
+    <a href="{{ url_for('fixtures', league='all') }}"  class="{{ 'on' if request.endpoint == 'fixtures' }}">Fixtures</a>
+    {# These three serve every league at once, so the menu lands on that view
        rather than silently picking the Premier League. The others carry the
        league you were looking at, because they have no combined view to go
        to - see _leaguetabs.html. #}
