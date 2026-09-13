@@ -22,12 +22,19 @@ on:
     # 13:30 UTC and the Premier League at 15:00, and a run that fires after
     # kickoff reads a closed or in-play market instead of the opening line,
     # which is the only price worth recording.
-    # Seven past, not on the hour. GitHub's shared runners queue hardest at
-    # :00, and a schedule there is delayed longest or dropped outright - the
-    # hourly data scrape has sat at :17 for the same reason. The first run at
-    # "0 8" never arrived at all; 22 minutes past due it had not been created.
+    # Four slots, not two, because GitHub's scheduler drifts badly. The 11:07
+    # run on 13 Sep was created at 14:53 - three hours forty-six late, by which
+    # time four of the day's fixtures had already kicked off - and the 08:07
+    # run that day never appeared at all. Slots are redundancy against that:
+    # with --skip-priced a run that finds nothing to do costs nothing, so the
+    # extra ones are only paid for when they actually have work.
+    #
+    # Seven past, not on the hour: shared runners queue hardest at :00, which
+    # is why the hourly data scrape has sat at :17 since it was written.
+    - cron: "7 5 * * *"     # 07:07 Prague
     - cron: "7 8 * * *"     # 10:07 Prague
     - cron: "7 11 * * *"    # 13:07 Prague
+    - cron: "7 14 * * *"    # 16:07 Prague
   workflow_dispatch:
     inputs:
       hours:
