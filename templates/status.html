@@ -192,9 +192,15 @@
   {% if unpriced %}
   <h3 style="margin-top:18px">Still without odds ({{ unpriced|length }})</h3>
   <p class="muted" style="font-size:13px;margin-top:-6px">
-    These are retried every run. Most are not a failure: the bookmaker simply does not
-    offer a possession market on them, and some never will. A page with no market returns
-    one or two rows instead of four, which is how the pipeline tells the difference.
+    Most are not a failure: the bookmaker simply does not offer a possession market on
+    them, and some never will. A page with no market returns one or two rows instead of
+    four, which is how the pipeline tells the difference.
+    {% if parked_n %}
+    <strong>{{ parked_n }} {{ 'is' if parked_n == 1 else 'are' }} parked</strong> after
+    {{ max_attempts }} empty reads &mdash; one credit each, four times a day, to learn the
+    same nothing. They are read again once kickoff is within {{ retry_within }} hours,
+    which is when a late market would appear anyway.
+    {% endif %}
   </p>
   <div class="tablewrap">
     <table>
@@ -204,6 +210,11 @@
           <td class="l muted" style="width:130px">{{ f.kickoff.strftime('%d %b %H:%M') }}</td>
           <td class="l muted" style="width:90px">{{ f.competition }}</td>
           <td class="l">{{ f.home }} v {{ f.away }}</td>
+          <td class="num muted" style="width:70px">{{ f.attempts or 0 }} tried</td>
+          <td class="l" style="width:90px">
+            {% if f.parked %}<span class="chip wa">parked</span>
+            {% else %}<span class="chip">retrying</span>{% endif %}
+          </td>
         </tr>
         {% endfor %}
       </tbody>

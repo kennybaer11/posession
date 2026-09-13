@@ -237,6 +237,23 @@ CREATE TABLE IF NOT EXISTS pl_scrape_run (
 )
 """
 
+# How many times a fixture's page has been opened without a possession market
+# appearing on it. Chance prices some matches and never prices others, and
+# without this the ones it never prices are re-scraped every run forever - one
+# credit each, several times a day, to learn the same nothing.
+#
+# Only empty attempts are counted. A fixture that yields a line has one
+# recorded against it too, but it then carries odds and is skipped as priced,
+# so the count stops mattering.
+ODDS_ATTEMPT_DDL = """
+CREATE TABLE IF NOT EXISTS pl_odds_attempt (
+  match_id     TEXT PRIMARY KEY,
+  attempts     INTEGER NOT NULL DEFAULT 0,
+  last_attempt TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  last_found   BOOLEAN NOT NULL DEFAULT FALSE
+)
+"""
+
 INDEXES = (
     "CREATE INDEX IF NOT EXISTS idx_tm_team_kickoff ON pl_team_match (team_id, kickoff)",
     "CREATE INDEX IF NOT EXISTS idx_tm_kickoff ON pl_team_match (kickoff)",
@@ -334,6 +351,7 @@ class Database:
             cur.execute(PLAYERS_DDL)
             cur.execute(LINES_DDL)
             cur.execute(SCRAPE_RUN_DDL)
+            cur.execute(ODDS_ATTEMPT_DDL)
             for stmt in INDEXES:
                 cur.execute(stmt)
         self.conn.commit()
@@ -466,6 +484,30 @@ class Database:
     def upsert_lines(self, rows):
         return self._upsert("pl_possession_line", LINE_COLS, rows,
                             ("match_id", "team_id", "line", "bookmaker"))
+
+    def record_attempts(self, scraped_ids, found_ids):
+        """Note that these fixtures' pages were opened, and which paid off.
+
+        An attempt that found a market resets the count rather than adding to
+        it: the throttle is about pages that keep coming back empty, and a
+        fixture that produced a line once is not that.
+        """
+        if not scraped_ids:
+            return 0
+        rows = [(str(mid), str(mid) in {str(f) for f in found_ids})
+                for mid in scraped_ids]
+        with self.conn.cursor() as cur:
+            cur.executemany("""
+                INSERT INTO pl_odds_attempt (match_id, attempts, last_found)
+                VALUES (%s, 1, %s)
+                ON CONFLICT (match_id) DO UPDATE
+                SET attempts = CASE WHEN EXCLUDED.last_found
+                                    THEN 0 ELSE pl_odds_attempt.attempts + 1 END,
+                    last_attempt = NOW(),
+                    last_found = EXCLUDED.last_found
+            """, rows)
+        self.conn.commit()
+        return len(rows)
 
     def start_run(self, **fields):
         """Open a run row and return its id.

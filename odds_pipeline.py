@@ -125,14 +125,30 @@ def _slug_words(url):
     return slug.replace("-", " ").lower()
 
 
-def upcoming_fixtures(db, hours, skip_priced=False):
+# A fixture whose page has come back empty this many times is parked, unless
+# kickoff is close. Three is enough to tell "not priced yet" from "never going
+# to be priced" without giving up on a market that opens late.
+MAX_EMPTY_ATTEMPTS = 3
+
+# Inside this many hours of kickoff every fixture is retried regardless, because
+# a market that appears at all usually appears near kickoff - and that is
+# exactly when the opening price is worth having.
+ALWAYS_RETRY_WITHIN_HOURS = 12
+
+
+def upcoming_fixtures(db, hours, skip_priced=False, retry_all=False):
     """Fixtures kicking off within the window, from OUR data.
 
     skip_priced drops the ones we already hold a line for, which is what makes
     a repeat run nearly free: one match page is one credit, so re-scraping a
     fixture whose odds are already recorded spends money to learn nothing.
-    Fixtures the bookmaker does not price are deliberately still included -
-    they carry no line, and a market can appear closer to kickoff.
+
+    Fixtures the bookmaker does not price are still included - a market can
+    appear closer to kickoff - but not forever. Chance prices some matches and
+    never prices others, and at four runs a day the ones it never prices cost a
+    credit each, every run, to learn the same nothing. After MAX_EMPTY_ATTEMPTS
+    empty reads a fixture is parked until kickoff comes within
+    ALWAYS_RETRY_WITHIN_HOURS. retry_all ignores the parking.
     """
     with db.conn.cursor() as cur:
         cur.execute("""
@@ -144,8 +160,13 @@ def upcoming_fixtures(db, hours, skip_priced=False):
             WHERE m.kickoff BETWEEN now() AND now() + (%s * INTERVAL '1 hour')
               AND (NOT %s OR NOT EXISTS (SELECT 1 FROM pl_possession_line l
                                          WHERE l.match_id = m.match_id))
+              AND (%s
+                   OR m.kickoff <= now() + (%s * INTERVAL '1 hour')
+                   OR COALESCE((SELECT a.attempts FROM pl_odds_attempt a
+                                WHERE a.match_id = m.match_id), 0) < %s)
             ORDER BY m.kickoff
-        """, (hours, skip_priced))
+        """, (hours, skip_priced, retry_all, ALWAYS_RETRY_WITHIN_HOURS,
+              MAX_EMPTY_ATTEMPTS))
         return cur.fetchall()
 
 
@@ -314,6 +335,9 @@ def main():
     ap.add_argument("--skip-priced", action="store_true",
                     help="ignore fixtures whose odds are already recorded, so "
                          "a repeat run only pays for what is missing")
+    ap.add_argument("--retry-all", action="store_true",
+                    help="also re-read fixtures parked after repeated empty "
+                         "reads, which normally wait until kickoff is near")
     ap.add_argument("--write", action="store_true",
                     help="write the odds (otherwise the import is a preview)")
     ap.add_argument("--links-job", type=int,
@@ -364,7 +388,8 @@ def credits_left():
 
 
 def _run(args, db, run_id):
-    fixtures = upcoming_fixtures(db, args.hours, args.skip_priced)
+    fixtures = upcoming_fixtures(db, args.hours, args.skip_priced,
+                                 args.retry_all)
     log.info("%d fixture(s) kicking off in the next %dh%s", len(fixtures),
              args.hours, " without odds" if args.skip_priced else "")
     for f in fixtures[:12]:
@@ -480,6 +505,11 @@ def _run(args, db, run_id):
         r.pop("_flipped", None)
     written = db.upsert_lines(ready)
     log.info("Wrote %d line(s).", written)
+    # Which of the pages we paid for actually carried a market. Recorded after
+    # the write so a crash before this leaves the counts untouched rather than
+    # parking a fixture on a run that never finished.
+    found = {r["match_id"] for r in ready}
+    db.record_attempts([f["match_id"] for _, f in chosen], found)
     db.finish_run(run_id, written=written, credits=credits_left(),
                   status="ok" if not problems else "ok-with-problems", **tally)
     return 0
