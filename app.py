@@ -929,21 +929,25 @@ def admin():
                     name = upload.filename
                 else:
                     raise ValueError("Paste some rows or choose a file.")
-                parsed = odds_sheet.parse_bytes(raw, name)
+                # A paste with no header row is the common case: people copy
+                # the data rows and leave the titles behind, and the compact
+                # form has no header at all. parse_bytes RAISES on a missing
+                # header rather than returning nothing, so the fallback has to
+                # catch - testing `if not parsed` never ran, and every compact
+                # paste died with a message about spreadsheet headers.
+                header_problem = None
+                try:
+                    parsed = odds_sheet.parse_bytes(raw, name)
+                except ValueError as exc:
+                    parsed, header_problem = [], exc
                 if not parsed:
-                    # A paste with no header row is the common case: people
-                    # copy the data rows and leave the titles behind. Fall back
-                    # to the text importer, which reads headerless lines.
                     parsed = import_odds_parse_text(raw.decode("utf-8", "replace"))
-                if not parsed:
-                    raise ValueError(
-                        "No rows found. The sheet needs a header row naming "
-                        "the columns.")
                 if not parsed:
                     raise ValueError(
                         "No rows understood. Include a header row naming the "
                         "columns, or paste lines in the compact form: "
-                        "date  club  club  team  line  O<over>  U<under>")
+                        "date  club  club  team  line  O<over>  U<under>"
+                        + (f"  ({header_problem})" if header_problem else ""))
                 preview, problems = io_mod.resolve_rows(db_handle(), parsed)
                 # The file is staged on disk, not in the session. Flask keeps
                 # session data in a cookie, and browsers silently drop cookies
@@ -953,7 +957,9 @@ def admin():
                 token = secrets.token_urlsafe(16)
                 _staged_path(token).write_bytes(raw)
                 session["upload_token"] = token
-                session["upload_name"] = upload.filename
+                # `name`, not upload.filename: on a paste there may be no file
+                # part at all, and None has no .filename.
+                session["upload_name"] = name
         except Exception as exc:          # surfaced to the page, not swallowed
             error = str(exc)
 
