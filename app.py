@@ -1030,6 +1030,64 @@ def admin_login():
     return render_template("admin_login.html", error=error)
 
 
+@app.route("/admin/advice")
+@login_required
+def admin_advice():
+    """The advice the site gave, frozen at kickoff, and how it settled.
+
+    Nothing here is recomputed. Side, odds, edge and stake come from pl_advice
+    as they stood when the match kicked off; only the actual possession is
+    looked up, because that is a fact about the match rather than a judgement.
+    Changing the model changes the Learning page, never this one.
+    """
+    import model as m
+    rows = query("""
+        SELECT a.*, t.name AS team, ht.abbr AS home_abbr, at_.abbr AS away_abbr,
+               tm.possession AS actual
+        FROM pl_advice a
+        JOIN pl_matches m ON m.match_id = a.match_id
+        JOIN pl_teams t   ON t.team_id = a.team_id
+        JOIN pl_teams ht  ON ht.team_id = m.home_team_id
+        JOIN pl_teams at_ ON at_.team_id = m.away_team_id
+        LEFT JOIN pl_team_match tm ON tm.match_id = a.match_id
+                                  AND tm.team_id = a.team_id
+        ORDER BY a.kickoff DESC
+    """)
+    settled, pending = [], []
+    for r in rows:
+        r = dict(r)
+        for k in ("line", "odds", "edge", "pred", "p_over", "sigma", "actual"):
+            r[k] = float(r[k]) if r[k] is not None else None
+        if r["actual"] is None:
+            pending.append(r)
+            continue
+        r["hit"] = (None if not r["side"] else
+                    settles_over(r["actual"], r["line"]) if r["side"] == "OVER"
+                    else not settles_over(r["actual"], r["line"]))
+        settled.append(r)
+
+    bets = [r for r in settled if r["backed"] and r["odds"]]
+    won = sum(1 for r in bets if r["hit"])
+    returned = sum(r["odds"] for r in bets if r["hit"])
+    # Also at the advised stake: rating N is N tenths of the 10/10 stake, so a
+    # 1/10 bet risks 0.1 units. This is what following the advice to the letter
+    # would have made, rather than betting every recommendation the same.
+    staked_r = sum((r["rating"] or 0) / 10 for r in bets)
+    returned_r = sum((r["rating"] or 0) / 10 * r["odds"] for r in bets if r["hit"])
+    totals = {
+        "advised": len(settled), "bets": len(bets), "won": won,
+        "pnl": returned - len(bets),
+        "roi": (returned - len(bets)) / len(bets) if bets else None,
+        "staked_r": staked_r, "pnl_r": returned_r - staked_r,
+        "roi_r": (returned_r - staked_r) / staked_r if staked_r else None,
+        "no_bet": sum(1 for r in settled if not r["backed"]),
+    }
+    call = m.verdict([(bool(r["hit"]), r["odds"]) for r in bets])
+    return render_template("admin_advice.html", settled=settled,
+                           pending=pending, totals=totals, verdict=call,
+                           league_names=LEAGUE_NAMES, user=session.get("admin"))
+
+
 @app.route("/admin/logout")
 def admin_logout():
     session.pop("admin", None)

@@ -1,14 +1,17 @@
 {% extends "base.html" %}
-{% block title %}Bets &middot; PL data{% endblock %}
-{% block heading %}Bet record{% endblock %}
+{% block title %}Learning &middot; PL data{% endblock %}
+{% block heading %}Learning{% endblock %}
 
 {% block content %}
 {% with tabs_all = true, tabs_active = scope %}{% include "_leaguetabs.html" %}{% endwith %}
 
 <div class="note">
-  Every recorded line, what the model said about it, and how it settled. The point
-  is to build a track record <em>before</em> staking anything on one &mdash; a model's own
-  edge estimate is a claim about itself, and this is the only thing that can check it.
+  <strong>How today's model would have done on every recorded line.</strong> This page is
+  recalculated on every rebuild, so it improves as the model does &mdash; and for the same
+  reason it is <em>not</em> a record of what the site advised: a model change can move a past
+  bet from OVER to no bet. The unchangeable record of advice as given lives in the admin
+  section, under Advice record. Use this page to learn whether the model is getting better;
+  use that one to judge the advice.
   <br><br>
   <strong>How it is graded.</strong> Each match counts once: if the market moved and a second
   line was recorded, only the first is graded &mdash; the opening price the scraper exists to

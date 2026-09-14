@@ -290,6 +290,49 @@ CREATE TABLE IF NOT EXISTS pl_match_manager (
 """
 MANAGER_COLS = ["match_id", "team_id", "manager_id", "manager_name"]
 
+# The advice the site actually gave, frozen at kickoff.
+#
+# The Learning page recomputes every past bet with today's model, so a change
+# to the model or to sigma rewrites what it says was advised - on 14 Sep one
+# fix changed the advised side of 5 of 30 settled bets. That page is for
+# learning; it cannot be a record. This table is the record.
+#
+# One row per match. Rewritten on every run while kickoff is still in the
+# future, so it follows the site as lines and the model move, and never
+# written again after kickoff: the WHERE on the conflict update enforces that
+# in the database rather than trusting the caller. What survives is the last
+# advice the site showed before the match began - the same run renders both.
+ADVICE_DDL = """
+CREATE TABLE IF NOT EXISTS pl_advice (
+  match_id          TEXT NOT NULL,
+  bookmaker         TEXT NOT NULL,
+  competition       TEXT,
+  kickoff           TIMESTAMP NOT NULL,
+  team_id           TEXT NOT NULL,
+  line              NUMERIC(5,2) NOT NULL,
+  over_odds         NUMERIC(6,3),
+  under_odds        NUMERIC(6,3),
+  pred              NUMERIC(6,2),
+  sigma             NUMERIC(6,3),
+  p_over            NUMERIC(6,4),
+  side              TEXT,
+  odds              NUMERIC(6,3),
+  edge              NUMERIC(7,4),
+  rating            SMALLINT,
+  backed            BOOLEAN NOT NULL,
+  fallback          BOOLEAN NOT NULL,
+  why               TEXT,
+  code_version      TEXT,
+  first_advised_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  advised_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (match_id, bookmaker)
+)
+"""
+ADVICE_COLS = ["match_id", "bookmaker", "competition", "kickoff", "team_id",
+               "line", "over_odds", "under_odds", "pred", "sigma", "p_over",
+               "side", "odds", "edge", "rating", "backed", "fallback", "why",
+               "code_version"]
+
 INDEXES = (
     "CREATE INDEX IF NOT EXISTS idx_tm_team_kickoff ON pl_team_match (team_id, kickoff)",
     "CREATE INDEX IF NOT EXISTS idx_tm_kickoff ON pl_team_match (kickoff)",
@@ -396,6 +439,7 @@ class Database:
             cur.execute(ODDS_ATTEMPT_DDL)
             cur.execute(CALIBRATION_DDL)
             cur.execute(MANAGER_DDL)
+            cur.execute(ADVICE_DDL)
             for stmt in INDEXES:
                 cur.execute(stmt)
         self.conn.commit()
@@ -522,6 +566,36 @@ class Database:
     def upsert_lineups(self, rows):
         return self._upsert("pl_lineup", LINEUP_COLS, rows,
                             ("match_id", "player_id"))
+
+    def freeze_advice(self, rows):
+        """Record current advice for matches that have not kicked off.
+
+        Returns (inserted_or_updated, refused). A row for a match whose kickoff
+        has passed is refused twice over: the insert is skipped here, and the
+        conflict update carries WHERE pl_advice.kickoff > now(), so even a
+        caller that got the time wrong cannot rewrite frozen advice.
+        """
+        if not rows:
+            return 0, 0
+        cols = ", ".join(ADVICE_COLS)
+        sets = ", ".join(f"{c} = EXCLUDED.{c}" for c in ADVICE_COLS
+                         if c not in ("match_id", "bookmaker"))
+        sql = (f"INSERT INTO pl_advice ({cols}) "
+               f"SELECT {', '.join(['%s'] * len(ADVICE_COLS))} "
+               f"WHERE %s::timestamp > (now() AT TIME ZONE 'UTC') "
+               f"ON CONFLICT (match_id, bookmaker) DO UPDATE SET {sets}, "
+               f"advised_at = NOW() "
+               f"WHERE pl_advice.kickoff > (now() AT TIME ZONE 'UTC')")
+        written = refused = 0
+        with self.conn.cursor() as cur:
+            for r in rows:
+                cur.execute(sql, [r.get(c) for c in ADVICE_COLS] + [r["kickoff"]])
+                if cur.rowcount:
+                    written += 1
+                else:
+                    refused += 1
+        self.conn.commit()
+        return written, refused
 
     def upsert_managers(self, rows):
         return self._upsert("pl_match_manager", MANAGER_COLS, rows,

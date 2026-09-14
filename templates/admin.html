@@ -6,6 +6,7 @@
 
 <p class="muted" style="margin-top:-12px">
   Signed in as <strong>{{ user }}</strong> &middot;
+  <a href="{{ url_for('admin_advice') }}">advice record</a> &middot;
   <a href="{{ url_for('admin_logout') }}">sign out</a>
 </p>
 
@@ -16,7 +17,7 @@
 {% if written is not none %}
 <div class="note" style="border-left-color: var(--good)">
   <strong>Imported {{ written }} line{{ '' if written == 1 else 's' }}.</strong>
-  They appear on the Model and Bets pages immediately, and reach the published
+  They appear on the Model and Learning pages immediately, and reach the published
   site on the next hourly run.
 </div>
 {% endif %}

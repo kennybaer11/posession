@@ -105,6 +105,17 @@ jobs:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
         run: python calibration.py
 
+      - name: Freeze the advice about to be published
+        # Same data and model as the render that follows, so the stored advice
+        # is what this run publishes. A line whose match has kicked off is never
+        # rewritten - see pl_advice in db.py. continue-on-error: a failure only
+        # means this run's advice is not recorded; the previous run's stands.
+        continue-on-error: true
+        timeout-minutes: 10
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: python advice.py
+
       - name: Render the static site
         # Reads the database that was just updated and writes site/. The
         # credentials stay here, inside the Action - the published pages are

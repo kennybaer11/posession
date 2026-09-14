@@ -19,7 +19,7 @@
        league you were looking at, because they have no combined view to go
        to - see _leaguetabs.html. #}
     <a href="{{ url_for('model', league='all') }}"     class="{{ 'on' if request.endpoint == 'model' }}">Model</a>
-    <a href="{{ url_for('bets', league='all') }}"      class="{{ 'on' if request.endpoint == 'bets' }}">Bets</a>
+    <a href="{{ url_for('bets', league='all') }}"      class="{{ 'on' if request.endpoint == 'bets' }}">Learning</a>
     <a href="{{ url_for('status') }}"                  class="{{ 'on' if request.endpoint == 'status' }}">Scraper</a>
   </nav>
 </header>
