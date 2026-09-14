@@ -29,6 +29,10 @@ log = logging.getLogger(__name__)
 BASE = "https://www.laliga.com"
 COMPETITION = "LaLiga"
 
+# The season ?week= serves. Any other season has to be asked for by path - see
+# LaLigaAPI.matchday.
+CURRENT_SEASON = "2026"
+
 def qualify(raw):
     """Prefix an id with the competition.
 
@@ -89,8 +93,20 @@ class LaLigaAPI:
                 time.sleep(self.delay * (2 ** attempt))
         return None
 
-    def matchday(self, week):
-        pp = self._page_props(f"/en-GB/laliga-easports/results?week={week}")
+    def matchday(self, week, season=None):
+        """Every match on one gameweek.
+
+        ?week= only ever serves the current season; a season query parameter
+        is silently ignored like every other one. A past season needs the path
+        form, /results/2025-26/gameweek-1, which is also what the site's own
+        season picker links to. season is the start year, "2025".
+        """
+        if season and str(season) != CURRENT_SEASON:
+            y = int(season)
+            path = f"/en-GB/laliga-easports/results/{y}-{(y + 1) % 100:02d}/gameweek-{week}"
+        else:
+            season, path = None, f"/en-GB/laliga-easports/results?week={week}"
+        pp = self._page_props(path)
         if not pp:
             return []
         got = (pp.get("gameweek") or {}).get("week")
@@ -99,6 +115,12 @@ class LaLigaAPI:
         # scraping the current matchday over and over under 38 labels.
         if got is not None and int(got) != int(week):
             log.warning("Asked for week %s, got %s - skipping", week, got)
+            return []
+        # Same guard for the season. Filing this season's matches under last
+        # season's label would be invisible once written.
+        if season and str(pp.get("season")) != str(season):
+            log.warning("Asked for season %s, got %s - skipping",
+                        season, pp.get("season"))
             return []
         return pp.get("matches") or []
 

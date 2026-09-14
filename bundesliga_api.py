@@ -116,13 +116,43 @@ class BundesligaAPI:
     # -- endpoints ---------------------------------------------------------
 
     def matchday(self, season, matchday):
-        """Every match on one matchday. season is like '2026-2027'."""
+        """Every match on one matchday. season is like '2026-2027'.
+
+        A page can carry more than one matchday list. A past season's matchday
+        page that shares its number with the CURRENT matchday also embeds the
+        current one as a widget, under a key for a different season id - and
+        taking the first match meant /spieltag/2025-2026/3 filed this weekend's
+        matchday 3 as last season's. So every candidate list is collected and
+        the one whose kickoffs fall inside the requested season is used; if
+        none do, nothing is returned rather than the wrong season.
+        """
         state = self._get_state(f"/de/bundesliga/spieltag/{season}/{matchday}")
-        data = self._find(state, lambda k: f"matchesmatchday{matchday}" in k)
-        if data is None:
+        if not state:
             return []
-        items = data if isinstance(data, list) else list(data.values())
-        return [m for m in items if isinstance(m, dict) and m.get("matchId")]
+        # Keys end "matchesmatchday" + number + a two-digit suffix, e.g.
+        # matchesmatchday399 for 3 and matchesmatchday3399 for 33. Without the
+        # lookahead "3" would also match matchday 30-34.
+        # Doubled braces: this is an f-string, and a bare {3} would be evaluated
+        # to the digit 3, turning the lookahead into "not followed by digit-3".
+        want = re.compile(rf"matchesmatchday{int(matchday)}(?!\d{{3}})")
+        start = int(str(season)[:4])
+        lo, hi = f"{start}-07-01", f"{start + 1}-07-01"
+        candidates = []
+        for key, data in state.items():
+            if not want.search(key):
+                continue
+            items = data if isinstance(data, list) else list((data or {}).values())
+            rows = [m for m in items if isinstance(m, dict) and m.get("matchId")]
+            if rows:
+                candidates.append(rows)
+        for rows in candidates:
+            kickoffs = [(m.get("plannedKickOff") or "")[:10] for m in rows]
+            if kickoffs and all(lo <= k < hi for k in kickoffs):
+                return rows
+        if candidates:
+            log.warning("Matchday %s of %s: %d list(s) on the page, none inside "
+                        "the season - skipping", matchday, season, len(candidates))
+        return []
 
     def season_matches(self, season, matchdays=34):
         """Walk every matchday. 34 in a Bundesliga season, 18 clubs."""

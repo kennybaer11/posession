@@ -29,7 +29,7 @@ def scrape_bundesliga(season, matchdays, refresh, db):
 
     api = bl.BundesligaAPI()
     days = (list(range(1, matchdays + 1)) if matchdays
-            else matchday_window(db, bl.COMPETITION, cap=34))
+            else matchday_window(db, bl.COMPETITION, season.split("-")[0], cap=34))
     log.info("Bundesliga %s: matchdays %s-%s", season, days[0], days[-1])
     matches = []
     for md in days:
@@ -71,11 +71,11 @@ def scrape_laliga(season, weeks, refresh, db):
 
     api = ll.LaLigaAPI()
     days = (list(range(1, weeks + 1)) if weeks
-            else matchday_window(db, ll.COMPETITION, cap=38))
+            else matchday_window(db, ll.COMPETITION, season, cap=38))
     log.info("LaLiga %s: weeks %s-%s", season, days[0], days[-1])
     matches = []
     for w in days:
-        rows = api.matchday(w)
+        rows = api.matchday(w, season)
         if rows:
             matches.extend(rows)
             log.info("  week %s: %d match(es)", w, len(rows))
@@ -102,7 +102,7 @@ def scrape_laliga(season, weeks, refresh, db):
     return list(teams.values()), match_rows, stat_rows, failed, api.request_count
 
 
-def matchday_window(db, competition, span_back=1, span_forward=3, cap=38):
+def matchday_window(db, competition, season, span_back=1, span_forward=3, cap=38):
     """Which matchdays are worth asking about.
 
     Walking a whole season every hour costs 72 listing requests to discover
@@ -113,11 +113,16 @@ def matchday_window(db, competition, span_back=1, span_forward=3, cap=38):
     Derived from the latest matchday already stored, so it follows the season
     without being told where it is. An empty database returns the full range,
     which is what a first backfill needs.
+
+    Scoped to the season being scraped. Unscoped, a stored past season's
+    matchday 38 is the "latest", and the routine run would refresh weeks 37-38
+    forever while this season's matches were never fetched again.
     """
     with db.conn.cursor() as cur:
         cur.execute("""SELECT max(match_week) AS latest FROM pl_matches
-                       WHERE competition = %s AND kickoff <= now()""",
-                    (competition,))
+                       WHERE competition = %s AND season = %s
+                         AND kickoff <= now()""",
+                    (competition, str(season)))
         row = cur.fetchone()
     latest = (row or {}).get("latest")
     if not latest:
