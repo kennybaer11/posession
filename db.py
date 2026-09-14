@@ -254,6 +254,23 @@ CREATE TABLE IF NOT EXISTS pl_odds_attempt (
 )
 """
 
+# Each league's measured prediction spread - see calibration.py. One row per
+# league, replaced on every measurement; the history of past values is not
+# kept because nothing reads it, and measured_at says how fresh the one is.
+CALIBRATION_DDL = """
+CREATE TABLE IF NOT EXISTS pl_model_calibration (
+  competition  TEXT PRIMARY KEY,
+  sigma        NUMERIC(6,3) NOT NULL,
+  mae          NUMERIC(6,3),
+  naive_mae    NUMERIC(6,3),
+  n            INTEGER NOT NULL,
+  within_1     NUMERIC(5,3),
+  within_164   NUMERIC(5,3),
+  within_196   NUMERIC(5,3),
+  measured_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+)
+"""
+
 INDEXES = (
     "CREATE INDEX IF NOT EXISTS idx_tm_team_kickoff ON pl_team_match (team_id, kickoff)",
     "CREATE INDEX IF NOT EXISTS idx_tm_kickoff ON pl_team_match (kickoff)",
@@ -352,6 +369,7 @@ class Database:
             cur.execute(LINES_DDL)
             cur.execute(SCRAPE_RUN_DDL)
             cur.execute(ODDS_ATTEMPT_DDL)
+            cur.execute(CALIBRATION_DDL)
             for stmt in INDEXES:
                 cur.execute(stmt)
         self.conn.commit()
@@ -484,6 +502,19 @@ class Database:
     def upsert_lines(self, rows):
         return self._upsert("pl_possession_line", LINE_COLS, rows,
                             ("match_id", "team_id", "line", "bookmaker"))
+
+    def upsert_calibration(self, row):
+        cols = ["competition", "sigma", "mae", "naive_mae", "n",
+                "within_1", "within_164", "within_196"]
+        with self.conn.cursor() as cur:
+            cur.execute(f"""
+                INSERT INTO pl_model_calibration ({', '.join(cols)}, measured_at)
+                VALUES ({', '.join('%(' + c + ')s' for c in cols)}, NOW())
+                ON CONFLICT (competition) DO UPDATE SET
+                {', '.join(f'{c} = EXCLUDED.{c}' for c in cols[1:])},
+                measured_at = NOW()
+            """, row)
+        self.conn.commit()
 
     def record_attempts(self, scraped_ids, found_ids):
         """Note that these fixtures' pages were opened, and which paid off.

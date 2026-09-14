@@ -92,6 +92,17 @@ jobs:
           fi
           python odds_pipeline.py --hours 72 --skip-priced --write --min-gap-hours 3
 
+      - name: Measure each league's prediction spread
+        # Per-league sigma for the probabilities on every page - see
+        # calibration.py. About half a minute. Before the render so the pages
+        # use today's figures; continue-on-error because a failure here only
+        # means yesterday's stored values are used, which is fine.
+        continue-on-error: true
+        timeout-minutes: 10
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: python calibration.py
+
       - name: Render the static site
         # Reads the database that was just updated and writes site/. The
         # credentials stay here, inside the Action - the published pages are

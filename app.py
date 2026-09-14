@@ -477,15 +477,12 @@ def settles_over(actual, line):
 FIXTURE_HORIZON_DAYS = 14
 
 
-# Below this many training rows a league falls back to the naive midpoint.
-# Roughly four rows per feature - a rule of thumb, not a measured threshold.
-MIN_FIT_ROWS = 40
-
-# What the fit actually trains on, and therefore what the readiness table has
-# to count. Not config.yaml's min_history, which is 3 and meant for analysis:
-# counting that instead reported 0 Bundesliga rows next to a rule applied to
-# 16, so the table described a decision nobody was making.
-FIT_MIN_HISTORY = 1
+# The fit thresholds and sigma defaults live in calibration.py, which measures
+# per-league sigma and must count rows exactly as the fit does. One source, so
+# the readiness table, the predictor and the calibration cannot disagree.
+from calibration import (MIN_FIT_ROWS, FIT_MIN_HISTORY, DEFAULT_SIGMA,  # noqa: E402
+                         NAIVE_BIAS, NAIVE_SIGMA)
+import calibration as calib  # noqa: E402
 
 
 def league_status():
@@ -514,6 +511,7 @@ def league_status():
                                   AND tm.team_id = l.team_id
         GROUP BY 1
     """)}
+    cal = calib.stored(query)
     out = []
     for code, name in LEAGUES:
         n = (rows.get(code) or {}).get("train_rows") or 0
@@ -523,6 +521,7 @@ def league_status():
             "fitted": n >= MIN_FIT_ROWS,
             "lines": (lines.get(code) or {}).get("lines") or 0,
             "settled": (lines.get(code) or {}).get("settled") or 0,
+            "cal": cal.get(code),
         })
     return out
 
@@ -577,7 +576,9 @@ def _line_rows(want=None):
     #
     # NAIVE_* is the fallback for a league with too little history to fit
     # anything, which is Bundesliga's situation for another few matchdays.
-    SIGMA, NAIVE_BIAS, NAIVE_SIGMA = 8.02, 0.98, 8.40
+    # Per league: the measured width of that league's own prediction errors,
+    # or the default where a league has too little history to measure.
+    sigmas = {c: float(r["sigma"]) for c, r in calib.stored(query).items()}
     comps = ([c for c, _ in LEAGUES] if want == ALL else [want])
     # One fit per league in scope. A league with too little history returns
     # None and its rows fall back to the midpoint - which the rows now say.
@@ -641,7 +642,7 @@ def _line_rows(want=None):
                 sigma = NAIVE_SIGMA
                 fallback = True
             else:
-                sigma = SIGMA
+                sigma = sigmas.get(r["competition"], DEFAULT_SIGMA)
             pred = home_pred if r["team_id"] == r["home_team_id"]                 else 100 - home_pred
             p_over = float(1 - norm.cdf(line, pred, sigma))
             side, p_side, edge, rating, why = m.choose_side(
@@ -666,6 +667,7 @@ def _line_rows(want=None):
                     "p_side": p_side, "edge": edge, "actual": actual,
                     "hit": hit, "backed": bool(side) and (edge or 0) > 0,
                     "rating": rating, "why": why, "fallback": fallback,
+                    "sigma": sigma if naive is not None else None,
                     "book_over": book_over, "margin": margin})
     return out, graded
 
@@ -809,7 +811,8 @@ def bets():
                            if r["over_odds"] and r["under_odds"]),
     }
     return render_template("bets.html", rows=rows, totals=totals,
-                           verdict=call, sigma=8.02, bias=0.19,
+                           verdict=call, calibrations=calib.stored(query),
+                           default_sigma=DEFAULT_SIGMA,
                            scope=want, all_leagues=(want == ALL),
                            league_names=LEAGUE_NAMES,
                            fallback_n=sum(1 for r in rows if r["fallback"]))
@@ -832,6 +835,7 @@ def model():
         return render_template(
             "model.html", all_leagues=True, scope=ALL,
             statuses=league_status(), open_lines=open_lines, graded=graded,
+            default_sigma=DEFAULT_SIGMA,
             fallback_n=sum(1 for r in open_lines if r["fallback"]),
             league_names=LEAGUE_NAMES,
             n_train=0, n_features=0, n_fit=0, n_holdout=0, n_fixtures=0,

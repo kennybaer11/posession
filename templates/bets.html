@@ -9,9 +9,12 @@
   Every recorded line, what the model said about it, and how it settled. The point
   is to build a track record <em>before</em> staking anything on one &mdash; a model's own
   edge estimate is a claim about itself, and this is the only thing that can check it.
-  Predictions come from the fitted model where a league has enough history for one,
-  at &sigma; = {{ sigma }}. Rows marked <sup class="warn">*</sup> came from the naive
-  midpoint instead, because that league cannot fit a model yet &mdash; see below the table.
+  Predictions come from the fitted model where a league has enough history for one, with
+  each league's own error spread:
+  {% for code, name in leagues %}{{ name }} &sigma;&nbsp;=&nbsp;{{ '%.2f'|format(calibrations[code].sigma|float) if calibrations.get(code) else '%.2f'|format(default_sigma) ~ ' (default)' }}{{ ', ' if not loop.last else '.' }}{% endfor %}
+  A wider spread means less confidence in any single prediction, so the same gap to a
+  line is worth less. Rows marked <sup class="warn">*</sup> came from the naive midpoint
+  instead, because that league cannot fit a model yet &mdash; see below the table.
 </div>
 
 <div class="tiles" style="margin-bottom:22px">
