@@ -9,6 +9,13 @@
   Every recorded line, what the model said about it, and how it settled. The point
   is to build a track record <em>before</em> staking anything on one &mdash; a model's own
   edge estimate is a claim about itself, and this is the only thing that can check it.
+  <br><br>
+  <strong>How it is graded.</strong> Each match counts once: if the market moved and a second
+  line was recorded, only the first is graded &mdash; the opening price the scraper exists to
+  capture. And a settled line is graded with the prediction the model would have made
+  <em>before kickoff</em>, fitted only on matches played earlier. Grading it with a model that
+  has already seen the result flatters the record badly. When this was fixed on 14 Sep 2026,
+  the bets settled by then read 71% won and +30% ROI with hindsight, and 60% and +10% without.
   Predictions come from the fitted model where a league has enough history for one, with
   each league's own error spread:
   {% for code, name in leagues %}{{ name }} &sigma;&nbsp;=&nbsp;{{ '%.2f'|format(calibrations[code].sigma|float) if calibrations.get(code) else '%.2f'|format(default_sigma) ~ ' (default)' }}{{ ', ' if not loop.last else '.' }}{% endfor %}

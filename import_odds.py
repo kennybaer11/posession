@@ -327,6 +327,9 @@ def main():
     ap.add_argument("--closing", action="store_true",
                     help="mark these as closing lines")
     ap.add_argument("--dry-run", action="store_true")
+    ap.add_argument("--insert-only", action="store_true",
+                    help="add new lines, never rewrite ones already stored - "
+                         "for the hourly re-import of odds.txt")
     args = ap.parse_args()
 
     db = Database()
@@ -364,8 +367,9 @@ def main():
 
     for r in ready:
         r.pop("_label"); r.pop("_flipped")
-    n = db.upsert_lines(ready)
-    print(f"\nWrote {n} line(s) to pl_possession_line.")
+    n = db.upsert_lines(ready, overwrite=not args.insert_only)
+    print(f"\n{'Added' if args.insert_only else 'Wrote'} {n} line(s) to "
+          f"pl_possession_line.")
     db.close()
     return 0
 

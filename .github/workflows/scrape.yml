@@ -63,7 +63,9 @@ jobs:
         # and an empty file is a no-op rather than a failure.
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
-        run: python import_odds.py odds.txt
+        # --insert-only: this runs every hour, and a full upsert would keep
+        # rewriting lines the scraper has since captured with other prices.
+        run: python import_odds.py odds.txt --insert-only
 
       - name: Scrape odds (second chance for the odds workflow)
         # GitHub fires scheduled workflows on this repo every three to five

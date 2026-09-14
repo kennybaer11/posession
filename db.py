@@ -327,11 +327,17 @@ def team_match_ddl():
     return TEAM_MATCH_DDL.format(stats=stat_columns_ddl())
 
 
-def _upsert_sql(table, columns, keys, touch_last_seen=True):
-    """Postgres upsert. EXCLUDED is the row that failed to insert."""
+def _upsert_sql(table, columns, keys, touch_last_seen=True, keep_first=()):
+    """Postgres upsert. EXCLUDED is the row that failed to insert.
+
+    keep_first names columns that record when something first happened. They
+    are written once and never replaced, whatever later writes carry.
+    """
     cols = ", ".join(columns)
     placeholders = ", ".join(["%s"] * len(columns))
-    updates = [f"{c} = EXCLUDED.{c}" for c in columns if c not in keys]
+    updates = [(f"{c} = COALESCE({table}.{c}, EXCLUDED.{c})" if c in keep_first
+                else f"{c} = EXCLUDED.{c}")
+               for c in columns if c not in keys]
     if touch_last_seen:
         updates.append("last_seen = NOW()")
     return (f"INSERT INTO {table} ({cols}) VALUES ({placeholders}) "
@@ -474,10 +480,11 @@ class Database:
 
     # -- writes ------------------------------------------------------------
 
-    def _upsert(self, table, cols, rows, keys, touch=True, batch=500):
+    def _upsert(self, table, cols, rows, keys, touch=True, batch=500,
+                keep_first=()):
         if not rows:
             return 0
-        sql = _upsert_sql(table, cols, keys, touch)
+        sql = _upsert_sql(table, cols, keys, touch, keep_first)
         tuples = [tuple(r.get(c) for c in cols) for r in rows]
         with self.conn.cursor() as cur:
             for i in range(0, len(tuples), batch):
@@ -523,9 +530,37 @@ class Database:
     def upsert_players(self, rows):
         return self._upsert("pl_player", PLAYER_COLS, rows, ("player_id",))
 
-    def upsert_lines(self, rows):
-        return self._upsert("pl_possession_line", LINE_COLS, rows,
-                            ("match_id", "team_id", "line", "bookmaker"))
+    def upsert_lines(self, rows, overwrite=True):
+        """Write possession lines.
+
+        captured_at is kept from the FIRST write. It used to be replaced on
+        every upsert, and odds.txt is re-imported every hour, so hand-entered
+        lines claimed to have been captured two days after their kickoff -
+        which made "the first line recorded for a match" unknowable.
+
+        overwrite=False inserts new lines and leaves existing ones alone. The
+        hourly odds.txt import uses it: otherwise the file and the scraper,
+        which write the same row, revert each other's prices every hour. An
+        explicit import - the admin page, or the file run by hand - still
+        overwrites, because that is how a mistyped price gets corrected.
+        """
+        keys = ("match_id", "team_id", "line", "bookmaker")
+        if overwrite:
+            return self._upsert("pl_possession_line", LINE_COLS, rows, keys,
+                                keep_first=("captured_at",))
+        if not rows:
+            return 0
+        cols = ", ".join(LINE_COLS)
+        sql = (f"INSERT INTO pl_possession_line ({cols}) "
+               f"VALUES ({', '.join(['%s'] * len(LINE_COLS))}) "
+               f"ON CONFLICT ({', '.join(keys)}) DO NOTHING")
+        inserted = 0
+        with self.conn.cursor() as cur:
+            for r in rows:
+                cur.execute(sql, tuple(r.get(c) for c in LINE_COLS))
+                inserted += cur.rowcount
+        self.conn.commit()
+        return inserted
 
     def upsert_calibration(self, row):
         cols = ["competition", "sigma", "mae", "naive_mae", "n",

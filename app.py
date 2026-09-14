@@ -503,8 +503,8 @@ def league_status():
     """, {"n": FIT_MIN_HISTORY})}
     lines = {r["competition"]: r for r in query("""
         SELECT m.competition,
-               count(*) AS lines,
-               count(*) FILTER (WHERE tm.possession IS NOT NULL) AS settled
+               count(DISTINCT l.match_id) AS lines,
+               count(DISTINCT l.match_id) FILTER (WHERE tm.possession IS NOT NULL) AS settled
         FROM pl_possession_line l
         JOIN pl_matches m ON m.match_id = l.match_id
         LEFT JOIN pl_team_match tm ON tm.match_id = l.match_id
@@ -526,12 +526,44 @@ def league_status():
     return out
 
 
-def _fitted_predictor(competition):
+# Loaded frames per league, reused for a few minutes. Loading is the whole cost
+# of a prediction - six to nine seconds for a league's training set and five for
+# its fixtures once two seasons were stored, against about 0.01s per fit - and
+# the Bets, Model and Fixtures pages each asked for the same frames again. A
+# static build renders a dozen of those pages in one process, so without this
+# it reloaded every league a dozen times. The data changes hourly at most, and
+# ten minutes is well inside that.
+_FRAME_TTL_SECONDS = 600
+_frames = {}
+
+
+def _league_frames(competition):
+    import load as loader
+    hit = _frames.get(competition)
+    if hit and time.monotonic() - hit[0] < _FRAME_TTL_SECONDS:
+        return hit[1], hit[2]
+    train = loader.training_set(season="all", competition=competition,
+                                min_history=FIT_MIN_HISTORY)
+    upcoming = loader.fixtures(competition=competition)
+    _frames[competition] = (time.monotonic(), train, upcoming)
+    return train, upcoming
+
+
+def _fitted_predictor(competition, settled_ids=()):
     """Fit the model for this league and return match_id -> prediction.
 
     Fitted per request rather than cached: 300-odd rows and ten columns costs
     milliseconds, and a stale model that silently disagrees with the Model page
     would cost far more than that to notice.
+
+    Upcoming fixtures are predicted by the model fitted on everything played.
+    A PLAYED match must never be: that model has already seen its result. The
+    Bets page used to grade settled lines exactly that way, and hindsight made
+    the record look far better than any bet placed at the time could have been.
+    So each match in settled_ids gets its own fit on the matches that kicked off
+    BEFORE it - the prediction the site would actually have shown - and none if
+    that earlier history was too short to fit, in which case the row falls back
+    to the naive midpoint like any other unfittable prediction.
 
     Returns None when the league has too little history to fit, which is a real
     state early in a season rather than an error.
@@ -539,9 +571,7 @@ def _fitted_predictor(competition):
     try:
         import load as loader
         import model as m
-        train = loader.training_set(season="all", competition=competition,
-                                    min_history=FIT_MIN_HISTORY)
-        upcoming = loader.fixtures(competition=competition)
+        train, upcoming = _league_frames(competition)
         feats = m.available_features(train)
         if len(train) < MIN_FIT_ROWS or not feats or not len(upcoming):
             return None
@@ -550,10 +580,19 @@ def _fitted_predictor(competition):
                    ridge__sample_weight=train["weight"])
         preds = dict(zip(upcoming["match_id"].astype(str),
                          fitted.predict(upcoming[feats])))
-        # Played matches need a prediction too, for the settled rows on the
-        # Bets page; they carry the same feature columns.
-        preds.update(zip(train["match_id"].astype(str),
-                         fitted.predict(train[feats])))
+
+        # Settled lines: one out-of-sample fit each, on strictly earlier matches.
+        wanted = {str(x) for x in settled_ids}
+        ids = train["match_id"].astype(str)
+        for i in train.index[ids.isin(wanted)]:
+            earlier = train[train["kickoff"] < train.at[i, "kickoff"]]
+            if len(earlier) < MIN_FIT_ROWS:
+                continue
+            past = m.build(alpha=1.0)
+            past.fit(earlier[feats], earlier[loader.TARGET],
+                     ridge__sample_weight=earlier["weight"])
+            preds[str(train.at[i, "match_id"])] = float(
+                past.predict(train.loc[[i], feats])[0])
         return lambda mid: preds.get(str(mid))
     except Exception:
         return None
@@ -580,28 +619,44 @@ def _line_rows(want=None):
     # or the default where a league has too little history to measure.
     sigmas = {c: float(r["sigma"]) for c, r in calib.stored(query).items()}
     comps = ([c for c, _ in LEAGUES] if want == ALL else [want])
-    # One fit per league in scope. A league with too little history returns
-    # None and its rows fall back to the midpoint - which the rows now say.
-    predictors = {c: _fitted_predictor(c) for c in comps}
+    # One line per match. When the market moves, a second line for the same
+    # match gets recorded (Dortmund at 57.0, then 58.0 a day later), and grading
+    # both counted one bet twice. The FIRST line recorded is kept: it is the
+    # price the scraper exists to capture, and with --skip-priced a fixture is
+    # never re-scraped once priced, so first-seen is what every future record
+    # will hold anyway. Later lines stay in the table as line-movement history.
     rows = query("""
-        SELECT l.line, l.over_odds, l.under_odds,
-               t.name AS team, l.team_id,
-               m.match_id, m.kickoff, m.competition, ht.abbr AS home_abbr,
-               at_.abbr AS away_abbr, m.home_team_id,
-               ht.name AS home_name, at_.name AS away_name,
-               f.poss_naive_l5 AS naive,
-               tm.possession AS actual
-        FROM pl_possession_line l
-        JOIN pl_teams t   ON t.team_id = l.team_id
-        JOIN pl_matches m ON m.match_id = l.match_id
-        JOIN pl_teams ht  ON ht.team_id = m.home_team_id
-        JOIN pl_teams at_ ON at_.team_id = m.away_team_id
-        LEFT JOIN v_match_features f ON f.match_id = l.match_id
-        LEFT JOIN pl_team_match tm ON tm.match_id = l.match_id
-                                  AND tm.team_id = l.team_id
-        WHERE m.competition = ANY(%(cs)s)
-        ORDER BY m.kickoff DESC
+        SELECT * FROM (
+            SELECT DISTINCT ON (l.match_id, l.bookmaker)
+                   l.line, l.over_odds, l.under_odds, l.captured_at,
+                   t.name AS team, l.team_id,
+                   m.match_id, m.kickoff, m.competition, ht.abbr AS home_abbr,
+                   at_.abbr AS away_abbr, m.home_team_id,
+                   ht.name AS home_name, at_.name AS away_name,
+                   f.poss_naive_l5 AS naive,
+                   tm.possession AS actual
+            FROM pl_possession_line l
+            JOIN pl_teams t   ON t.team_id = l.team_id
+            JOIN pl_matches m ON m.match_id = l.match_id
+            JOIN pl_teams ht  ON ht.team_id = m.home_team_id
+            JOIN pl_teams at_ ON at_.team_id = m.away_team_id
+            LEFT JOIN v_match_features f ON f.match_id = l.match_id
+            LEFT JOIN pl_team_match tm ON tm.match_id = l.match_id
+                                      AND tm.team_id = l.team_id
+            WHERE m.competition = ANY(%(cs)s)
+            ORDER BY l.match_id, l.bookmaker, l.captured_at ASC NULLS LAST, l.line
+        ) first_lines
+        ORDER BY kickoff DESC
     """, {"cs": comps})
+
+    # One fit per league in scope, plus an out-of-sample fit per settled line.
+    # A league with too little history returns None and its rows fall back to
+    # the midpoint - which the rows say.
+    settled = {}
+    for r in rows:
+        if r["actual"] is not None:
+            settled.setdefault(r["competition"], set()).add(r["match_id"])
+    predictors = {c: _fitted_predictor(c, settled.get(c, ())) for c in comps}
     fixture_naive = {r["match_id"]: r["poss_naive_l5"] for r in query(
         "SELECT match_id, poss_naive_l5 FROM v_fixture_features "
         "WHERE competition = ANY(%(cs)s)", {"cs": comps})}
