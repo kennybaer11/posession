@@ -65,6 +65,33 @@ jobs:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
         run: python import_odds.py odds.txt
 
+      - name: Scrape odds (second chance for the odds workflow)
+        # GitHub fires scheduled workflows on this repo every three to five
+        # hours whatever the cron says - this "hourly" job ran six times on
+        # 13 Sep, and the odds workflow's four slots produced one run in two
+        # days. Attempting the odds scrape here as well turns every fire of
+        # either workflow into a chance.
+        #
+        # --min-gap-hours makes the two share one budget: whichever lands
+        # second within three hours of the other skips without spending.
+        #
+        # Placed before the render so a line imported here is published by
+        # this same run. continue-on-error because this is a bonus: a
+        # webscraper.io outage must never stop the data and the site updating.
+        continue-on-error: true
+        timeout-minutes: 25
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          WEBSCRAPER_TOKEN: ${{ secrets.WEBSCRAPER_TOKEN }}
+          WS_SITEMAP_LINKS: ${{ vars.WS_SITEMAP_LINKS || '1529498' }}
+          WS_SITEMAP_MATCHES: ${{ vars.WS_SITEMAP_MATCHES || '1529506' }}
+        run: |
+          if [ -z "$WEBSCRAPER_TOKEN" ]; then
+            echo "WEBSCRAPER_TOKEN not set - skipping the odds scrape."
+            exit 0
+          fi
+          python odds_pipeline.py --hours 72 --skip-priced --write --min-gap-hours 3
+
       - name: Render the static site
         # Reads the database that was just updated and writes site/. The
         # credentials stay here, inside the Action - the published pages are

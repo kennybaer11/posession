@@ -100,7 +100,11 @@ jobs:
           # 2>&1 matters: the pipeline reports through logging, which writes
           # to stderr, and a pipe carries only stdout. Without it run.log is
           # empty and the count below finds nothing.
-          python odds_pipeline.py --hours "${{ inputs.hours || '72' }}" $ARGS --write 2>&1 | tee run.log
+          # The data workflow attempts this too. A dispatched run always goes
+          # ahead; a scheduled one skips if the other ran within three hours.
+          GAP="--min-gap-hours 3"
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then GAP=""; fi
+          python odds_pipeline.py --hours "${{ inputs.hours || '72' }}" $ARGS $GAP --write 2>&1 | tee run.log
 
           # Rebuilding ~540 pages to publish nothing is a waste of several
           # minutes, and most runs do land nothing: the fixtures still being

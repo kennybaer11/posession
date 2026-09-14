@@ -349,6 +349,9 @@ def main():
                     help="sitemap id for the match-detail scrape")
     ap.add_argument("--interval", type=int, default=2000,
                     help="ms between requests (be polite)")
+    ap.add_argument("--min-gap-hours", type=float, default=0,
+                    help="skip entirely if a run started within this many "
+                         "hours - lets two schedules share one budget")
     args = ap.parse_args()
 
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(message)s",
@@ -357,6 +360,18 @@ def main():
     from db import Database
     db = Database()
     db.ensure_schema(with_views=False)
+
+    if args.min_gap_hours:
+        recent = recent_run(db, args.min_gap_hours)
+        if recent:
+            # No run row for a skip. Two schedules each firing every few hours
+            # would otherwise fill the Scraper page with rows that say nothing
+            # happened, burying the runs that did.
+            log.info("A run started at %s (%s, %s) - within %sh, so skipping.",
+                     recent["started_at"].strftime("%d %b %H:%M"),
+                     recent["source"], recent["status"], args.min_gap_hours)
+            db.close()
+            return 0
 
     # Opened before anything is scraped, so a run that dies mid-way still
     # leaves a row. GITHUB_ACTIONS is set by the runner and nothing else.
@@ -373,6 +388,37 @@ def main():
         raise
     finally:
         db.close()
+
+
+# Statuses that mean a run genuinely happened and should hold off the next one.
+# preview and dry-run are hand-run experiments that wrote nothing, and error is
+# a run that failed - none of those should stop a real run from trying.
+_COUNTS_AS_RUN = ("ok", "ok-with-problems", "idle")
+
+# A 'running' row older than this is a process that died without reporting, not
+# a run in progress - it must not block the schedule forever.
+_RUNNING_STALE_MINUTES = 60
+
+
+def recent_run(db, hours):
+    """The latest run that should hold off another, or None.
+
+    Exists because two GitHub workflows now attempt the odds scrape: the odds
+    workflow's own four slots, and a step inside the data workflow. GitHub
+    fires both unreliably - hours late, often not at all - so between them
+    there are more chances than either gives alone. Without a gap they would
+    also spend twice when both happen to land close together.
+    """
+    with db.conn.cursor() as cur:
+        cur.execute("""
+            SELECT started_at, source, status FROM pl_scrape_run
+            WHERE started_at > now() - (%s * INTERVAL '1 hour')
+              AND (status = ANY(%s)
+                   OR (status = 'running'
+                       AND started_at > now() - (%s * INTERVAL '1 minute')))
+            ORDER BY started_at DESC LIMIT 1
+        """, (hours, list(_COUNTS_AS_RUN), _RUNNING_STALE_MINUTES))
+        return cur.fetchone()
 
 
 def credits_left():
