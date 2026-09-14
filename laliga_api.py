@@ -282,6 +282,36 @@ def _week_of(match):
     return int(m.group(1)) if m else None
 
 
+_PERSON_RE = re.compile(r"/(man\d+)_")
+
+
+def manager_rows(match, payload):
+    """The manager of each side, from the match page's lineups.
+
+    The entry's own `id` cannot be the identity. It is a squad-registration id
+    numbered by season - 124xxxx in 2025/26, 126xxxx in 2026/27 - so keying on
+    it would record a manager change at every club every summer. The person
+    code in the photo path (man257 is Pellegrini in both seasons) is stable;
+    the name is the fallback if a manager has no photo.
+    """
+    lineups = (payload or {}).get("lineups") or {}
+    home, away = _team(match, "home"), _team(match, "away")
+    rows = []
+    for side, team in (("home", home), ("away", away)):
+        people = (lineups.get(side) or {}).get("manager") or []
+        if not people or not team.get("id"):
+            continue
+        who = people[0]
+        name = ((who.get("person") or {}).get("name") or "").strip()
+        code = _PERSON_RE.search(json.dumps(who.get("photos") or {}))
+        key = code.group(1) if code else ("name:" + name.lower() if name else None)
+        if key:
+            rows.append({"match_id": qualify(match["id"]),
+                         "team_id": qualify(team["id"]),
+                         "manager_id": key, "manager_name": name or None})
+    return rows
+
+
 def team_match_rows(match, season, stats):
     """One row per team. stats is the match page's `stats` block."""
     if not stats or not isinstance(stats, dict):

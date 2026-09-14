@@ -202,6 +202,31 @@ def event_rows(match, payload):
     return goals, cards, subs
 
 
+def manager_rows(match_id, home_id, away_id, payload):
+    """The manager of each side, from the same lineups payload.
+
+    Each side's `managers` is a list; the entry typed "Manager" is taken, or
+    the first if none is typed - a caretaker spell is still who picked the
+    team. Takes ids rather than the match dict so the backfill, which reads
+    home and away from the database, uses exactly the same extraction.
+    """
+    if not payload:
+        return []
+    rows = []
+    for key, team_id in (("home_team", home_id), ("away_team", away_id)):
+        people = (payload.get(key) or {}).get("managers") or []
+        chosen = next((m for m in people if m.get("type") == "Manager"),
+                      people[0] if people else None)
+        if chosen and chosen.get("id"):
+            rows.append({
+                "match_id": str(match_id), "team_id": str(team_id),
+                "manager_id": str(chosen["id"]),
+                "manager_name": " ".join(filter(None, (chosen.get("firstName"),
+                                                       chosen.get("lastName")))),
+            })
+    return rows
+
+
 def lineup_rows(match, payload):
     """Starting XI and bench for one match, plus the players seen.
 
@@ -403,6 +428,7 @@ def main():
     # 4. Per-match stats, plus events and lineups
     rows, failed = [], []
     goals_all, cards_all, subs_all, lineups_all, players_all = [], [], [], [], []
+    managers_all = []
     event_matches = []
     for i, mid in enumerate(needed, 1):
         match = matches_by_id[mid]
@@ -420,7 +446,10 @@ def main():
 
         if collect_detail:
             g, c, s = event_rows(match, api.match_events(mid))
-            lu, pl = lineup_rows(match, api.match_lineups(mid))
+            lineups_payload = api.match_lineups(mid)
+            lu, pl = lineup_rows(match, lineups_payload)
+            managers_all += manager_rows(mid, match["homeTeam"]["id"],
+                                         match["awayTeam"]["id"], lineups_payload)
             # Only mark the match for an event wipe if something came back, so
             # a failed fetch cannot silently delete events already stored.
             if g or c or s:
@@ -505,6 +534,7 @@ def main():
             seen = {p["player_id"]: p for p in players_all}
             db.upsert_players(list(seen.values()))
             db.upsert_lineups(lineups_all)
+            db.upsert_managers(managers_all)
             log.info("Wrote %d goal(s), %d card(s), %d sub(s), %d lineup row(s), "
                      "%d player(s).", len(goals_all), len(cards_all),
                      len(subs_all), len(lineups_all), len(seen))

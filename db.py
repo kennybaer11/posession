@@ -271,6 +271,25 @@ CREATE TABLE IF NOT EXISTS pl_model_calibration (
 )
 """
 
+# Who managed each side in each match, read from the lineups the scrapers
+# already fetch. Stored per match rather than as appointment dates because no
+# source publishes appointment dates, and per match is what the model needs:
+# a change shows up as the id changing between one match and the next.
+#
+# Premier League and LaLiga only. bundesliga.com carries no coach in the page
+# state we can read.
+MANAGER_DDL = """
+CREATE TABLE IF NOT EXISTS pl_match_manager (
+  match_id     TEXT NOT NULL,
+  team_id      TEXT NOT NULL,
+  manager_id   TEXT NOT NULL,
+  manager_name TEXT,
+  last_seen    TIMESTAMP NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (match_id, team_id)
+)
+"""
+MANAGER_COLS = ["match_id", "team_id", "manager_id", "manager_name"]
+
 INDEXES = (
     "CREATE INDEX IF NOT EXISTS idx_tm_team_kickoff ON pl_team_match (team_id, kickoff)",
     "CREATE INDEX IF NOT EXISTS idx_tm_kickoff ON pl_team_match (kickoff)",
@@ -370,6 +389,7 @@ class Database:
             cur.execute(SCRAPE_RUN_DDL)
             cur.execute(ODDS_ATTEMPT_DDL)
             cur.execute(CALIBRATION_DDL)
+            cur.execute(MANAGER_DDL)
             for stmt in INDEXES:
                 cur.execute(stmt)
         self.conn.commit()
@@ -495,6 +515,10 @@ class Database:
     def upsert_lineups(self, rows):
         return self._upsert("pl_lineup", LINEUP_COLS, rows,
                             ("match_id", "player_id"))
+
+    def upsert_managers(self, rows):
+        return self._upsert("pl_match_manager", MANAGER_COLS, rows,
+                            ("match_id", "team_id"))
 
     def upsert_players(self, rows):
         return self._upsert("pl_player", PLAYER_COLS, rows, ("player_id",))

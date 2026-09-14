@@ -63,7 +63,8 @@ def scrape_bundesliga(season, matchdays, refresh, db):
         stats = api.match_stats(season, m.get("matchday"), bl.slug_of(m))
         built = bl.team_match_rows(m, season_key, stats)
         (stat_rows.extend(built) if built else failed.append(m["matchId"]))
-    return list(teams.values()), match_rows, stat_rows, failed, api.request_count
+    # bundesliga.com has no coach in the page state we read - see pl_match_manager.
+    return list(teams.values()), match_rows, stat_rows, failed, api.request_count, []
 
 
 def scrape_laliga(season, weeks, refresh, db):
@@ -93,13 +94,16 @@ def scrape_laliga(season, weeks, refresh, db):
     log.info("%d played match(es) need stats (%d already stored)",
              len(todo), len(matches) - len(todo))
 
-    stat_rows, failed = [], []
+    stat_rows, failed, managers = [], [], []
     for i, m in enumerate(todo, 1):
         log.info("[%d/%d] %s", i, len(todo), m["slug"][:60])
         payload = api.match_stats(m["slug"])
         built = ll.team_match_rows(m, season, (payload or {}).get("stats"))
         (stat_rows.extend(built) if built else failed.append(m["id"]))
-    return list(teams.values()), match_rows, stat_rows, failed, api.request_count
+        # Same page, no extra request.
+        managers.extend(ll.manager_rows(m, payload))
+    return (list(teams.values()), match_rows, stat_rows, failed,
+            api.request_count, managers)
 
 
 def matchday_window(db, competition, season, span_back=1, span_forward=3, cap=38):
@@ -164,7 +168,7 @@ def main():
 
     leagues = ("bundesliga", "laliga") if args.league == "both" else (args.league,)
     for which in leagues:
-        teams, matches, stats, failed, requests_made = run(
+        teams, matches, stats, failed, requests_made, managers = run(
             which, args.season, args.limit, args.refresh, args.dry_run, db)
 
         # Possession is zero-sum: if a league's rows do not average 50 the
@@ -192,6 +196,9 @@ def main():
         db.upsert_matches(matches)
         if stats:
             db.upsert_team_matches(stats)
+        if managers:
+            db.upsert_managers(managers)
+            log.info("  %d manager row(s)", len(managers))
         log.info("  written.")
 
     if args.dry_run:
