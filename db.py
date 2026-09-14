@@ -494,12 +494,13 @@ class Database:
         """
         if not scraped_ids:
             return 0
-        rows = [(str(mid), str(mid) in {str(f) for f in found_ids})
+        found = {str(f) for f in found_ids}
+        rows = [(str(mid), str(mid) in found, str(mid) in found)
                 for mid in scraped_ids]
         with self.conn.cursor() as cur:
             cur.executemany("""
                 INSERT INTO pl_odds_attempt (match_id, attempts, last_found)
-                VALUES (%s, 1, %s)
+                VALUES (%s, CASE WHEN %s THEN 0 ELSE 1 END, %s)
                 ON CONFLICT (match_id) DO UPDATE
                 SET attempts = CASE WHEN EXCLUDED.last_found
                                     THEN 0 ELSE pl_odds_attempt.attempts + 1 END,
