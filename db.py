@@ -445,6 +445,7 @@ class Database:
         self.conn.commit()
         self.migrate_competitions()
         self.migrate_stat_columns()
+        self.migrate_notifications()
         if with_views:
             self.ensure_views()
 
@@ -508,6 +509,31 @@ class Database:
             log.info("Added %d new stat column(s): %s",
                      len(missing), ", ".join(missing))
         return missing
+
+    def migrate_notifications(self):
+        """Give possession lines a notified_at, for the Telegram alerts.
+
+        When the column is first added, every line already stored is marked as
+        notified in the same transaction. Otherwise the first run after
+        installing notifications would announce every line ever recorded,
+        including matches played weeks ago. Only lines captured from here on
+        are news.
+        """
+        with self.conn.cursor() as cur:
+            cur.execute("""SELECT 1 FROM information_schema.columns
+                           WHERE table_name = 'pl_possession_line'
+                             AND column_name = 'notified_at'""")
+            if cur.fetchone():
+                return False
+            cur.execute("ALTER TABLE pl_possession_line "
+                        "ADD COLUMN IF NOT EXISTS notified_at TIMESTAMPTZ")
+            cur.execute("UPDATE pl_possession_line SET notified_at = NOW() "
+                        "WHERE notified_at IS NULL")
+            marked = cur.rowcount
+        self.conn.commit()
+        log.info("Added notified_at; marked %d existing line(s) as already "
+                 "notified", marked)
+        return True
 
     def ensure_views(self):
         """(Re)create the modelling views from views.sql."""
