@@ -139,6 +139,17 @@ jobs:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
         run: python advice.py
 
+      - name: Announce new odds on Telegram
+        # See the same step in scrape.yml. Only when this run imported a line.
+        if: ${{ steps.scrape.outputs.changed == 'true' }}
+        continue-on-error: true
+        timeout-minutes: 5
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: python notify.py
+
       - name: Render the static site
         # Only when odds actually landed - otherwise the hourly scrape's own
         # export is already publishing the same pages.

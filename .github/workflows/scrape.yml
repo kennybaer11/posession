@@ -116,6 +116,20 @@ jobs:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
         run: python advice.py
 
+      - name: Announce new odds on Telegram
+        # After the advice is frozen, so each message carries the advice this
+        # run publishes. Skips cleanly until TELEGRAM_BOT_TOKEN and
+        # TELEGRAM_CHAT_ID are added under Settings -> Secrets and variables ->
+        # Actions. A line is marked as announced only after Telegram accepts
+        # the message, so a failed send is retried by the next run.
+        continue-on-error: true
+        timeout-minutes: 5
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: python notify.py
+
       - name: Render the static site
         # Reads the database that was just updated and writes site/. The
         # credentials stay here, inside the Action - the published pages are

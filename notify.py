@@ -109,7 +109,7 @@ def describe(r):
 def build_messages(rows):
     header = (f"🟢 <b>New possession odds</b> - {len(rows)} line"
               f"{'' if len(rows) == 1 else 's'}")
-    footer = (f"\n<i>Stakes stay capped until the advice record is long enough "
+    footer = (f"\n\n<i>Stakes stay capped until the advice record is long enough "
               f"to mean something.</i>\n<a href=\"{SITE}all-fixtures.html\">Fixtures</a>")
     messages, current = [], header
     for r in rows:
