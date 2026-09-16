@@ -446,6 +446,7 @@ class Database:
         self.migrate_competitions()
         self.migrate_stat_columns()
         self.migrate_notifications()
+        self.migrate_monitoring()
         if with_views:
             self.ensure_views()
 
@@ -509,6 +510,29 @@ class Database:
             log.info("Added %d new stat column(s): %s",
                      len(missing), ", ".join(missing))
         return missing
+
+    def migrate_monitoring(self):
+        """Columns and a table the scraper monitor needs.
+
+        reused_jobs marks a run that re-imported already-paid scraping jobs. It
+        spent no credits, so it must not hold off the next real scrape: on
+        16 Sep one such recovery run blocked every scheduled odds scrape for
+        three and a half hours, and Levante v Athletic's market opened inside
+        that window unseen.
+
+        pl_alert remembers when each health alert was last sent, so a problem
+        that persists for hours is reported once, not on every hourly run.
+        """
+        with self.conn.cursor() as cur:
+            cur.execute("ALTER TABLE pl_scrape_run "
+                        "ADD COLUMN IF NOT EXISTS reused_jobs BOOLEAN NOT NULL DEFAULT FALSE")
+            cur.execute("ALTER TABLE pl_scrape_run "
+                        "ADD COLUMN IF NOT EXISTS alerted_at TIMESTAMPTZ")
+            cur.execute("""CREATE TABLE IF NOT EXISTS pl_alert (
+                             alert_key TEXT PRIMARY KEY,
+                             sent_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                             message   TEXT)""")
+        self.conn.commit()
 
     def migrate_notifications(self):
         """Give possession lines a notified_at, for the Telegram alerts.

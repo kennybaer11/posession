@@ -376,12 +376,17 @@ def main():
     if args.min_gap_hours:
         recent = recent_run(db, args.min_gap_hours)
         if recent:
-            # No run row for a skip. Two schedules each firing every few hours
-            # would otherwise fill the Scraper page with rows that say nothing
-            # happened, burying the runs that did.
-            log.info("A run started at %s (%s, %s) - within %sh, so skipping.",
-                     recent["started_at"].strftime("%d %b %H:%M"),
-                     recent["source"], recent["status"], args.min_gap_hours)
+            # Recorded, not silent. A skip used to leave no row, which made
+            # three and a half hours without a single look at the bookmaker
+            # invisible on 16 Sep. The Scraper page shows skips muted, so they
+            # explain gaps without burying the runs that did the work.
+            reason = (f"skipped: a run started {recent['started_at']:%H:%M} UTC "
+                      f"({recent['source']}), within {args.min_gap_hours:g}h")
+            log.info("%s", reason)
+            skip = db.start_run(
+                source="github-actions" if os.getenv("GITHUB_ACTIONS") else "local",
+                hours=args.hours, skip_priced=bool(args.skip_priced))
+            db.finish_run(skip, status="skipped", detail=reason)
             db.close()
             return 0
 
@@ -389,7 +394,9 @@ def main():
     # leaves a row. GITHUB_ACTIONS is set by the runner and nothing else.
     run_id = db.start_run(
         source="github-actions" if os.getenv("GITHUB_ACTIONS") else "local",
-        hours=args.hours, skip_priced=bool(args.skip_priced))
+        hours=args.hours, skip_priced=bool(args.skip_priced),
+        # Re-importing a finished stage-2 job opens no pages, so costs nothing.
+        reused_jobs=bool(args.matches_job))
     try:
         return _run(args, db, run_id)
     except Exception as exc:
@@ -425,6 +432,7 @@ def recent_run(db, hours):
         cur.execute("""
             SELECT started_at, source, status FROM pl_scrape_run
             WHERE started_at > now() - (%s * INTERVAL '1 hour')
+              AND NOT reused_jobs
               AND (status = ANY(%s)
                    OR (status = 'running'
                        AND started_at > now() - (%s * INTERVAL '1 minute')))
@@ -567,7 +575,10 @@ def _run(args, db, run_id):
     # the write so a crash before this leaves the counts untouched rather than
     # parking a fixture on a run that never finished.
     found = {r["match_id"] for r in ready}
-    db.record_attempts([f["match_id"] for _, f in chosen], found)
+    if not args.matches_job:
+        # A replay re-reads a scrape already counted when it ran; counting it
+        # again would park fixtures on reads that never happened.
+        db.record_attempts([f["match_id"] for _, f in chosen], found)
     db.finish_run(run_id, written=written, credits=credits_left(),
                   status="ok" if not problems else "ok-with-problems", **tally)
     return 0
