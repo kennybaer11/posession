@@ -59,7 +59,7 @@ jobs:
     runs-on: ubuntu-latest
     # The pipeline blocks while webscraper.io works through the pages, and it
     # paces itself to be polite. 27 pages took eight minutes.
-    timeout-minutes: 45
+    timeout-minutes: 90
 
     # Lifted to the job so a step can test the token. The secrets context is
     # not available in a step-level `if`; env is.

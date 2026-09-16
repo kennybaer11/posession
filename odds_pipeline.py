@@ -361,6 +361,11 @@ def main():
                     help="sitemap id for the match-detail scrape")
     ap.add_argument("--interval", type=int, default=2000,
                     help="ms between requests (be polite)")
+    ap.add_argument("--wait-budget", type=float, default=35,
+                    help="minutes to wait for webscraper.io in total before "
+                         "stopping cleanly as 'timeout' - keep it under the "
+                         "workflow step's own time limit, or the step is "
+                         "killed first and nothing is recorded")
     ap.add_argument("--min-gap-hours", type=float, default=0,
                     help="skip entirely if a run started within this many "
                          "hours - lets two schedules share one budget")
@@ -372,6 +377,18 @@ def main():
     from db import Database
     db = Database()
     db.ensure_schema(with_views=False)
+
+    # Free work first: odds from an earlier run that timed out or was killed,
+    # whose scrape has since finished on webscraper.io. Before the gap check,
+    # because the gap exists to save credits and this spends none.
+    if args.write and not (args.links_job or args.matches_job or args.dry_run):
+        try:
+            recover_unfinished(db)
+        except Exception:
+            # Recovery is a bonus. A bug in it must never cost the scrape that
+            # follows - that would turn one lost market into a lost hour.
+            log.exception("recovery failed - carrying on with the scrape")
+            db.ensure_connection()
 
     if args.min_gap_hours:
         recent = recent_run(db, args.min_gap_hours)
@@ -412,7 +429,7 @@ def main():
 # Statuses that mean a run genuinely happened and should hold off the next one.
 # preview and dry-run are hand-run experiments that wrote nothing, and error is
 # a run that failed - none of those should stop a real run from trying.
-_COUNTS_AS_RUN = ("ok", "ok-with-problems", "idle")
+_COUNTS_AS_RUN = ("ok", "ok-with-problems", "idle", "timeout", "recovered")
 
 # A 'running' row older than this is a process that died without reporting, not
 # a run in progress - it must not block the schedule forever.
@@ -441,6 +458,82 @@ def recent_run(db, hours):
         return cur.fetchone()
 
 
+class WaitBudgetExceeded(Exception):
+    pass
+
+
+def recover_unfinished(db):
+    """Import the odds from earlier runs that stopped before importing them.
+
+    On 16 Sep webscraper.io queued a run's first stage for 17 minutes, the
+    workflow killed the step at its time limit mid-wait, and the scrape it had
+    paid for - Levante v Athletic's market included - was never imported. The
+    next run then skipped, because the dead run still looked in progress.
+
+    Runs now record their job ids as soon as each job is queued, and stop with
+    status 'timeout' before the step limit. This picks those up: a job that has
+    since finished is imported, lines for matches that have already kicked off
+    are dropped (a price read after kickoff is not an opening line), and the run
+    is marked recovered. A job still running is left for the next run. A failed
+    job is marked recovered with nothing imported, so it is not retried forever.
+    """
+    import odds_sheet
+    import import_odds as io_mod
+    with db.conn.cursor() as cur:
+        cur.execute("""
+            SELECT run_id, started_at, status, stage2_job FROM pl_scrape_run
+            WHERE NOT recovered AND NOT reused_jobs AND stage2_job IS NOT NULL
+              AND started_at > now() - INTERVAL '24 hours'
+              AND (status IN ('timeout', 'error')
+                   OR (status = 'running'
+                       AND started_at < now() - (%s * INTERVAL '1 minute')))
+            ORDER BY started_at""", (_RUNNING_STALE_MINUTES,))
+        pending = cur.fetchall()
+    for run in pending:
+        try:
+            job = _req("GET", f"/scraping-job/{run['stage2_job']}").json()["data"]
+        except Exception as exc:
+            log.warning("recovery: cannot read job %s: %s", run["stage2_job"], exc)
+            continue
+        status = job.get("status")
+        if status not in ("finished", "failed", "stopped"):
+            log.info("recovery: run %s's job %s is still %s - next run will retry",
+                     run["run_id"], run["stage2_job"], status)
+            continue
+        if status != "finished":
+            db.finish_run(run["run_id"], status=run["status"], recovered=True,
+                          detail=f"job {run['stage2_job']} {status} - nothing to recover")
+            continue
+
+        rows = job_rows(run["stage2_job"])
+        db.ensure_connection()
+        ready, problems = io_mod.resolve_rows(db, odds_sheet.parse_webscraper(rows))
+        fresh = []
+        with db.conn.cursor() as cur:
+            cur.execute("SELECT now() AT TIME ZONE 'UTC' AS now")
+            now = cur.fetchone()["now"]
+            for r in ready:
+                cur.execute("SELECT kickoff FROM pl_matches WHERE match_id = %s",
+                            (r["match_id"],))
+                ko = cur.fetchone()
+                if ko and ko["kickoff"] > now:
+                    fresh.append(r)
+        late = len(ready) - len(fresh)
+        for r in fresh:
+            r.pop("_label", None)
+            r.pop("_flipped", None)
+        written = db.upsert_lines(fresh)
+        found = {r["match_id"] for r in fresh}
+        db.record_attempts(list(found), found)
+        detail = (f"recovered from job {run['stage2_job']}: {written} line(s) written"
+                  + (f", {late} dropped as already kicked off" if late else "")
+                  + (f"; problems: {'; '.join(map(str, problems))}" if problems else ""))
+        log.info("recovery: run %s - %s", run["run_id"], detail)
+        db.finish_run(run["run_id"], status="recovered", recovered=True,
+                      rows_back=len(rows), resolved=len(ready),
+                      problems=len(problems), written=written, detail=detail[:2000])
+
+
 def credits_left():
     """Remaining page credits, or None if the account cannot be read.
 
@@ -454,6 +547,30 @@ def credits_left():
 
 
 def _run(args, db, run_id):
+    deadline = time.time() + args.wait_budget * 60
+    try:
+        return _run_stages(args, db, run_id, deadline)
+    except WaitBudgetExceeded as exc:
+        # A clean stop, not a failure: the job ids are already on the row, and
+        # the next run imports the scrape once webscraper.io finishes it.
+        log.warning("%s - stopping; the next run will recover it", exc)
+        db.finish_run(run_id, status="timeout", detail=str(exc)[:2000])
+        return 0
+
+
+def _wait(job_id, deadline, stage):
+    remaining = deadline - time.time()
+    if remaining <= 0:
+        raise WaitBudgetExceeded(f"no time left to wait for {stage} job {job_id}")
+    try:
+        return wait_for(job_id, timeout=remaining)
+    except TimeoutError:
+        raise WaitBudgetExceeded(
+            f"{stage} job {job_id} still running when the wait budget ran out "
+            f"- webscraper.io is queueing slowly")
+
+
+def _run_stages(args, db, run_id, deadline):
     fixtures = upcoming_fixtures(db, args.hours, args.skip_priced,
                                  args.retry_all)
     log.info("%d fixture(s) kicking off in the next %dh%s", len(fixtures),
@@ -479,7 +596,8 @@ def _run(args, db, run_id):
         links_job = start_job(LINKS_SITEMAP, request_interval=args.interval,
                               custom_id="stage1-links")
         log.info("stage 1 queued as job %s", links_job)
-        wait_for(links_job)
+        db.note_run(run_id, stage1_job=str(links_job), fixtures=len(fixtures))
+        _wait(links_job, deadline, "stage 1")
 
     link_rows = job_rows(links_job)
     log.info("stage 1 returned %d row(s)", len(link_rows))
@@ -528,7 +646,8 @@ def _run(args, db, run_id):
                               request_interval=args.interval,
                               custom_id="stage2-markets")
         log.info("stage 2 queued as job %s for %d page(s)", match_job, len(urls))
-        wait_for(match_job)
+        db.note_run(run_id, stage2_job=str(match_job), pages=len(chosen))
+        _wait(match_job, deadline, "stage 2")
 
     rows = job_rows(match_job)
     log.info("stage 2 returned %d row(s)", len(rows))

@@ -528,6 +528,10 @@ class Database:
                         "ADD COLUMN IF NOT EXISTS reused_jobs BOOLEAN NOT NULL DEFAULT FALSE")
             cur.execute("ALTER TABLE pl_scrape_run "
                         "ADD COLUMN IF NOT EXISTS alerted_at TIMESTAMPTZ")
+            # A run that timed out or died, whose paid scrape was later
+            # imported by a following run. See odds_pipeline.recover_unfinished.
+            cur.execute("ALTER TABLE pl_scrape_run "
+                        "ADD COLUMN IF NOT EXISTS recovered BOOLEAN NOT NULL DEFAULT FALSE")
             cur.execute("""CREATE TABLE IF NOT EXISTS pl_alert (
                              alert_key TEXT PRIMARY KEY,
                              sent_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -740,6 +744,25 @@ class Database:
             run_id = cur.fetchone()["run_id"]
         self.conn.commit()
         return run_id
+
+    def note_run(self, run_id, **fields):
+        """Record fields on a run that is still going - job ids, mostly.
+
+        Written the moment a scraping job is queued, not at the end. A run the
+        workflow kills mid-wait never reaches finish_run, and without its job
+        ids the scrape it already paid for could not be found again.
+        """
+        if not run_id or not fields:
+            return
+        sets = ", ".join(f"{k} = %({k})s" for k in fields)
+        try:
+            self.ensure_connection()
+            with self.conn.cursor() as cur:
+                cur.execute(f"UPDATE pl_scrape_run SET {sets} WHERE run_id = %(run_id)s",
+                            {**fields, "run_id": run_id})
+            self.conn.commit()
+        except Exception:
+            log.warning("could not note run %s", run_id, exc_info=True)
 
     def finish_run(self, run_id, **fields):
         """Record how a run ended. Never raises: a failure to log must not

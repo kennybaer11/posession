@@ -29,7 +29,7 @@ jobs:
     runs-on: ubuntu-latest
     # A warm run is seconds; a cold start with an empty database now has
     # ~380 matches to fetch at 3 requests each, one second apart.
-    timeout-minutes: 60
+    timeout-minutes: 90
 
     steps:
       - uses: actions/checkout@v4
@@ -80,8 +80,13 @@ jobs:
         # Placed before the render so a line imported here is published by
         # this same run. continue-on-error because this is a bonus: a
         # webscraper.io outage must never stop the data and the site updating.
+        #
+        # 45 minutes, with the script's own wait budget at 35. On 16 Sep a
+        # 25-minute limit killed a run while webscraper.io queued its jobs, and
+        # a killed step records nothing. Now the script stops itself first,
+        # as 'timeout', and the next run imports the finished scrape.
         continue-on-error: true
-        timeout-minutes: 25
+        timeout-minutes: 45
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           WEBSCRAPER_TOKEN: ${{ secrets.WEBSCRAPER_TOKEN }}

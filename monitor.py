@@ -87,12 +87,17 @@ def checks(db):
                         FROM pl_scrape_run
                         WHERE alerted_at IS NULL
                           AND started_at > now() - INTERVAL '2 days'
+                          AND NOT recovered
                           AND (status = 'error'
+                               OR (status = 'timeout'
+                                   AND started_at < now() - INTERVAL '90 minutes')
                                OR (status = 'running'
                                    AND started_at < now() - INTERVAL '{STUCK_MINUTES} minutes'))
                         ORDER BY started_at""")
         for r in cur.fetchall():
             what = ("crashed" if r["status"] == "error"
+                    else "timed out and has not been recovered after 90 min"
+                    if r["status"] == "timeout"
                     else f"has been running over {STUCK_MINUTES} min - probably died")
             last_line = (r["detail"] or "").strip().splitlines()[-1:] or [""]
             out.append((None,
