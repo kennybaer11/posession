@@ -184,6 +184,53 @@ def resolve(name, index):
     return index[close[0]] if close else None
 
 
+def _tokens(text):
+    import unicodedata
+    t = unicodedata.normalize("NFKD", str(text or ""))
+    t = "".join(c for c in t if not unicodedata.combining(c)).lower()
+    return [w for w in re.split(r"[^a-z0-9]+", t) if w]
+
+
+def resolve_between(name, candidates):
+    """Which of a match's two clubs a bookmaker label means, or None.
+
+    Once the fixture is known the line can only be about one of its two clubs,
+    so the label is scored against those two alone. Searching every club
+    instead is how "Atl. Madrid" resolved to Real Madrid - the nearest spelling
+    in the whole league - and a genuine Atletico line was thrown away as a
+    club that "did not play".
+
+    A label word counts for a club when it equals one of the club's words or
+    abbreviates it ("atl" for atletico, "man" for manchester). The higher score
+    wins; a tie, or no overlap at all, returns None rather than guessing.
+
+    candidates is {team_id: [name, short_name, abbr, ...]}.
+    """
+    words = _tokens(name)
+    if not words:
+        return None
+    scores = {}
+    for team_id, variants in candidates.items():
+        best = 0
+        for v in filter(None, variants):
+            club = _tokens(v)
+            joined = "".join(club)
+            score = sum(
+                1 for w in words
+                if any(c == w or (len(w) >= 3 and c.startswith(w))
+                       or (len(c) >= 3 and w.startswith(c)) for c in club))
+            if "".join(words) == joined:
+                score += 2          # an exact abbreviation or short name
+            best = max(best, score)
+        scores[team_id] = best
+    ranked = sorted(scores.items(), key=lambda kv: -kv[1])
+    if not ranked or ranked[0][1] == 0:
+        return None
+    if len(ranked) > 1 and ranked[0][1] == ranked[1][1]:
+        return None
+    return ranked[0][0]
+
+
 def find_match(db, date, team_a, team_b):
     """The match on that date between those two clubs, in EITHER order.
 
@@ -282,10 +329,13 @@ def resolve_rows(db, parsed, bookmaker="chance.cz", closing=False):
 
         home_id = resolve(r["home"], index)
         away_id = resolve(r["away"], index)
+        # The team is not required to resolve globally here: once the fixture
+        # is found it is resolved between that match's two clubs below, which
+        # is what rescues a bookmaker label like "Bilbao" or "Atl. Madrid".
         team_id = resolve(r["team"], index)
-        if not (home_id and away_id and team_id):
-            missing = [lbl for lbl, v in (("home", home_id), ("away", away_id),
-                                          ("team", team_id)) if not v]
+        if not (home_id and away_id):
+            missing = [lbl for lbl, v in (("home", home_id), ("away", away_id))
+                       if not v]
             problems.append(f"row {r['n']}: unknown club for {', '.join(missing)} "
                             f"({r['home']} / {r['away']} / {r['team']})")
             continue
@@ -294,6 +344,22 @@ def resolve_rows(db, parsed, bookmaker="chance.cz", closing=False):
             problems.append(f"row {r['n']}: no {r['home']} v {r['away']} "
                             f"on {r['date']}")
             continue
+        if team_id not in (match["home_team_id"], match["away_team_id"]):
+            # The global lookup picked some other club. Ask again, between the
+            # two that actually played.
+            from odds_pipeline import ALIASES
+            with db.conn.cursor() as cur:
+                cur.execute("SELECT team_id, name, short_name, abbr FROM pl_teams "
+                            "WHERE team_id IN (%s, %s)",
+                            (match["home_team_id"], match["away_team_id"]))
+                both = {}
+                for t in cur.fetchall():
+                    variants = [t["name"], t["short_name"], t["abbr"]]
+                    # The scraper's alias list: names the bookmaker uses that
+                    # share no word with ours ("bilbao" for Athletic Club).
+                    variants += list(ALIASES.get(" ".join(_tokens(t["name"])), ()))
+                    both[t["team_id"]] = variants
+            team_id = resolve_between(r["team"], both)
         if team_id not in (match["home_team_id"], match["away_team_id"]):
             problems.append(f"row {r['n']}: {r['team']} did not play in "
                             f"{r['home']} v {r['away']}")
