@@ -804,7 +804,10 @@ def status():
                COALESCE(a.attempts, 0) AS attempts,
                a.last_attempt,
                (COALESCE(a.attempts, 0) >= %(max)s
-                AND m.kickoff > now() + (%(near)s * INTERVAL '1 hour')) AS parked
+                AND m.kickoff > now() + (%(near)s * INTERVAL '1 hour')
+                AND a.last_attempt >= now() - (%(recheck)s * INTERVAL '1 hour')) AS parked,
+               LEAST(a.last_attempt + (%(recheck)s * INTERVAL '1 hour'),
+                     m.kickoff - (%(near)s * INTERVAL '1 hour')) AS next_read
         FROM pl_matches m
         JOIN pl_teams ht  ON ht.team_id = m.home_team_id
         JOIN pl_teams at_ ON at_.team_id = m.away_team_id
@@ -813,7 +816,8 @@ def status():
           AND NOT EXISTS (SELECT 1 FROM pl_possession_line l
                           WHERE l.match_id = m.match_id)
         ORDER BY m.kickoff
-    """, {"max": op.MAX_EMPTY_ATTEMPTS, "near": op.ALWAYS_RETRY_WITHIN_HOURS})
+    """, {"max": op.MAX_EMPTY_ATTEMPTS, "near": op.ALWAYS_RETRY_WITHIN_HOURS,
+          "recheck": op.PARKED_RECHECK_HOURS})
 
     # A run started by the runner proves the schedule is armed - that the
     # secret is present and the cron fired. Nothing else on this page can.
@@ -823,6 +827,7 @@ def status():
         unpriced=unpriced, upcoming=next_scrapes(),
         max_attempts=op.MAX_EMPTY_ATTEMPTS,
         retry_within=op.ALWAYS_RETRY_WITHIN_HOURS,
+        recheck_hours=op.PARKED_RECHECK_HOURS,
         parked_n=sum(1 for r in unpriced if r["parked"]),
         ci_runs=len(ci_runs), last_ci=(ci_runs[0] if ci_runs else None),
         now=datetime.now(timezone.utc),

@@ -197,9 +197,10 @@
     four, which is how the pipeline tells the difference.
     {% if parked_n %}
     <strong>{{ parked_n }} {{ 'is' if parked_n == 1 else 'are' }} parked</strong> after
-    {{ max_attempts }} empty reads &mdash; one credit each, four times a day, to learn the
-    same nothing. They are read again once kickoff is within {{ retry_within }} hours,
-    which is when a late market would appear anyway.
+    {{ max_attempts }} empty reads, rather than costing a credit on every run to learn the
+    same nothing. A parked fixture is still read once every {{ recheck_hours }} hours, and on
+    every run once kickoff is within {{ retry_within }} hours &mdash; so a market that opens a
+    day or two ahead is caught within a day, not on the morning of the match.
     {% endif %}
   </p>
   <div class="tablewrap">
@@ -214,6 +215,9 @@
           <td class="l" style="width:90px">
             {% if f.parked %}<span class="chip wa">parked</span>
             {% else %}<span class="chip">retrying</span>{% endif %}
+          </td>
+          <td class="l muted" style="width:150px;font-size:12px">
+            {% if f.parked and f.next_read %}next read {{ f.next_read.strftime('%d %b %H:%M') }}{% endif %}
           </td>
         </tr>
         {% endfor %}

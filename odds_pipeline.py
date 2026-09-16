@@ -135,6 +135,14 @@ MAX_EMPTY_ATTEMPTS = 3
 # exactly when the opening price is worth having.
 ALWAYS_RETRY_WITHIN_HOURS = 12
 
+# A parked fixture is still looked at once a day. Three empty reads used to park
+# it outright until its last twelve hours, which was reasonable at two runs a
+# day and wrong at a run every three hours: the three reads then fell inside
+# nine hours, and on 16 Sep Brentford v Chelsea was parked more than two days
+# before kickoff. A market opening a day or two ahead would have been seen only
+# on the morning of the match. One read a day costs a credit per parked fixture.
+PARKED_RECHECK_HOURS = 24
+
 
 def upcoming_fixtures(db, hours, skip_priced=False, retry_all=False):
     """Fixtures kicking off within the window, from OUR data.
@@ -144,11 +152,12 @@ def upcoming_fixtures(db, hours, skip_priced=False, retry_all=False):
     fixture whose odds are already recorded spends money to learn nothing.
 
     Fixtures the bookmaker does not price are still included - a market can
-    appear closer to kickoff - but not forever. Chance prices some matches and
-    never prices others, and at four runs a day the ones it never prices cost a
+    appear closer to kickoff - but not on every run. Chance prices some matches
+    and never prices others, and the ones it never prices would otherwise cost a
     credit each, every run, to learn the same nothing. After MAX_EMPTY_ATTEMPTS
-    empty reads a fixture is parked until kickoff comes within
-    ALWAYS_RETRY_WITHIN_HOURS. retry_all ignores the parking.
+    empty reads a fixture is parked: read again once every PARKED_RECHECK_HOURS,
+    and on every run once kickoff is within ALWAYS_RETRY_WITHIN_HOURS.
+    retry_all ignores the parking.
     """
     with db.conn.cursor() as cur:
         cur.execute("""
@@ -163,10 +172,13 @@ def upcoming_fixtures(db, hours, skip_priced=False, retry_all=False):
               AND (%s
                    OR m.kickoff <= now() + (%s * INTERVAL '1 hour')
                    OR COALESCE((SELECT a.attempts FROM pl_odds_attempt a
-                                WHERE a.match_id = m.match_id), 0) < %s)
+                                WHERE a.match_id = m.match_id), 0) < %s
+                   OR COALESCE((SELECT a.last_attempt FROM pl_odds_attempt a
+                                WHERE a.match_id = m.match_id), '-infinity')
+                      < now() - (%s * INTERVAL '1 hour'))
             ORDER BY m.kickoff
         """, (hours, skip_priced, retry_all, ALWAYS_RETRY_WITHIN_HOURS,
-              MAX_EMPTY_ATTEMPTS))
+              MAX_EMPTY_ATTEMPTS, PARKED_RECHECK_HOURS))
         return cur.fetchall()
 
 
