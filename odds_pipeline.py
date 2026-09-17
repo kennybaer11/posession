@@ -485,6 +485,10 @@ def recent_run(db, hours):
             SELECT started_at, source, status FROM pl_scrape_run
             WHERE started_at > now() - (%s * INTERVAL '1 hour')
               AND NOT reused_jobs
+              -- A timeout that never queued the match pages read nothing: on
+              -- 17 Sep the 08:20 UTC listing job queued for 36 minutes and
+              -- that non-read blocked every run for the next three hours.
+              AND NOT (status = 'timeout' AND stage2_job IS NULL)
               AND (status = ANY(%s)
                    OR (status = 'running'
                        AND started_at > now() - (%s * INTERVAL '1 minute')))

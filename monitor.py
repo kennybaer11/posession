@@ -112,12 +112,14 @@ def checks(db):
         cur.execute("""SELECT max(started_at) AS last FROM pl_scrape_run
                        WHERE NOT reused_jobs
                          AND status IN ('ok', 'ok-with-problems', 'idle',
-                                        'timeout', 'recovered')""")
+                                        'timeout', 'recovered')
+                         AND NOT (status = 'timeout' AND stage2_job IS NULL)""")
         last = cur.fetchone()["last"]
         cur.execute(f"""SELECT count(*) AS n FROM pl_scrape_run
                         WHERE NOT reused_jobs
                           AND status IN ('ok', 'ok-with-problems', 'idle',
                                          'timeout', 'recovered')
+                          AND NOT (status = 'timeout' AND stage2_job IS NULL)
                           AND started_at > now() - INTERVAL '{SILENT_HOURS} hours'""")
         if cur.fetchone()["n"] == 0 and due(cur, "silent", SILENT_HOURS):
             out.append(("silent",
