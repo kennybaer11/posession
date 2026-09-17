@@ -712,8 +712,12 @@ def _run_stages(args, db, run_id, deadline):
     # or two rows of a page without a market. On 17 Sep Brentford v Chelsea's
     # page failed that way, and counting it as an empty read would park a
     # fixture whose page was never actually seen.
+    # ...and a page can also come back as a single blank row - no team names, no
+    # market text - when it did not render. Brentford v Chelsea's page did that
+    # on a retry the same morning. Only a row carrying something counts.
     returned = {(x.get("web_scraper_start_url") or x.get("web-scraper-start-url") or "")
-                for x in rows}
+                for x in rows
+                if (x.get("teams") or "").strip() or (x.get("market_text") or "").strip()}
     failed = [f for u, f in chosen if u not in returned]
     for f in failed:
         log.warning("   page FAILED to load, not counted as a read: %s v %s",
