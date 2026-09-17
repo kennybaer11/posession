@@ -144,6 +144,41 @@ ALWAYS_RETRY_WITHIN_HOURS = 12
 PARKED_RECHECK_HOURS = 24
 
 
+def unpark_round(db, found_match_ids):
+    """Un-park every unpriced fixture in a round where a market just opened.
+
+    Chance opens a round's possession markets together, not one fixture at a
+    time. On 16 Sep three of the Premier League's match week 5 markets appeared
+    at 16:31 UTC while Brentford v Chelsea, in the same round, sat parked after
+    three empty reads that morning - and stayed parked until its daily re-check
+    the next morning, a day after its market had most likely opened.
+
+    Resetting the attempt count of the round's other unpriced, not-yet-played
+    fixtures makes the very next run read them. Returns how many were reset.
+    """
+    ids = [str(m) for m in found_match_ids]
+    if not ids:
+        return 0
+    with db.conn.cursor() as cur:
+        cur.execute("""
+            UPDATE pl_odds_attempt a SET attempts = 0
+            FROM pl_matches m
+            WHERE a.match_id = m.match_id
+              AND a.attempts > 0
+              AND m.kickoff > (now() AT TIME ZONE 'UTC')
+              AND NOT EXISTS (SELECT 1 FROM pl_possession_line l
+                              WHERE l.match_id = m.match_id)
+              AND (m.competition, m.season, m.match_week) IN (
+                    SELECT competition, season, match_week FROM pl_matches
+                    WHERE match_id = ANY(%s) AND match_week IS NOT NULL)
+        """, (ids,))
+        reset = cur.rowcount
+    db.conn.commit()
+    if reset:
+        log.info("un-parked %d fixture(s) in the same round as a new market", reset)
+    return reset
+
+
 def upcoming_fixtures(db, hours, skip_priced=False, retry_all=False):
     """Fixtures kicking off within the window, from OUR data.
 
@@ -525,6 +560,7 @@ def recover_unfinished(db):
         written = db.upsert_lines(fresh)
         found = {r["match_id"] for r in fresh}
         db.record_attempts(list(found), found)
+        unpark_round(db, found)
         detail = (f"recovered from job {run['stage2_job']}: {written} line(s) written"
                   + (f", {late} dropped as already kicked off" if late else "")
                   + (f"; problems: {'; '.join(map(str, problems))}" if problems else ""))
@@ -698,6 +734,7 @@ def _run_stages(args, db, run_id, deadline):
         # A replay re-reads a scrape already counted when it ran; counting it
         # again would park fixtures on reads that never happened.
         db.record_attempts([f["match_id"] for _, f in chosen], found)
+    unpark_round(db, found)
     db.finish_run(run_id, written=written, credits=credits_left(),
                   status="ok" if not problems else "ok-with-problems", **tally)
     return 0

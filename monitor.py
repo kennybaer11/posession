@@ -106,13 +106,18 @@ def checks(db):
                         ("run", r["run_id"])))
 
         # 3. Nobody has looked at the bookmaker for too long.
+        # 'timeout' and 'recovered' count: those runs did scrape the bookmaker,
+        # their results just landed later. Leaving them out raised a false
+        # "no scrape for 5 hours" on 16 Sep during a slow webscraper.io evening.
         cur.execute("""SELECT max(started_at) AS last FROM pl_scrape_run
                        WHERE NOT reused_jobs
-                         AND status IN ('ok', 'ok-with-problems', 'idle')""")
+                         AND status IN ('ok', 'ok-with-problems', 'idle',
+                                        'timeout', 'recovered')""")
         last = cur.fetchone()["last"]
         cur.execute(f"""SELECT count(*) AS n FROM pl_scrape_run
                         WHERE NOT reused_jobs
-                          AND status IN ('ok', 'ok-with-problems', 'idle')
+                          AND status IN ('ok', 'ok-with-problems', 'idle',
+                                         'timeout', 'recovered')
                           AND started_at > now() - INTERVAL '{SILENT_HOURS} hours'""")
         if cur.fetchone()["n"] == 0 and due(cur, "silent", SILENT_HOURS):
             out.append(("silent",
