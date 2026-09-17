@@ -708,12 +708,24 @@ def _run_stages(args, db, run_id, deadline):
     # Everything the run learned, recorded whichever way it ends. Kept in one
     # place so a preview and a write are described identically apart from the
     # count - the Scraper page should not have to guess which it is reading.
+    # A page webscraper.io failed to load returns no rows at all - not the one
+    # or two rows of a page without a market. On 17 Sep Brentford v Chelsea's
+    # page failed that way, and counting it as an empty read would park a
+    # fixture whose page was never actually seen.
+    returned = {(x.get("web_scraper_start_url") or x.get("web-scraper-start-url") or "")
+                for x in rows}
+    failed = [f for u, f in chosen if u not in returned]
+    for f in failed:
+        log.warning("   page FAILED to load, not counted as a read: %s v %s",
+                    f["home"], f["away"])
+    notes = [str(p) for p in problems] + [
+        f"page failed to load: {f['home']} v {f['away']}" for f in failed]
     tally = dict(fixtures=len(fixtures), stage1_job=str(links_job),
                  stage2_job=str(match_job), pages=len(chosen),
                  unmatched=len(unmatched), ambiguous=len(ambiguous),
                  superseded=len(superseded), rows_back=len(rows),
                  resolved=len(ready), problems=len(problems),
-                 detail="; ".join(str(p) for p in problems)[:2000] or None)
+                 detail="; ".join(notes)[:2000] or None)
 
     if not args.write:
         log.info("preview only - pass --write to import")
@@ -733,7 +745,8 @@ def _run_stages(args, db, run_id, deadline):
     if not args.matches_job:
         # A replay re-reads a scrape already counted when it ran; counting it
         # again would park fixtures on reads that never happened.
-        db.record_attempts([f["match_id"] for _, f in chosen], found)
+        db.record_attempts([f["match_id"] for u, f in chosen if u in returned],
+                           found)
     unpark_round(db, found)
     db.finish_run(run_id, written=written, credits=credits_left(),
                   status="ok" if not problems else "ok-with-problems", **tally)
