@@ -55,6 +55,8 @@ app.config.update(
     SESSION_COOKIE_SECURE=DEPLOYED,
 )
 
+app.config["DEPLOYED_SITE"] = DEPLOYED
+
 if DEPLOYED:
     # Behind a host's proxy, Flask sees plain HTTP and would build http://
     # redirects and refuse to send a Secure cookie. This trusts the one proxy
@@ -98,10 +100,22 @@ def login_required(view):
         if not admin_configured():
             return render_template("admin_setup.html"), 503
         if not session.get("admin"):
-            return redirect(url_for("admin_login", next=request.path))
+            return redirect(url_for("admin_login", next=request.full_path.rstrip("?")))
         return view(*args, **kwargs)
     return wrapper
 
+
+
+def members_only(view):
+    """Everything except the advice record sits behind the admin login on the
+    public server. Locally (DEPLOYED unset) the pages stay open, so the app
+    and the static build work without credentials."""
+    @wraps(view)
+    def wrapper(*args, **kwargs):
+        if not DEPLOYED:
+            return view(*args, **kwargs)
+        return login_required(view)(*args, **kwargs)
+    return wrapper
 
 # -- database ---------------------------------------------------------------
 
@@ -262,6 +276,14 @@ def scope():
 
 
 @app.context_processor
+def _members():
+    # Whether the full menu shows: always locally, only when signed in on the
+    # public server.
+    local = not DEPLOYED and not app.config.get("STATIC_EXPORT")
+    return {"members": local or bool(session.get("admin"))}
+
+
+@app.context_processor
 def _league_globals():
     return {"leagues": LEAGUES, "league": league(),
             "league_name": LEAGUE_NAMES.get(league(), league())}
@@ -269,7 +291,8 @@ def _league_globals():
 
 # -- pages ------------------------------------------------------------------
 
-@app.route("/")
+@app.route("/overview")
+@members_only
 def index():
     lg = league()
     totals = one("""
@@ -344,6 +367,7 @@ def index():
 
 
 @app.route("/teams")
+@members_only
 def teams():
     rows = query("""
         SELECT f.*, t.name, t.abbr, t.short_name
@@ -356,6 +380,7 @@ def teams():
 
 
 @app.route("/team/<team_id>")
+@members_only
 def team(team_id):
     info = one("SELECT * FROM pl_teams WHERE team_id = %s", (team_id,))
     if not info:
@@ -374,6 +399,7 @@ def team(team_id):
 
 
 @app.route("/matches")
+@members_only
 def matches():
     season = request.args.get("season")   # text column, keep it text
     sql = """
@@ -406,6 +432,7 @@ def matches():
 
 
 @app.route("/match/<match_id>")
+@members_only
 def match(match_id):
     sides = query(
         "SELECT * FROM v_team_match WHERE match_id = %s ORDER BY is_home DESC",
@@ -458,6 +485,7 @@ def match(match_id):
 
 
 @app.route("/fixtures")
+@members_only
 def fixtures():
     # The combined view is horizon-limited where the per-league ones are not.
     # Both other leagues store a whole season of fixtures - 281 and 332 against
@@ -924,6 +952,7 @@ def next_scrapes(n=4, now=None):
 
 
 @app.route("/status")
+@members_only
 def status():
     """What the odds scraper has been doing, and whether it worked.
 
@@ -987,6 +1016,7 @@ def status():
 
 
 @app.route("/bets")
+@members_only
 def bets():
     """Every recorded line, what the model said, and how it settled.
 
@@ -1032,6 +1062,7 @@ def bets():
 
 
 @app.route("/model")
+@members_only
 def model():
     """Readiness of the modelling layer - no model is trained yet."""
     import load as loader
@@ -1178,7 +1209,7 @@ def admin_login():
             target = request.args.get("next") or url_for("admin")
             # Only ever redirect within this app: an attacker-supplied ?next=
             # pointing elsewhere would turn the login into an open redirect.
-            if not target.startswith("/"):
+            if not target.startswith("/") or target.startswith("//"):
                 target = url_for("admin")
             _LOGIN_ATTEMPTS.pop(ip, None)
             return redirect(target)
@@ -1189,8 +1220,10 @@ def admin_login():
     return render_template("admin_login.html", error=error)
 
 
+# Registered "/admin/advice" first so url_for() builds "/": the decorator
+# nearest the function is added first, and url_for uses the first rule.
 @app.route("/admin/advice")
-@login_required
+@app.route("/")
 def admin_advice():
     """The advice the site gave, frozen at kickoff, and how it settled.
 
@@ -1250,7 +1283,7 @@ def admin_advice():
 @app.route("/admin/logout")
 def admin_logout():
     session.pop("admin", None)
-    return redirect(url_for("admin_login"))
+    return redirect(url_for("admin_advice"))
 
 
 @app.route("/admin", methods=["GET", "POST"])

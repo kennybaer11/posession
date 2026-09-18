@@ -80,48 +80,13 @@ def render(client, url):
 
 
 def targets():
-    """(url, output path) for every page, discovered from the database."""
-    # The Premier League keeps the bare filenames so existing links still work;
-    # the other leagues get a prefixed copy of each page.
-    pages = []
-    for code, _ in webapp.LEAGUES:
-        pre = "" if code == "PL" else f"{code.lower()}-"
-        q = "" if code == "PL" else f"?league={code}"
-        pages += [
-            (f"/{q}", f"{pre}index.html"),
-            (f"/teams{q}", f"{pre}teams.html"),
-            (f"/matches{q}", f"{pre}matches.html"),
-            (f"/fixtures{q}", f"{pre}fixtures.html"),
-            (f"/model{q}", f"{pre}model.html"),
-            (f"/bets{q}", f"{pre}bets.html"),
-        ]
-    # The Bets page alone spans every league, so it gets one more copy.
-    # to_static() maps ?league=all to the "all-" prefix without being told.
-    pages.append(("/bets?league=all", "all-bets.html"))
-    pages.append(("/model?league=all", "all-model.html"))
-    pages.append(("/fixtures?league=all", "all-fixtures.html"))
-    # Not per-league: the scraper serves every competition at once.
-    pages.append(("/status", "status.html"))
+    """(url, output path) for every page published to GitHub Pages.
 
-    with webapp.app.app_context():
-        for r in webapp.query("SELECT DISTINCT competition, season FROM pl_matches "
-                              "ORDER BY competition, season"):
-            code, season = r["competition"], r["season"]
-            pre = "" if code == "PL" else f"{code.lower()}-"
-            q = f"?season={season}" + ("" if code == "PL" else f"&league={code}")
-            pages.append((f"/matches{q}", f"{pre}matches-{season}.html"))
-        for r in webapp.query("SELECT team_id FROM pl_teams ORDER BY team_id"):
-            pages.append((f"/team/{r['team_id']}", f"team/{r['team_id']}.html"))
-        # Played matches have a detail page. Upcoming ones with a recorded
-        # betting line need one too: the Bets page links every row, and a link
-        # to a page that was never rendered is a 404 on a site where every
-        # page returned 200 when it was built.
-        for r in webapp.query("""
-                SELECT DISTINCT match_id FROM pl_team_match
-                UNION
-                SELECT DISTINCT match_id FROM pl_possession_line"""):
-            pages.append((f"/match/{r['match_id']}", f"match/{r['match_id']}.html"))
-    return pages
+    Only the advice record. Since 18 Sep 2026 everything else is behind the
+    admin login on posession.cz, and a public static copy of those pages would
+    publish exactly what the login hides.
+    """
+    return [("/", "index.html")]
 
 
 def rewrite_links(html, depth):

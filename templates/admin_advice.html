@@ -1,14 +1,16 @@
 {% extends "base.html" %}
-{% block title %}{{ _("Advice record") }} &middot; PL data{% endblock %}
+{% block title %}{{ _("Advice record") }} &middot; posession.cz{% endblock %}
 {% block heading %}{{ _("Advice record") }}{% endblock %}
 
 {% block content %}
 
+{% if user %}
 <p class="muted" style="margin-top:-12px">
   {% trans %}Signed in as <strong>{{ user }}</strong>{% endtrans %} &middot;
   <a href="{{ url_for('admin') }}">{{ _("import odds") }}</a> &middot;
   <a href="{{ url_for('admin_logout') }}">{{ _("sign out") }}</a>
 </p>
+{% endif %}
 
 <div class="note">
   <strong>{{ _("What the site advised, exactly as it stood at kickoff.") }}</strong>

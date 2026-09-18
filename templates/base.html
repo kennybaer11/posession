@@ -3,29 +3,37 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>{% block title %}PL Data{% endblock %}</title>
+<title>{% block title %}posession.cz{% endblock %}</title>
 <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
 <header class="topbar">
-  <a class="brand" href="{{ url_for('index') }}">PL<span>data</span></a>
+  <a class="brand" href="{{ url_for('admin_advice') }}">posession<span>.cz</span></a>
   <nav>
-    <a href="{{ url_for('index', league=league) }}"    class="{{ 'on' if request.endpoint == 'index' }}">{{ _("Overview") }}</a>
-    <a href="{{ url_for('teams', league=league) }}"    class="{{ 'on' if request.endpoint in ('teams','team') }}">{{ _("Teams") }}</a>
-    <a href="{{ url_for('matches', league=league) }}"  class="{{ 'on' if request.endpoint in ('matches','match') }}">{{ _("Matches") }}</a>
-    <a href="{{ url_for('fixtures', league='all') }}"  class="{{ 'on' if request.endpoint == 'fixtures' }}">{{ _("Fixtures") }}</a>
-    {# These three serve every league at once, so the menu lands on that view
-       rather than silently picking the Premier League. The others carry the
-       league you were looking at, because they have no combined view to go
-       to - see _leaguetabs.html. #}
-    <a href="{{ url_for('model', league='all') }}"     class="{{ 'on' if request.endpoint == 'model' }}">{{ _("Model") }}</a>
-    <a href="{{ url_for('bets', league='all') }}"      class="{{ 'on' if request.endpoint == 'bets' }}">{{ _("Learning") }}</a>
-    <a href="{{ url_for('status') }}"                  class="{{ 'on' if request.endpoint == 'status' }}">{{ _("Scraper") }}</a>
+    {# Visitors see the advice record only; everything else is behind the
+       admin login on the public server (members_only in app.py). #}
+    <a href="{{ url_for('admin_advice') }}" class="{{ 'on' if request.endpoint == 'admin_advice' }}">{{ _("Advice record") }}</a>
+    {% if members %}
+      <a href="{{ url_for('index', league=league) }}"    class="{{ 'on' if request.endpoint == 'index' }}">{{ _("Overview") }}</a>
+      <a href="{{ url_for('teams', league=league) }}"    class="{{ 'on' if request.endpoint in ('teams','team') }}">{{ _("Teams") }}</a>
+      <a href="{{ url_for('matches', league=league) }}"  class="{{ 'on' if request.endpoint in ('matches','match') }}">{{ _("Matches") }}</a>
+      <a href="{{ url_for('fixtures', league='all') }}"  class="{{ 'on' if request.endpoint == 'fixtures' }}">{{ _("Fixtures") }}</a>
+      {# These three serve every league at once, so the menu lands on that view
+         rather than silently picking the Premier League. The others carry the
+         league you were looking at, because they have no combined view to go
+         to - see _leaguetabs.html. #}
+      <a href="{{ url_for('model', league='all') }}"     class="{{ 'on' if request.endpoint == 'model' }}">{{ _("Model") }}</a>
+      <a href="{{ url_for('bets', league='all') }}"      class="{{ 'on' if request.endpoint == 'bets' }}">{{ _("Learning") }}</a>
+      <a href="{{ url_for('status') }}"                  class="{{ 'on' if request.endpoint == 'status' }}">{{ _("Scraper") }}</a>
+      <a href="{{ url_for('admin') }}"                   class="{{ 'on' if request.endpoint == 'admin' }}">{{ _("Admin") }}</a>
+    {% endif %}
   </nav>
   {% if not config.STATIC_EXPORT %}
   {# The static GitHub Pages copy has no server to set the cookie, so it
      shows one language and no switch. #}
   <div class="langswitch">
+    {% if session.get('admin') %}<a href="{{ url_for('admin_logout') }}">{{ _("sign out") }}</a><span class="sep">&middot;</span>
+    {% elif config.DEPLOYED_SITE %}<a href="{{ url_for('admin_login') }}">{{ _("Sign in") }}</a><span class="sep">&middot;</span>{% endif %}
     {% for code in langs %}
       {% if code == lang %}<span class="on">{{ code|upper }}</span>
       {% else %}<a href="{{ url_for('set_lang', code=code, next=request.full_path.rstrip('?')) }}" hreflang="{{ code }}">{{ code|upper }}</a>{% endif %}
