@@ -26,7 +26,11 @@ from werkzeug.security import check_password_hash
 
 load_dotenv()
 
+import i18n
+from i18n import _
+
 app = Flask(__name__)
+i18n.install(app)
 
 # Sessions need a stable secret. A random one per process would log the admin
 # out on every restart, so this is read from the environment and only falls
@@ -148,7 +152,7 @@ def _pct(value):
 
 @app.template_filter("dt")
 def _dt(value, fmt="%d %b %Y"):
-    return "-" if value is None else value.strftime(fmt)
+    return "-" if value is None else i18n.strftime(value, fmt)
 
 
 @app.template_filter("signed")

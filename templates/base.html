@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en">
+<html lang="{{ lang }}">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -10,18 +10,29 @@
 <header class="topbar">
   <a class="brand" href="{{ url_for('index') }}">PL<span>data</span></a>
   <nav>
-    <a href="{{ url_for('index', league=league) }}"    class="{{ 'on' if request.endpoint == 'index' }}">Overview</a>
-    <a href="{{ url_for('teams', league=league) }}"    class="{{ 'on' if request.endpoint in ('teams','team') }}">Teams</a>
-    <a href="{{ url_for('matches', league=league) }}"  class="{{ 'on' if request.endpoint in ('matches','match') }}">Matches</a>
-    <a href="{{ url_for('fixtures', league='all') }}"  class="{{ 'on' if request.endpoint == 'fixtures' }}">Fixtures</a>
+    <a href="{{ url_for('index', league=league) }}"    class="{{ 'on' if request.endpoint == 'index' }}">{{ _("Overview") }}</a>
+    <a href="{{ url_for('teams', league=league) }}"    class="{{ 'on' if request.endpoint in ('teams','team') }}">{{ _("Teams") }}</a>
+    <a href="{{ url_for('matches', league=league) }}"  class="{{ 'on' if request.endpoint in ('matches','match') }}">{{ _("Matches") }}</a>
+    <a href="{{ url_for('fixtures', league='all') }}"  class="{{ 'on' if request.endpoint == 'fixtures' }}">{{ _("Fixtures") }}</a>
     {# These three serve every league at once, so the menu lands on that view
        rather than silently picking the Premier League. The others carry the
        league you were looking at, because they have no combined view to go
        to - see _leaguetabs.html. #}
-    <a href="{{ url_for('model', league='all') }}"     class="{{ 'on' if request.endpoint == 'model' }}">Model</a>
-    <a href="{{ url_for('bets', league='all') }}"      class="{{ 'on' if request.endpoint == 'bets' }}">Learning</a>
-    <a href="{{ url_for('status') }}"                  class="{{ 'on' if request.endpoint == 'status' }}">Scraper</a>
+    <a href="{{ url_for('model', league='all') }}"     class="{{ 'on' if request.endpoint == 'model' }}">{{ _("Model") }}</a>
+    <a href="{{ url_for('bets', league='all') }}"      class="{{ 'on' if request.endpoint == 'bets' }}">{{ _("Learning") }}</a>
+    <a href="{{ url_for('status') }}"                  class="{{ 'on' if request.endpoint == 'status' }}">{{ _("Scraper") }}</a>
   </nav>
+  {% if not config.STATIC_EXPORT %}
+  {# The static GitHub Pages copy has no server to set the cookie, so it
+     shows one language and no switch. #}
+  <div class="langswitch">
+    {% for code in langs %}
+      {% if code == lang %}<span class="on">{{ code|upper }}</span>
+      {% else %}<a href="{{ url_for('set_lang', code=code, next=request.full_path.rstrip('?')) }}" hreflang="{{ code }}">{{ code|upper }}</a>{% endif %}
+      {% if not loop.last %}<span class="sep">|</span>{% endif %}
+    {% endfor %}
+  </div>
+  {% endif %}
 </header>
 
 <main>
@@ -29,7 +40,7 @@
   {% block content %}{% endblock %}
 </main>
 
-<footer>Read-only view of the Neon database &middot; rendered {{ now.strftime('%d %b %Y %H:%M') }} UTC</footer>
+<footer>{{ _("Read-only view of the Neon database") }} &middot; {{ _("rendered") }} {{ now|dt('%d %b %Y %H:%M') }} UTC</footer>
 
 <script>
 // Click a th[data-sort] to sort its table. Numeric when every cell parses as a

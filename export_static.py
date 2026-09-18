@@ -176,6 +176,7 @@ def main(outdir="site"):
     share_one_connection()
     # A build should say why a page broke, not swallow it into a 500.
     webapp.app.config["PROPAGATE_EXCEPTIONS"] = True
+    webapp.app.config["STATIC_EXPORT"] = True   # no language switch - see base.html
     client = webapp.app.test_client()
     pages = targets()
     written = failed = 0

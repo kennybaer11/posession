@@ -62,6 +62,14 @@ body {
 .topbar nav a:hover { color: var(--ink); }
 .topbar nav a.on { color: var(--accent); border-bottom-color: var(--accent); }
 
+/* CZ | EN, pushed to the right end of the header bar. */
+.langswitch { margin-left: auto; display: flex; align-items: center; gap: 6px;
+  font-size: 13px; font-weight: 600; white-space: nowrap; }
+.langswitch a { color: var(--muted); text-decoration: none; padding: 4px 2px; }
+.langswitch a:hover { color: var(--ink); }
+.langswitch .on { color: var(--accent); }
+.langswitch .sep { color: var(--line); }
+
 .leagues { margin-left: auto; display: flex; gap: 5px; padding: 9px 0; }
 
 /* The same pills, in the page rather than the header bar. Moved here so the
