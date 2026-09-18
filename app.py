@@ -236,9 +236,22 @@ def _season(value):
     return f"{start}/{(start + 1) % 100:02d}"
 
 
+def _code_version():
+    """Short commit id of the running code, read once at startup - shown in
+    the footer so anyone can see whether a push has gone live yet."""
+    try:
+        from advice import code_version
+        return (code_version() or "")[:7]
+    except Exception:
+        return ""
+
+
+CODE_VERSION = _code_version()
+
+
 @app.context_processor
 def _globals():
-    return {"now": datetime.now(timezone.utc)}
+    return {"now": datetime.now(timezone.utc), "code_version": CODE_VERSION}
 
 
 

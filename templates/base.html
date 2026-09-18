@@ -48,7 +48,7 @@
   {% block content %}{% endblock %}
 </main>
 
-<footer>{{ _("Read-only view of the Neon database") }} &middot; {{ _("rendered") }} {{ now|dt('%d %b %Y %H:%M') }} UTC</footer>
+<footer>{{ _("Read-only view of the Neon database") }} &middot; {{ _("rendered") }} {{ now|dt('%d %b %Y %H:%M') }} UTC{% if code_version %} &middot; {{ _("version") }} {{ code_version }}{% endif %}</footer>
 
 <script>
 // Click a th[data-sort] to sort its table. Numeric when every cell parses as a
