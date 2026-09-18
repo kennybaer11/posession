@@ -44,24 +44,35 @@ def current_lang():
     return g.lang
 
 
-def _(message, **params):
-    text = message
+def translate(message):
+    """The Czech for message when Czech is on, unformatted."""
     if current_lang() == "cs":
-        text = CS.get(" ".join(message.split()), message)
+        found = CS.get(" ".join(message.split()))
+        if isinstance(found, str):
+            return found
+    return message
+
+
+def translate_plural(singular, plural, n):
+    if current_lang() == "cs":
+        forms = CS.get(" ".join(singular.split()))
+        if isinstance(forms, tuple):
+            # Czech: 1 / 2-4 / 5+ (and 0)
+            return forms[0] if n == 1 else forms[1] if 2 <= n <= 4 else forms[2]
+        if isinstance(forms, str):
+            return forms
+    return singular if n == 1 else plural
+
+
+def _(message, **params):
+    """For Python code. %(name)s placeholders are filled from params."""
+    text = translate(message)
     return text % params if params else text
 
 
 def ngettext(singular, plural, n, **params):
     params.setdefault("num", n)
-    if current_lang() == "cs":
-        forms = CS.get(" ".join(singular.split()))
-        if isinstance(forms, tuple):
-            # Czech: 1 / 2-4 / 5+ (and 0)
-            text = forms[0] if n == 1 else forms[1] if 2 <= n <= 4 else forms[2]
-            return text % params
-        if isinstance(forms, str):
-            return forms % params
-    return (singular if n == 1 else plural) % params
+    return translate_plural(singular, plural, n) % params
 
 
 # -- dates ------------------------------------------------------------------
@@ -93,9 +104,12 @@ def install(app):
 
     app.jinja_env.add_extension("jinja2.ext.i18n")
     app.jinja_env.policies["ext.i18n.trimmed"] = True
+    # Unformatted: with newstyle gettext, Jinja itself applies "% variables"
+    # to what these return - always, even with no variables, which is why a
+    # literal % in template text must be written %%.
     app.jinja_env.install_gettext_callables(
-        lambda s, **kw: _(s, **kw),
-        lambda s, p, n, **kw: ngettext(s, p, n, **kw),
+        lambda s, **kw: translate(s),
+        lambda s, p, n, **kw: translate_plural(s, p, n),
         newstyle=True)
 
     @app.context_processor
