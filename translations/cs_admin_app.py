@@ -234,4 +234,7 @@ CS = {
     "%(w)s/%(n)s at %(rate)s against %(be)s breakeven, but only %(z)s standard errors clear":
         "%(w)s/%(n)s, úspěšnost %(rate)s proti potřebným %(be)s, ale jen o %(z)s "
         "směrodatné chyby výš",
+    "ROI, 1 unit each": "ROI, 1 jednotka na sázku",
+    "ROI at the advised stake": "ROI při doporučeném vkladu",
+    "staked %(s)s": "vsazeno %(s)s",
 }

@@ -28,11 +28,22 @@
   <div class="tile"><div class="v num">{{ totals.won }}{% if totals.bets %} <span class="muted" style="font-size:14px">({{ '%.0f%%'|format(100 * totals.won / totals.bets) }})</span>{% endif %}</div><div class="k">{{ _("Won") }}</div></div>
   <div class="tile">
     <div class="v num {{ 'good' if totals.pnl > 0 else ('bad' if totals.pnl < 0 else '') }}">{{ '%+.2f'|format(totals.pnl) }}</div>
-    <div class="k">{{ _("P/L, 1 unit each") }}{% if totals.roi is not none %} &middot; ROI {{ '%+.1f%%'|format(100 * totals.roi) }}{% endif %}</div>
+    <div class="k">{{ _("P/L, 1 unit each") }}</div>
   </div>
   <div class="tile">
     <div class="v num {{ 'good' if totals.pnl_r > 0 else ('bad' if totals.pnl_r < 0 else '') }}">{{ '%+.2f'|format(totals.pnl_r) }}</div>
-    <div class="k">{{ _("P/L at the advised stake") }}{% if totals.roi_r is not none %} &middot; ROI {{ '%+.1f%%'|format(100 * totals.roi_r) }}{% endif %}</div>
+    <div class="k">{{ _("P/L at the advised stake") }}</div>
+  </div>
+  {# Return on investment in its own tiles: profit divided by what was staked.
+     The flat one treats every advised bet as 1 unit; the advised one weights
+     each by its stake rating, as following the advice to the letter would. #}
+  <div class="tile">
+    <div class="v num {{ 'good' if (totals.roi or 0) > 0 else ('bad' if (totals.roi or 0) < 0 else '') }}">{{ '%+.1f%%'|format(100 * totals.roi) if totals.roi is not none else '-' }}</div>
+    <div class="k">{{ _("ROI, 1 unit each") }} &middot; {{ _("staked %(s)s", s='%.0f'|format(totals.bets)) }}</div>
+  </div>
+  <div class="tile">
+    <div class="v num {{ 'good' if (totals.roi_r or 0) > 0 else ('bad' if (totals.roi_r or 0) < 0 else '') }}">{{ '%+.1f%%'|format(100 * totals.roi_r) if totals.roi_r is not none else '-' }}</div>
+    <div class="k">{{ _("ROI at the advised stake") }} &middot; {{ _("staked %(s)s", s='%.1f'|format(totals.staked_r)) }}</div>
   </div>
 </div>
 
