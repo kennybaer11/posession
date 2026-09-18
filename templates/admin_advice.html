@@ -34,16 +34,13 @@
     <div class="v num {{ 'good' if totals.pnl_r > 0 else ('bad' if totals.pnl_r < 0 else '') }}">{{ '%+.2f'|format(totals.pnl_r) }}</div>
     <div class="k">{{ _("P/L at the advised stake") }}</div>
   </div>
-  {# Return on investment in its own tiles: profit divided by what was staked.
-     The flat one treats every advised bet as 1 unit; the advised one weights
-     each by its stake rating, as following the advice to the letter would. #}
+  {# Return on investment: profit divided by what was staked. The big figure
+     treats every advised bet as 1 unit; the one under it weights each by its
+     stake rating, as following the advice to the letter would. #}
   <div class="tile">
     <div class="v num {{ 'good' if (totals.roi or 0) > 0 else ('bad' if (totals.roi or 0) < 0 else '') }}">{{ '%+.1f%%'|format(100 * totals.roi) if totals.roi is not none else '-' }}</div>
-    <div class="k">{{ _("ROI, 1 unit each") }} &middot; {{ _("staked %(s)s", s='%.0f'|format(totals.bets)) }}</div>
-  </div>
-  <div class="tile">
-    <div class="v num {{ 'good' if (totals.roi_r or 0) > 0 else ('bad' if (totals.roi_r or 0) < 0 else '') }}">{{ '%+.1f%%'|format(100 * totals.roi_r) if totals.roi_r is not none else '-' }}</div>
-    <div class="k">{{ _("ROI at the advised stake") }} &middot; {{ _("staked %(s)s", s='%.1f'|format(totals.staked_r)) }}</div>
+    <div class="k">{{ _("ROI, 1 unit each") }}<br>
+      {{ _("at the advised stake") }}: <span class="num {{ 'good' if (totals.roi_r or 0) > 0 else ('bad' if (totals.roi_r or 0) < 0 else '') }}">{{ '%+.1f%%'|format(100 * totals.roi_r) if totals.roi_r is not none else '-' }}</span></div>
   </div>
 </div>
 
