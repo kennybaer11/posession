@@ -49,7 +49,20 @@ def training_config():
     }
 
 
+_engine = None
+
+
 def engine():
+    """One engine per process. SQLAlchemy keeps its connections pooled, so a
+    new engine per call threw that away and paid Neon's ~2 s connection setup
+    on every read - twice per Model page view."""
+    global _engine
+    if _engine is None:
+        _engine = _make_engine()
+    return _engine
+
+
+def _make_engine():
     url = os.getenv("DATABASE_URL")
     if not url:
         raise RuntimeError("DATABASE_URL is not set - see .env.example")
@@ -58,7 +71,9 @@ def engine():
         url = url.replace("postgresql://", "postgresql+psycopg://", 1)
     elif url.startswith("postgres://"):          # some hosts still emit this
         url = url.replace("postgres://", "postgresql+psycopg://", 1)
-    return create_engine(url)
+    # pre_ping replaces a connection Neon closed while idle; recycle keeps
+    # none alive long enough to meet that in the first place.
+    return create_engine(url, pool_pre_ping=True, pool_recycle=240)
 
 
 def decay_weights(kickoffs, half_life_days=30, reference=None):

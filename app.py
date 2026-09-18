@@ -11,6 +11,7 @@ import os
 import re
 import secrets
 import tempfile
+import threading
 import time
 from datetime import datetime, timezone
 from pathlib import Path
@@ -104,13 +105,36 @@ def login_required(view):
 
 # -- database ---------------------------------------------------------------
 
-def db():
-    """One connection per request; Neon's pooled endpoint absorbs the churn."""
-    if "conn" not in g:
+_pool = None
+
+
+def _get_pool():
+    """Connections kept open and reused, one pool per worker process.
+
+    Opening a connection to Neon (Ohio) from the Prague server costs about a
+    second of TLS and auth round trips - it was the floor under every page
+    when each request opened its own. check_connection tests a connection
+    before lending it, so one Neon closed while idle is replaced, not handed
+    out broken.
+    """
+    global _pool
+    if _pool is None:
+        from psycopg_pool import ConnectionPool
         dsn = os.getenv("DATABASE_URL")
         if not dsn:
             raise RuntimeError("DATABASE_URL is not set - see .env.example")
-        g.conn = psycopg.connect(dsn, row_factory=dict_row)
+        _pool = ConnectionPool(dsn, min_size=1, max_size=6, max_idle=240,
+                               kwargs={"row_factory": dict_row},
+                               check=ConnectionPool.check_connection, open=True)
+        import atexit
+        atexit.register(_pool.close)
+    return _pool
+
+
+def db():
+    """The request's connection, borrowed from the pool."""
+    if "conn" not in g:
+        g.conn = _get_pool().getconn()
     return g.conn
 
 
@@ -118,7 +142,11 @@ def db():
 def _close(_exc):
     conn = g.pop("conn", None)
     if conn is not None:
-        conn.close()
+        # putconn rolls back anything left open, so a read's transaction never
+        # leaks into the next request.
+        if conn.info.transaction_status != psycopg.pq.TransactionStatus.IDLE:
+            conn.rollback()
+        _get_pool().putconn(conn)
 
 
 def query(sql, params=None):
@@ -542,18 +570,68 @@ def league_status():
 # ten minutes is well inside that.
 _FRAME_TTL_SECONDS = 600
 _frames = {}
+_frames_lock = threading.Lock()
+_refreshing = set()
+
+
+def _cached(key, load):
+    """load() once, then reuse; after the TTL, serve the old value and reload
+    in the background.
+
+    Stale-while-revalidate, so an expired entry never makes a visitor wait:
+    only the very first load in a worker does, and warm_caches() does that at
+    startup. A failed background reload keeps the old value and tries again on
+    the next request.
+    """
+    hit = _frames.get(key)
+    if hit is None:
+        value = load()
+        _frames[key] = (time.monotonic(), value)
+        return value
+    if time.monotonic() - hit[0] >= _FRAME_TTL_SECONDS:
+        with _frames_lock:
+            start = key not in _refreshing
+            _refreshing.add(key)
+        if start:
+            def refresh():
+                try:
+                    _frames[key] = (time.monotonic(), load())
+                except Exception:
+                    app.logger.exception("background reload of %s failed", key)
+                finally:
+                    with _frames_lock:
+                        _refreshing.discard(key)
+            threading.Thread(target=refresh, daemon=True).start()
+    return hit[1]
 
 
 def _league_frames(competition):
     import load as loader
-    hit = _frames.get(competition)
-    if hit and time.monotonic() - hit[0] < _FRAME_TTL_SECONDS:
-        return hit[1], hit[2]
-    train = loader.training_set(season="all", competition=competition,
-                                min_history=FIT_MIN_HISTORY)
-    upcoming = loader.fixtures(competition=competition)
-    _frames[competition] = (time.monotonic(), train, upcoming)
-    return train, upcoming
+    return _cached(("frames", competition), lambda: (
+        loader.training_set(season="all", competition=competition,
+                            min_history=FIT_MIN_HISTORY),
+        loader.fixtures(competition=competition)))
+
+
+def _model_frames(competition):
+    """The Model page's own view: the configured season and history rule."""
+    import load as loader
+    return _cached(("model", competition), lambda: (
+        loader.training_set(competition=competition),
+        loader.fixtures(competition=competition)))
+
+
+def warm_caches():
+    """Load every league's frames in the background when a worker starts, so
+    the first visitor after a deploy or restart does not pay for it."""
+    def run():
+        for code, _ in LEAGUES:
+            for fn in (_league_frames, _model_frames):
+                try:
+                    fn(code)
+                except Exception:
+                    app.logger.exception("cache warm-up for %s failed", code)
+    threading.Thread(target=run, daemon=True).start()
 
 
 def _fitted_predictor(competition, settled_ids=()):
@@ -979,8 +1057,7 @@ def model():
             sparse=None, groups={}, speculative=False, preview=[])
 
     lg = league()
-    train = loader.training_set(competition=lg)
-    upcoming = loader.fixtures(competition=lg)
+    train, upcoming = _model_frames(lg)
     feats = loader.feature_columns(train, upcoming)
 
     # A league early in its season has no training rows at all: min_history
@@ -1313,3 +1390,10 @@ def db_handle():
     handle.conn = db()
     handle.dsn = os.getenv("DATABASE_URL")
     return handle
+
+
+# On the server (DEPLOYED is set only in the web service's unit, not for the
+# cron jobs that also import this module) load every league's data as soon as
+# a worker starts.
+if DEPLOYED:
+    warm_caches()
