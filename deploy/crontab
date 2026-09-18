@@ -1,0 +1,4 @@
+# Installed for user `app` with: crontab deploy/crontab
+# Server clock is Europe/Prague. flock -n: skip if the previous run still holds it.
+17 * * * * flock -n /home/app/locks/data.lock /home/app/scraper/deploy/run_data.sh >> /home/app/logs/data.log 2>&1
+20 * * * * flock -n /home/app/locks/odds.lock /home/app/scraper/deploy/run_odds.sh >> /home/app/logs/odds.log 2>&1

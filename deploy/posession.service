@@ -1,0 +1,17 @@
+# /etc/systemd/system/posession.service - the Flask app behind nginx.
+[Unit]
+Description=posession web app (gunicorn)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=app
+Group=app
+WorkingDirectory=/home/app/scraper
+Environment=DEPLOYED=1
+ExecStart=/home/app/scraper/.venv/bin/gunicorn app:app --workers 2 --threads 4 --timeout 120 --bind 127.0.0.1:8000
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
