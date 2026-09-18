@@ -1,72 +1,73 @@
 {% extends "base.html" %}
-{% block title %}Advice record &middot; PL data{% endblock %}
-{% block heading %}Advice record{% endblock %}
+{% block title %}{{ _("Advice record") }} &middot; PL data{% endblock %}
+{% block heading %}{{ _("Advice record") }}{% endblock %}
 
 {% block content %}
 
 <p class="muted" style="margin-top:-12px">
-  Signed in as <strong>{{ user }}</strong> &middot;
-  <a href="{{ url_for('admin') }}">import odds</a> &middot;
-  <a href="{{ url_for('admin_logout') }}">sign out</a>
+  {% trans %}Signed in as <strong>{{ user }}</strong>{% endtrans %} &middot;
+  <a href="{{ url_for('admin') }}">{{ _("import odds") }}</a> &middot;
+  <a href="{{ url_for('admin_logout') }}">{{ _("sign out") }}</a>
 </p>
 
 <div class="note">
-  <strong>What the site advised, exactly as it stood at kickoff.</strong> Each line's advice
+  <strong>{{ _("What the site advised, exactly as it stood at kickoff.") }}</strong>
+  {% trans %}Each line's advice
   is saved on every run while its match is still to be played, and locked the moment the
   match kicks off &mdash; the database refuses any later change. Nothing on this page is
   recalculated: a new model, a new &sigma; or a code fix changes the Learning page and never
-  this one. Only the actual possession is looked up, because that is a fact about the match.
+  this one. Only the actual possession is looked up, because that is a fact about the match.{% endtrans %}
   <br><br>
-  The record starts on 14 Sep 2026. Bets settled before then have no saved advice, and
+  {% trans %}The record starts on 14 Sep 2026. Bets settled before then have no saved advice, and
   rebuilding it would be exactly the recalculation this page exists to avoid, so they are
-  not here.
+  not here.{% endtrans %}
 </div>
 
 <div class="tiles" style="margin-bottom:22px">
-  <div class="tile"><div class="v num">{{ totals.bets }}</div><div class="k">Bets advised, settled</div></div>
-  <div class="tile"><div class="v num">{{ totals.won }}{% if totals.bets %} <span class="muted" style="font-size:14px">({{ '%.0f%%'|format(100 * totals.won / totals.bets) }})</span>{% endif %}</div><div class="k">Won</div></div>
+  <div class="tile"><div class="v num">{{ totals.bets }}</div><div class="k">{{ _("Bets advised, settled") }}</div></div>
+  <div class="tile"><div class="v num">{{ totals.won }}{% if totals.bets %} <span class="muted" style="font-size:14px">({{ '%.0f%%'|format(100 * totals.won / totals.bets) }})</span>{% endif %}</div><div class="k">{{ _("Won") }}</div></div>
   <div class="tile">
     <div class="v num {{ 'good' if totals.pnl > 0 else ('bad' if totals.pnl < 0 else '') }}">{{ '%+.2f'|format(totals.pnl) }}</div>
-    <div class="k">P/L, 1 unit each{% if totals.roi is not none %} &middot; ROI {{ '%+.1f%%'|format(100 * totals.roi) }}{% endif %}</div>
+    <div class="k">{{ _("P/L, 1 unit each") }}{% if totals.roi is not none %} &middot; ROI {{ '%+.1f%%'|format(100 * totals.roi) }}{% endif %}</div>
   </div>
   <div class="tile">
     <div class="v num {{ 'good' if totals.pnl_r > 0 else ('bad' if totals.pnl_r < 0 else '') }}">{{ '%+.2f'|format(totals.pnl_r) }}</div>
-    <div class="k">P/L at the advised stake{% if totals.roi_r is not none %} &middot; ROI {{ '%+.1f%%'|format(100 * totals.roi_r) }}{% endif %}</div>
+    <div class="k">{{ _("P/L at the advised stake") }}{% if totals.roi_r is not none %} &middot; ROI {{ '%+.1f%%'|format(100 * totals.roi_r) }}{% endif %}</div>
   </div>
 </div>
 
 {% if totals.bets %}
 <div class="note" style="border-left-color: {{ 'var(--good)' if verdict.ready else 'var(--warn)' }}">
-  <strong>{{ 'Beating the market by more than luck explains.' if verdict.ready else 'Not yet distinguishable from luck.' }}</strong>
-  {{ verdict.wins }} of {{ verdict.n }} won against a breakeven of
-  {{ '%.0f%%'|format(verdict.breakeven * 100) }}, {{ '%.1f'|format(verdict.z) }} standard errors
+  <strong>{{ _('Beating the market by more than luck explains.') if verdict.ready else _('Not yet distinguishable from luck.') }}</strong>
+  {% trans wins=verdict.wins, n=verdict.n, be='%.0f%%'|format(verdict.breakeven * 100), z='%.1f'|format(verdict.z) %}{{ wins }} of {{ n }} won against a breakeven of
+  {{ be }}, {{ z }} standard errors
   from it. Two is the usual bar, and at these prices it takes roughly 100&ndash;200 settled
-  bets to reach honestly.
+  bets to reach honestly.{% endtrans %}
 </div>
 {% endif %}
 
 <div class="panel">
-  <h2>Settled <span class="sub">&mdash; advice frozen at kickoff</span></h2>
+  <h2>{{ _("Settled") }} <span class="sub">&mdash; {{ _("advice frozen at kickoff") }}</span></h2>
   {% if settled %}
   <div class="tablewrap">
     <table class="sortable">
       <thead>
         <tr>
-          <th class="l">Kickoff</th><th class="l">League</th><th class="l">Match</th>
-          <th class="l">Line is about</th><th>Line</th><th>Advised</th><th>Odds</th>
-          <th>Model</th><th>Edge</th><th>Stake</th><th>Actual</th><th>Result</th>
-          <th class="l" title="Last time the advice was saved before kickoff">Advice as of</th>
+          <th class="l">{{ _("Kickoff") }}</th><th class="l">{{ _("League") }}</th><th class="l">{{ _("Match") }}</th>
+          <th class="l">{{ _("Line is about") }}</th><th>{{ _("Line") }}</th><th>{{ _("Advised") }}</th><th>{{ _("Odds") }}</th>
+          <th>{{ _("Model") }}</th><th>{{ _("Edge") }}</th><th>{{ _("Stake") }}</th><th>{{ _("Actual") }}</th><th>{{ _("Result") }}</th>
+          <th class="l" title="{{ _('Last time the advice was saved before kickoff') }}">{{ _("Advice as of") }}</th>
         </tr>
       </thead>
       <tbody>
         {% for r in settled %}
         <tr>
-          <td class="l muted" data-v="{{ r.kickoff.timestamp() }}">{{ r.kickoff.strftime('%d %b %H:%M') }}</td>
+          <td class="l muted" data-v="{{ r.kickoff.timestamp() }}">{{ r.kickoff|dt('%d %b %H:%M') }}</td>
           <td class="l muted">{{ league_names.get(r.competition, r.competition) }}</td>
           <td class="l">{{ r.home_abbr }} v {{ r.away_abbr }}</td>
           <td class="l">{{ r.team }}</td>
           <td class="num">{{ '%.1f'|format(r.line) }}</td>
-          <td>{% if r.backed %}<span class="chip ok">{{ r.side }}</span>{% else %}<span class="chip">no bet</span>{% endif %}</td>
+          <td>{% if r.backed %}<span class="chip ok">{{ _(r.side) }}</span>{% else %}<span class="chip">{{ _("no bet") }}</span>{% endif %}</td>
           <td class="num">{{ '%.2f'|format(r.odds) if r.odds else '-' }}</td>
           <td class="num muted">{{ '%.1f'|format(r.pred) if r.pred is not none else '-' }}{% if r.fallback %}<sup class="warn">*</sup>{% endif %}</td>
           <td class="num {{ 'good' if r.backed else 'muted' }}">{{ '%+.1f%%'|format(r.edge * 100) if r.edge is not none else '-' }}</td>
@@ -74,60 +75,62 @@
           <td class="num">{{ '%.1f'|format(r.actual) }}</td>
           <td>
             {% if not r.backed %}<span class="muted">&ndash;</span>
-            {% elif r.hit %}<span class="chip ok">won</span>
-            {% else %}<span class="chip no">lost</span>{% endif %}
+            {% elif r.hit %}<span class="chip ok">{{ _("won") }}</span>
+            {% else %}<span class="chip no">{{ _("lost") }}</span>{% endif %}
           </td>
-          <td class="l muted" style="font-size:12px">{{ r.advised_at.strftime('%d %b %H:%M') }}</td>
+          <td class="l muted" style="font-size:12px">{{ r.advised_at|dt('%d %b %H:%M') }}</td>
         </tr>
         {% endfor %}
       </tbody>
     </table>
   </div>
   <p class="muted" style="font-size:12.5px;margin-bottom:0">
-    {{ totals.no_bet }} settled line{{ '' if totals.no_bet == 1 else 's' }} carried no advised bet
-    and do not count towards the totals. <sup class="warn">*</sup> marks advice that came from the
-    naive midpoint because the league could not fit a model at the time.
+    {% trans count=totals.no_bet %}{{ count }} settled line carried no advised bet
+    and does not count towards the totals.{% pluralize %}{{ count }} settled lines carried no advised bet
+    and do not count towards the totals.{% endtrans %}
+    {% trans %}<sup class="warn">*</sup> marks advice that came from the
+    naive midpoint because the league could not fit a model at the time.{% endtrans %}
   </p>
   {% else %}
-  <div class="empty">No advised line has settled yet. The first ones settle after the
-    next matches with a recorded line kick off.</div>
+  <div class="empty">{% trans %}No advised line has settled yet. The first ones settle after the
+    next matches with a recorded line kick off.{% endtrans %}</div>
   {% endif %}
 </div>
 
 <div class="panel">
-  <h2>Upcoming <span class="sub">&mdash; still updating until kickoff</span></h2>
+  <h2>{{ _("Upcoming") }} <span class="sub">&mdash; {{ _("still updating until kickoff") }}</span></h2>
   {% if pending %}
   <div class="tablewrap">
     <table>
       <thead>
-        <tr><th class="l">Kickoff</th><th class="l">League</th><th class="l">Match</th>
-            <th class="l">Line is about</th><th>Line</th><th>Advised</th><th>Odds</th>
-            <th>Edge</th><th>Stake</th><th class="l">As of</th></tr>
+        <tr><th class="l">{{ _("Kickoff") }}</th><th class="l">{{ _("League") }}</th><th class="l">{{ _("Match") }}</th>
+            <th class="l">{{ _("Line is about") }}</th><th>{{ _("Line") }}</th><th>{{ _("Advised") }}</th><th>{{ _("Odds") }}</th>
+            <th>{{ _("Edge") }}</th><th>{{ _("Stake") }}</th><th class="l">{{ _("As of") }}</th></tr>
       </thead>
       <tbody>
         {% for r in pending %}
         <tr>
-          <td class="l muted">{{ r.kickoff.strftime('%d %b %H:%M') }}</td>
+          <td class="l muted">{{ r.kickoff|dt('%d %b %H:%M') }}</td>
           <td class="l muted">{{ league_names.get(r.competition, r.competition) }}</td>
           <td class="l">{{ r.home_abbr }} v {{ r.away_abbr }}</td>
           <td class="l">{{ r.team }}</td>
           <td class="num">{{ '%.1f'|format(r.line) }}</td>
-          <td>{% if r.backed %}<span class="chip ok">{{ r.side }}</span>{% else %}<span class="chip">no bet</span>{% endif %}</td>
+          <td>{% if r.backed %}<span class="chip ok">{{ _(r.side) }}</span>{% else %}<span class="chip">{{ _("no bet") }}</span>{% endif %}</td>
           <td class="num">{{ '%.2f'|format(r.odds) if r.odds else '-' }}</td>
           <td class="num">{{ '%+.1f%%'|format(r.edge * 100) if r.edge is not none else '-' }}</td>
           <td class="num">{{ r.rating }}/10</td>
-          <td class="l muted" style="font-size:12px">{{ r.advised_at.strftime('%d %b %H:%M') }}</td>
+          <td class="l muted" style="font-size:12px">{{ r.advised_at|dt('%d %b %H:%M') }}</td>
         </tr>
         {% endfor %}
       </tbody>
     </table>
   </div>
   <p class="muted" style="font-size:12.5px;margin-bottom:0">
-    Runs happen every few hours, so what gets locked is whatever the last run before kickoff
-    saved &mdash; the same advice the site was showing at that moment.
+    {% trans %}Runs happen every few hours, so what gets locked is whatever the last run before kickoff
+    saved &mdash; the same advice the site was showing at that moment.{% endtrans %}
   </p>
   {% else %}
-  <div class="empty">No upcoming line has advice recorded yet.</div>
+  <div class="empty">{{ _("No upcoming line has advice recorded yet.") }}</div>
   {% endif %}
 </div>
 

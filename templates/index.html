@@ -1,43 +1,43 @@
 {% extends "base.html" %}
-{% block title %}Overview &middot; PL data{% endblock %}
-{% block heading %}Overview{% endblock %}
+{% block title %}{{ _("Overview") }} &middot; PL data{% endblock %}
+{% block heading %}{{ _("Overview") }}{% endblock %}
 
 {% block content %}
 {% include "_leaguetabs.html" %}
 
 <div class="tiles" style="margin-bottom:22px">
-  <div class="tile"><div class="v num">{{ totals.teams }}</div><div class="k">Teams</div></div>
-  <div class="tile"><div class="v num">{{ totals.matches }}</div><div class="k">Matches stored</div></div>
-  <div class="tile"><div class="v num">{{ totals.fixtures }}</div><div class="k">Upcoming fixtures</div></div>
-  <div class="tile"><div class="v num">{{ totals.stat_rows }}</div><div class="k">Team-match stat rows</div></div>
-  <div class="tile"><div class="v num">{{ totals.appearances }}</div><div class="k">Team appearances<br><span style="font-size:11px">all competitions, drives rest days</span></div></div>
+  <div class="tile"><div class="v num">{{ totals.teams }}</div><div class="k">{{ _("Teams") }}</div></div>
+  <div class="tile"><div class="v num">{{ totals.matches }}</div><div class="k">{{ _("Matches stored") }}</div></div>
+  <div class="tile"><div class="v num">{{ totals.fixtures }}</div><div class="k">{{ _("Upcoming fixtures") }}</div></div>
+  <div class="tile"><div class="v num">{{ totals.stat_rows }}</div><div class="k">{{ _("Team-match stat rows") }}</div></div>
+  <div class="tile"><div class="v num">{{ totals.appearances }}</div><div class="k">{{ _("Team appearances") }}<br><span style="font-size:11px">{{ _("all competitions, drives rest days") }}</span></div></div>
 </div>
 
 <div class="cols2">
 
   <div class="panel">
-    <h2>Data health</h2>
+    <h2>{{ _("Data health") }}</h2>
     <table>
       <tbody>
         <tr>
-          <td class="l">Rows missing xG</td>
+          <td class="l">{{ _("Rows missing xG") }}</td>
           <td>
             {% if health.missing_xg %}<span class="chip no">{{ health.missing_xg }}</span>
-            {% else %}<span class="chip ok">none</span>{% endif %}
+            {% else %}<span class="chip ok">{{ _("none") }}</span>{% endif %}
           </td>
         </tr>
         <tr>
-          <td class="l">Rows missing possession</td>
+          <td class="l">{{ _("Rows missing possession") }}</td>
           <td>
             {% if health.missing_poss %}<span class="chip wa">{{ health.missing_poss }}</span>
-            {% else %}<span class="chip ok">none</span>{% endif %}
+            {% else %}<span class="chip ok">{{ _("none") }}</span>{% endif %}
           </td>
         </tr>
         <tr>
           <td class="l">
-            Mean possession
+            {{ _("Mean possession") }}
             <div class="muted" style="font-size:12px;white-space:normal">
-              Zero-sum within a match, so this should sit on 50.00
+              {{ _("Zero-sum within a match, so this should sit on 50.00") }}
             </div>
           </td>
           <td>
@@ -51,24 +51,24 @@
         </tr>
         <tr>
           <td class="l">
-            Matches without exactly 2 rows
+            {{ _("Matches without exactly 2 rows") }}
             <div class="muted" style="font-size:12px;white-space:normal">
-              Every match must contribute one row per side
+              {{ _("Every match must contribute one row per side") }}
             </div>
           </td>
           <td>
             {% if orphans %}<span class="chip no">{{ orphans }}</span>
-            {% else %}<span class="chip ok">none</span>{% endif %}
+            {% else %}<span class="chip ok">{{ _("none") }}</span>{% endif %}
           </td>
         </tr>
         <tr>
-          <td class="l">xG range</td>
-          <td class="num muted">{{ health.min_xg }} &ndash; {{ health.max_xg }} (mean {{ health.avg_xg }})</td>
+          <td class="l">{{ _("xG range") }}</td>
+          <td class="num muted">{{ health.min_xg }} &ndash; {{ health.max_xg }} ({{ _("mean") }} {{ health.avg_xg }})</td>
         </tr>
         <tr>
-          <td class="l">Last scrape</td>
+          <td class="l">{{ _("Last scrape") }}</td>
           <td class="muted">
-            {{ freshness.last_scrape.strftime('%d %b %Y %H:%M') if freshness.last_scrape else '-' }}
+            {{ freshness.last_scrape|dt('%d %b %Y %H:%M') if freshness.last_scrape else '-' }}
           </td>
         </tr>
       </tbody>
@@ -76,11 +76,11 @@
   </div>
 
   <div class="panel">
-    <h2>Seasons</h2>
+    <h2>{{ _("Seasons") }}</h2>
     <div class="tablewrap">
       <table>
         <thead>
-          <tr><th class="l">Season</th><th>Matches</th><th>Played</th><th>From</th><th>To</th></tr>
+          <tr><th class="l">{{ _("Season") }}</th><th>{{ _("Matches") }}</th><th>{{ _("Played") }}</th><th>{{ _("From") }}</th><th>{{ _("To") }}</th></tr>
         </thead>
         <tbody>
           {% for s in seasons %}
@@ -100,11 +100,11 @@
 </div>
 
 <div class="panel">
-  <h2>Coverage per team <span class="sub">&mdash; fewest matches first, so gaps surface at the top</span></h2>
+  <h2>{{ _("Coverage per team") }} <span class="sub">&mdash; {{ _("fewest matches first, so gaps surface at the top") }}</span></h2>
   <div class="tablewrap">
     <table class="sortable">
       <thead>
-        <tr><th class="l">Team</th><th>Matches stored</th><th>Last played</th></tr>
+        <tr><th class="l">{{ _("Team") }}</th><th>{{ _("Matches stored") }}</th><th>{{ _("Last played") }}</th></tr>
       </thead>
       <tbody>
         {% for c in coverage %}
@@ -120,11 +120,11 @@
 </div>
 
 <div class="panel">
-  <h2>Latest matches</h2>
+  <h2>{{ _("Latest matches") }}</h2>
   <div class="tablewrap">
     <table>
       <thead>
-        <tr><th class="l">Date</th><th class="l">Match</th><th>Score</th><th>xG</th><th></th></tr>
+        <tr><th class="l">{{ _("Date") }}</th><th class="l">{{ _("Match") }}</th><th>{{ _("Score") }}</th><th>xG</th><th></th></tr>
       </thead>
       <tbody>
         {% for m in recent %}
@@ -133,7 +133,7 @@
           <td class="l">{{ m.home }} v {{ m.away }}</td>
           <td class="num">{{ m.home_goals }}&ndash;{{ m.away_goals }}</td>
           <td class="num muted">{{ m.home_xg|num }} &ndash; {{ m.away_xg|num }}</td>
-          <td><a href="{{ url_for('match', match_id=m.match_id) }}">detail</a></td>
+          <td><a href="{{ url_for('match', match_id=m.match_id) }}">{{ _("detail") }}</a></td>
         </tr>
         {% endfor %}
       </tbody>

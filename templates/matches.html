@@ -1,12 +1,12 @@
 {% extends "base.html" %}
-{% block title %}Matches &middot; PL data{% endblock %}
-{% block heading %}Matches{% endblock %}
+{% block title %}{{ _("Matches") }} &middot; PL data{% endblock %}
+{% block heading %}{{ _("Matches") }}{% endblock %}
 
 {% block content %}
 {% include "_leaguetabs.html" %}
 
 <div class="filters">
-  <a href="{{ url_for('matches') }}" class="{{ 'on' if not current }}">All seasons</a>
+  <a href="{{ url_for('matches') }}" class="{{ 'on' if not current }}">{{ _("All seasons") }}</a>
   {% for s in seasons %}
   <a href="{{ url_for('matches', season=s.season) }}"
      class="{{ 'on' if current == s.season }}">{{ s.season|season }}</a>
@@ -14,20 +14,20 @@
 </div>
 
 <div class="panel">
-  <h2>{{ rows|length }} match{{ '' if rows|length == 1 else 'es' }} with stats</h2>
+  <h2>{% trans count=rows|length %}{{ count }} match with stats{% pluralize %}{{ count }} matches with stats{% endtrans %}</h2>
   <div class="tablewrap">
     <table class="sortable">
       <thead>
         <tr>
-          <th class="l">Date</th>
-          <th>MW</th>
-          <th class="l">Home</th>
-          <th>Score</th>
-          <th class="l">Away</th>
-          <th>Home xG</th>
-          <th>Away xG</th>
-          <th>xG diff</th>
-          <th>Home poss</th>
+          <th class="l">{{ _("Date") }}</th>
+          <th>{{ _("MW") }}</th>
+          <th class="l">{{ _("Home") }}</th>
+          <th>{{ _("Score") }}</th>
+          <th class="l">{{ _("Away") }}</th>
+          <th>{{ _("Home xG") }}</th>
+          <th>{{ _("Away xG") }}</th>
+          <th>{{ _("xG diff") }}</th>
+          <th>{{ _("Home poss") }}</th>
           <th data-nosort></th>
         </tr>
       </thead>
@@ -44,13 +44,13 @@
           {% set diff = (m.home_xg|float) - (m.away_xg|float) %}
           <td class="num {{ 'good' if diff > 0 else 'bad' }}" data-v="{{ diff }}">{{ diff|signed }}</td>
           <td class="num muted">{{ m.home_poss|num(1) }}</td>
-          <td><a href="{{ url_for('match', match_id=m.match_id) }}">detail</a></td>
+          <td><a href="{{ url_for('match', match_id=m.match_id) }}">{{ _("detail") }}</a></td>
         </tr>
         {% endfor %}
       </tbody>
     </table>
   </div>
-  {% if not rows %}<div class="empty">No matches stored for this season yet.</div>{% endif %}
+  {% if not rows %}<div class="empty">{{ _("No matches stored for this season yet.") }}</div>{% endif %}
 </div>
 
 {% endblock %}

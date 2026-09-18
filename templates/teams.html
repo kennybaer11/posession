@@ -1,15 +1,15 @@
 {% extends "base.html" %}
-{% block title %}Teams &middot; PL data{% endblock %}
-{% block heading %}Team form{% endblock %}
+{% block title %}{{ _("Teams") }} &middot; PL data{% endblock %}
+{% block heading %}{{ _("Team form") }}{% endblock %}
 
 {% block content %}
 {% include "_leaguetabs.html" %}
 
 <div class="note">
-  Rolling averages over each team's last 5 and 10 matches, straight from
+  {% trans %}Rolling averages over each team's last 5 and 10 matches, straight from
   <strong>v_team_form_current</strong>. <strong>Finishing gap</strong> is goals minus xG over 10
   matches: positive means finishing above the chances created, which tends to regress.
-  Click any column to sort.
+  Click any column to sort.{% endtrans %}
 </div>
 
 <div class="panel">
@@ -17,20 +17,20 @@
     <table class="sortable">
       <thead>
         <tr>
-          <th class="l">Team</th>
-          <th>Used</th>
+          <th class="l">{{ _("Team") }}</th>
+          <th>{{ _("Used") }}</th>
           <th>xG&nbsp;L5</th>
           <th>xGA&nbsp;L5</th>
           <th>xGD&nbsp;L5</th>
-          <th>PPG&nbsp;L5</th>
-          <th>Poss&nbsp;L5</th>
-          <th>Shots&nbsp;L5</th>
-          <th>SoT&nbsp;L5</th>
-          <th>Corners&nbsp;L5</th>
+          <th>{{ _("PPG") }}&nbsp;L5</th>
+          <th>{{ _("Poss") }}&nbsp;L5</th>
+          <th>{{ _("Shots") }}&nbsp;L5</th>
+          <th>{{ _("SoT") }}&nbsp;L5</th>
+          <th>{{ _("Corners") }}&nbsp;L5</th>
           <th>xG&nbsp;L10</th>
           <th>xGA&nbsp;L10</th>
-          <th>PPG&nbsp;L10</th>
-          <th>Finishing gap</th>
+          <th>{{ _("PPG") }}&nbsp;L10</th>
+          <th>{{ _("Finishing gap") }}</th>
           <th data-nosort></th>
         </tr>
       </thead>
@@ -51,7 +51,7 @@
           <td class="num">{{ r.xg_against_l10|num }}</td>
           <td class="num">{{ r.ppg_l10|num(2) }}</td>
           <td class="num {{ 'good' if r.finishing_gap_l10 and r.finishing_gap_l10 > 0 else 'muted' }}">{{ r.finishing_gap_l10|signed }}</td>
-          <td><a href="{{ url_for('team', team_id=r.team_id) }}">view</a></td>
+          <td><a href="{{ url_for('team', team_id=r.team_id) }}">{{ _("view") }}</a></td>
         </tr>
         {% endfor %}
       </tbody>

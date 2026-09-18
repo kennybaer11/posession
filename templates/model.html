@@ -7,25 +7,25 @@
 
 {% if all_leagues %}
 <div class="note">
-  <strong>Every league's open lines in one place.</strong> The panels below this one are
+  {% trans %}<strong>Every league's open lines in one place.</strong> The panels below this one are
   missing on purpose: a training set, a feature inventory and an error baseline each
   describe <em>one</em> league's own data, and stacking three leagues' rows into them would
   describe a model that does not exist. Pick a league above for those. What genuinely spans
-  leagues is the guidance, and which leagues are modelled at all.
+  leagues is the guidance, and which leagues are modelled at all.{% endtrans %}
 </div>
 
 <div class="panel">
-  <h2>Modelling readiness <span class="sub">&mdash; which leagues have enough history to fit</span></h2>
+  <h2>{{ _("Modelling readiness") }} <span class="sub">&mdash; {{ _("which leagues have enough history to fit") }}</span></h2>
   <div class="tablewrap">
     <table>
       <thead>
-        <tr><th class="l">League</th><th>Training rows</th><th>Needed</th>
-            <th class="l">Predictions from</th>
-            <th title="Mean absolute error, walk-forward">Error</th>
-            <th title="The naive midpoint's error on the same matches">Naive</th>
-            <th title="Spread of the errors - how wide the probability curve is">&sigma;</th>
-            <th title="Share of errors inside 1 / 1.645 / 1.96 sigma. A normal curve gives 68 / 90 / 95.">Calibration</th>
-            <th>Lines</th><th>Settled</th></tr>
+        <tr><th class="l">{{ _("League") }}</th><th>{{ _("Training rows") }}</th><th>{{ _("Needed") }}</th>
+            <th class="l">{{ _("Predictions from") }}</th>
+            <th title="{{ _("Mean absolute error, walk-forward") }}">{{ _("Error") }}</th>
+            <th title="{{ _("The naive midpoint's error on the same matches") }}">{{ _("Naive") }}</th>
+            <th title="{{ _("Spread of the errors - how wide the probability curve is") }}">&sigma;</th>
+            <th title="{{ _("Share of errors inside 1 / 1.645 / 1.96 sigma. A normal curve gives 68 / 90 / 95.") }}">{{ _("Calibration") }}</th>
+            <th>{{ _("Lines") }}</th><th>{{ _("Settled") }}</th></tr>
       </thead>
       <tbody>
         {% for st in statuses %}
@@ -34,8 +34,8 @@
           <td class="num {{ 'good' if st.fitted else 'warn' }}">{{ st.rows }}</td>
           <td class="num muted">{{ st.needed }}</td>
           <td class="l">
-            {% if st.fitted %}<span class="chip ok">fitted model</span>
-            {% else %}<span class="chip wa">naive midpoint</span>{% endif %}
+            {% if st.fitted %}<span class="chip ok">{{ _("fitted model") }}</span>
+            {% else %}<span class="chip wa">{{ _("naive midpoint") }}</span>{% endif %}
           </td>
           {% if st.cal %}
           <td class="num {{ 'good' if st.cal.mae < st.cal.naive_mae else 'bad' }}">{{ '%.2f'|format(st.cal.mae|float) }}</td>
@@ -43,7 +43,7 @@
           <td class="num">{{ '%.2f'|format(st.cal.sigma|float) }}</td>
           <td class="num muted">{{ '%.0f / %.0f / %.0f'|format(100*st.cal.within_1|float, 100*st.cal.within_164|float, 100*st.cal.within_196|float) }}</td>
           {% else %}
-          <td class="num muted" colspan="4">not measured &mdash; &sigma; {{ '%.2f'|format(default_sigma) }} assumed</td>
+          <td class="num muted" colspan="4">{% trans s='%.2f'|format(default_sigma) %}not measured &mdash; &sigma; {{ s }} assumed{% endtrans %}</td>
           {% endif %}
           <td class="num muted">{{ st.lines }}</td>
           <td class="num muted">{{ st.settled }}</td>
@@ -53,36 +53,36 @@
     </table>
   </div>
   <p class="muted" style="font-size:12.5px;margin-bottom:0">
-    Error and &sigma; are measured walk-forward over every match the fit could have predicted
+    {% trans n=(statuses[0].needed if statuses else 40) %}Error and &sigma; are measured walk-forward over every match the fit could have predicted
     &mdash; refit before each, never shown its own future &mdash; and refreshed before every
     site rebuild. Each league's stake guidance uses its own &sigma;: a wider spread means the
     same gap to a line is worth less.
-    A league under {{ statuses[0].needed if statuses else 40 }} rows falls back to the naive
+    A league under {{ n }} rows falls back to the naive
     midpoint &mdash; the side's own recent possession averaged against what its opponent
     concedes. Those rows are marked <sup class="warn">*</sup> below. The threshold is about
-    four rows per feature, a rule of thumb rather than a measured cliff.
+    four rows per feature, a rule of thumb rather than a measured cliff.{% endtrans %}
   </p>
 </div>
 {% else %}
 <div class="note">
-  <strong>Target: home possession %.</strong> Possession is zero-sum inside a match, so
+  {% trans %}<strong>Target: home possession %.</strong> Possession is zero-sum inside a match, so
   this one number defines the whole result &mdash; the away side is 100 minus it. This is a
   regression problem, not a win/draw/lose one. <strong>No model is trained yet;</strong>
-  the figures below are what the modelling layer has to work with.
+  the figures below are what the modelling layer has to work with.{% endtrans %}
 </div>
 
 <div class="tiles" style="margin-bottom:22px">
-  <div class="tile"><div class="v num">{{ n_train }}</div><div class="k">Training rows</div></div>
-  <div class="tile"><div class="v num">{{ n_features }}</div><div class="k">Usable features</div></div>
-  <div class="tile"><div class="v num">{{ n_fit }}</div><div class="k">Fit split</div></div>
-  <div class="tile"><div class="v num">{{ n_holdout }}</div><div class="k">Holdout split</div></div>
-  <div class="tile"><div class="v num">{{ n_fixtures }}</div><div class="k">Fixtures to score</div></div>
+  <div class="tile"><div class="v num">{{ n_train }}</div><div class="k">{{ _("Training rows") }}</div></div>
+  <div class="tile"><div class="v num">{{ n_features }}</div><div class="k">{{ _("Usable features") }}</div></div>
+  <div class="tile"><div class="v num">{{ n_fit }}</div><div class="k">{{ _("Fit split") }}</div></div>
+  <div class="tile"><div class="v num">{{ n_holdout }}</div><div class="k">{{ _("Holdout split") }}</div></div>
+  <div class="tile"><div class="v num">{{ n_fixtures }}</div><div class="k">{{ _("Fixtures to score") }}</div></div>
 </div>
 
 <div class="cols2">
 
   <div class="panel">
-    <h2>What a model must beat <span class="sub">&mdash; mean absolute error, percentage points</span></h2>
+    <h2>{{ _("What a model must beat") }} <span class="sub">&mdash; {{ _("mean absolute error, percentage points") }}</span></h2>
     {% if baselines %}
       {% set worst = baselines.values()|max %}
       <table>
@@ -90,13 +90,13 @@
           {% for name, mae in baselines|dictsort(by='value', reverse=true) %}
           <tr>
             <td class="l">
-              {% if name == 'always_50' %}Always predict 50%
-                <div class="muted" style="font-size:12px;white-space:normal">The know-nothing floor</div>
-              {% elif name == 'home_form' %}Home side's own recent average
-                <div class="muted" style="font-size:12px;white-space:normal">Ignores who they are playing</div>
-              {% else %}Naive midpoint
+              {% if name == 'always_50' %}{{ _("Always predict 50%%") }}
+                <div class="muted" style="font-size:12px;white-space:normal">{{ _("The know-nothing floor") }}</div>
+              {% elif name == 'home_form' %}{{ _("Home side's own recent average") }}
+                <div class="muted" style="font-size:12px;white-space:normal">{{ _("Ignores who they are playing") }}</div>
+              {% else %}{{ _("Naive midpoint") }}
                 <div class="muted" style="font-size:12px;white-space:normal">
-                  Home form vs what the away side concedes &mdash; the one that matters
+                  {% trans %}Home form vs what the away side concedes &mdash; the one that matters{% endtrans %}
                 </div>
               {% endif %}
             </td>
@@ -110,47 +110,47 @@
         </tbody>
       </table>
       <p class="muted" style="font-size:12.5px;margin-bottom:0">
-        A model is only earning its keep below
-        <strong>{{ '%.2f'|format(baselines.values()|min) }}</strong> points of error.
-        Beating "always 50" is not an achievement.
+        {% trans x='%.2f'|format(baselines.values()|min) %}A model is only earning its keep below
+        <strong>{{ x }}</strong> points of error.
+        Beating "always 50" is not an achievement.{% endtrans %}
       </p>
     {% else %}
-      <div class="empty">Not enough data yet.</div>
+      <div class="empty">{{ _("Not enough data yet.") }}</div>
     {% endif %}
   </div>
 
   <div class="panel">
-    <h2>Training set</h2>
+    <h2>{{ _("Training set") }}</h2>
     <table>
       <tbody>
         <tr>
           <td class="l">
-            Rows
+            {{ _("Rows") }}
             <div class="muted" style="font-size:12px;white-space:normal">
-              Played matches where both sides had enough prior matches to form an average
+              {{ _("Played matches where both sides had enough prior matches to form an average") }}
             </div>
           </td>
           <td class="num">{{ n_train }}</td>
         </tr>
         {% if stats %}
         <tr>
-          <td class="l">Home possession seen</td>
+          <td class="l">{{ _("Home possession seen") }}</td>
           <td class="num">{{ '%.1f'|format(stats.min) }}% &ndash; {{ '%.1f'|format(stats.max) }}%</td>
         </tr>
         <tr>
-          <td class="l">Mean / spread</td>
+          <td class="l">{{ _("Mean / spread") }}</td>
           <td class="num">{{ '%.1f'|format(stats.mean) }}% &plusmn; {{ '%.1f'|format(stats.std) }}</td>
         </tr>
         {% endif %}
         {% if coverage %}
-        <tr><td class="l">Earliest match</td><td class="muted">{{ coverage.first.strftime('%d %b %Y') }}</td></tr>
-        <tr><td class="l">Latest match</td><td class="muted">{{ coverage.last.strftime('%d %b %Y') }}</td></tr>
+        <tr><td class="l">{{ _("Earliest match") }}</td><td class="muted">{{ coverage.first|dt('%d %b %Y') }}</td></tr>
+        <tr><td class="l">{{ _("Latest match") }}</td><td class="muted">{{ coverage.last|dt('%d %b %Y') }}</td></tr>
         {% endif %}
         <tr>
           <td class="l">
-            Split
+            {{ _("Split") }}
             <div class="muted" style="font-size:12px;white-space:normal">
-              Chronological, never random
+              {{ _("Chronological, never random") }}
             </div>
           </td>
           <td class="num">{{ n_fit }} / {{ n_holdout }}</td>
@@ -163,33 +163,37 @@
 
 {% if shortfall %}
 <div class="note" style="border-left-color: var(--warn)">
-  <strong>No training rows for this league yet.</strong>
-  {{ shortfall.played }} match{{ '' if shortfall.played == 1 else 'es' }} played, and
-  <code>min_history</code> is {{ shortfall.min_history }} &mdash; every row needs both
-  sides to have {{ shortfall.min_history }} earlier matches to average, which nobody has
-  until about matchday {{ shortfall.min_history + 1 }}. Nothing is broken; the season is
+  <strong>{{ _("No training rows for this league yet.") }}</strong>
+  {% trans count=shortfall.played, mh=shortfall.min_history, md=shortfall.min_history + 1 %}{{ count }} match played, and
+  <code>min_history</code> is {{ mh }} &mdash; every row needs both
+  sides to have {{ mh }} earlier matches to average, which nobody has
+  until about matchday {{ md }}.{% pluralize %}{{ count }} matches played, and
+  <code>min_history</code> is {{ mh }} &mdash; every row needs both
+  sides to have {{ mh }} earlier matches to average, which nobody has
+  until about matchday {{ md }}.{% endtrans %}
+  {% trans %}Nothing is broken; the season is
   young. The figures below are what the model <em>will</em> use once there is something
-  to fit.
+  to fit.{% endtrans %}
 </div>
 {% endif %}
 
 {% if n_features > n_train %}
 <div class="note" style="border-left-color: var(--warn)">
-  <strong>{{ n_features }} features against {{ n_train }} rows.</strong> More columns than
+  {% trans nf=n_features, nt=n_train %}<strong>{{ nf }} features against {{ nt }} rows.</strong> More columns than
   examples means any model will fit the training data perfectly and learn nothing that
   generalises. Until the season fills out, prefer a handful of possession columns and
   strong regularisation over the full set &mdash; or widen
-  <code>training.season</code> in config.yaml.
+  <code>training.season</code> in config.yaml.{% endtrans %}
 </div>
 {% endif %}
 
 {% if sparse %}
 <div class="panel">
-  <h2>Thin features <span class="sub">&mdash; present in fewer than half the training rows</span></h2>
+  <h2>{{ _("Thin features") }} <span class="sub">&mdash; {{ _("present in fewer than half the training rows") }}</span></h2>
   <p class="muted" style="font-size:13px;margin-top:-6px">
-    Mostly head-to-head columns: within one season two clubs have met at most once by
+    {% trans %}Mostly head-to-head columns: within one season two clubs have met at most once by
     now, so there is usually no prior meeting to average. These fill in from January,
-    when the reverse fixtures start.
+    when the reverse fixtures start.{% endtrans %}
   </p>
   <div class="featlist">
     {% for name, n in sparse %}<code>{{ name }} &middot; {{ n }}/{{ n_train }}</code>{% endfor %}
@@ -198,20 +202,19 @@
 {% endif %}
 
 <div class="panel">
-  <h2>Feature inventory
-    <span class="sub">&mdash; {{ n_features }} columns
-    {%- if speculative %} the model would use, taken from the fixture side since there is
-    no training set yet{% else %} present in both training and fixtures{% endif %}</span>
+  <h2>{{ _("Feature inventory") }}
+    <span class="sub">&mdash; {% if speculative %}{% trans n=n_features %}{{ n }} columns the model would use, taken from the fixture side since there is
+    no training set yet{% endtrans %}{% else %}{% trans n=n_features %}{{ n }} columns present in both training and fixtures{% endtrans %}{% endif %}</span>
   </h2>
   <p class="muted" style="font-size:13px;margin-top:-6px">
-    Minutes spent ahead, level and behind are deliberately <em>not</em> here. They are
+    {% trans %}Minutes spent ahead, level and behind are deliberately <em>not</em> here. They are
     only known after the whistle, so using them to predict possession would be leakage.
     They are stored for explaining errors instead: a match settled early is inherently
-    less predictable, because the leading side stops trying to keep the ball.
+    less predictable, because the leading side stops trying to keep the ball.{% endtrans %}
   </p>
   {% for group, cols in groups.items() %}
   <div class="featgroup">
-    <h3>{{ group }} <span class="muted" style="font-weight:400">({{ cols|length }})</span></h3>
+    <h3>{{ _(group) }} <span class="muted" style="font-weight:400">({{ cols|length }})</span></h3>
     <div class="featlist">
       {% for c in cols %}<code>{{ c }}</code>{% endfor %}
     </div>
@@ -222,31 +225,34 @@
 {% endif %}
 
 <div class="panel">
-  <h2>Stake guidance <span class="sub">&mdash; open lines, rated out of 10</span></h2>
+  <h2>{{ _("Stake guidance") }} <span class="sub">&mdash; {{ _("open lines, rated out of 10") }}</span></h2>
   <p class="muted" style="font-size:13px;margin-top:-6px">
-    Two separate things have to be true before staking much: the edge must be large,
+    {% trans %}Two separate things have to be true before staking much: the edge must be large,
     <em>and</em> the model must have shown it can find real edges. The first is arithmetic;
     the second is a track record. The rating is the smaller of the two, so a big edge
-    from a model with no record scores low &mdash; correctly. It is
-    <strong>{{ graded }}</strong> settled bet{{ '' if graded == 1 else 's' }} in, so the
-    ceiling is low for a while yet.
+    from a model with no record scores low &mdash; correctly.{% endtrans %}
+    {% trans count=graded %}It is
+    <strong>{{ count }}</strong> settled bet in, so the
+    ceiling is low for a while yet.{% pluralize %}It is
+    <strong>{{ count }}</strong> settled bets in, so the
+    ceiling is low for a while yet.{% endtrans %}
   </p>
   {% if open_lines %}
   <div class="tablewrap">
     <table>
       <thead>
         <tr>
-          <th class="l">Kickoff</th>
-          {% if all_leagues %}<th class="l">League</th>{% endif %}
-          <th class="l">Match</th><th class="l">Line is about</th>
-          <th>Line</th><th>Under</th><th>Over</th><th>Model</th>
-          <th>Market</th><th>Bet</th><th>Edge</th><th>Stake</th><th class="l">Why</th>
+          <th class="l">{{ _("Kickoff") }}</th>
+          {% if all_leagues %}<th class="l">{{ _("League") }}</th>{% endif %}
+          <th class="l">{{ _("Match") }}</th><th class="l">{{ _("Line is about") }}</th>
+          <th>{{ _("Line") }}</th><th>{{ _("Under") }}</th><th>{{ _("Over") }}</th><th>{{ _("Model") }}</th>
+          <th>{{ _("Market") }}</th><th>{{ _("Bet") }}</th><th>{{ _("Edge") }}</th><th>{{ _("Stake") }}</th><th class="l">{{ _("Why") }}</th>
         </tr>
       </thead>
       <tbody>
         {% for r in open_lines %}
         <tr>
-          <td class="l muted">{{ r.kickoff.strftime('%d %b %H:%M') }}</td>
+          <td class="l muted">{{ r.kickoff|dt('%d %b %H:%M') }}</td>
           {% if all_leagues %}<td class="l muted">{{ league_names.get(r.competition, r.competition) }}</td>{% endif %}
           <td class="l">{{ r.home_abbr }} v {{ r.away_abbr }}</td>
           <td class="l">{{ r.team }}</td>
@@ -254,13 +260,13 @@
           <td class="num muted">{{ '%.2f'|format(r.under_odds) if r.under_odds else '-' }}</td>
           <td class="num muted">{{ '%.2f'|format(r.over_odds) if r.over_odds else '-' }}</td>
           <td class="num">{{ '%.1f'|format(r.pred) if r.pred is not none else '-'
-            }}%{% if r.fallback %}<sup class="warn" title="No fitted model for this league yet - naive midpoint">*</sup>{% endif %}</td>
-          <td class="num muted" title="bookmaker's own probability, margin removed">
-            {% if r.book_over is not none %}{{ '%.0f%%'|format(r.book_over * 100) }} over{% else %}&ndash;{% endif %}
+            }}%{% if r.fallback %}<sup class="warn" title="{{ _("No fitted model for this league yet - naive midpoint") }}">*</sup>{% endif %}</td>
+          <td class="num muted" title="{{ _("bookmaker's own probability, margin removed") }}">
+            {% if r.book_over is not none %}{{ _("%(p)s over", p='%.0f%%'|format(r.book_over * 100)) }}{% else %}&ndash;{% endif %}
           </td>
           <td>
-            {% if r.side %}<span class="chip {{ 'ok' if r.backed }}">{{ r.side }}</span>
-            {% else %}<span class="chip">no bet</span>{% endif %}
+            {% if r.side %}<span class="chip {{ 'ok' if r.backed }}">{{ _(r.side) }}</span>
+            {% else %}<span class="chip">{{ _("no bet") }}</span>{% endif %}
           </td>
           <td class="num {{ 'good' if r.backed else 'bad' }}">
             {{ '%+.1f%%'|format(r.edge * 100) if r.edge is not none else '-' }}
@@ -278,44 +284,46 @@
   </div>
   {% if fallback_n %}
   <p class="muted" style="font-size:12.5px">
-    <sup class="warn">*</sup> <strong>{{ fallback_n }} row{{ '' if fallback_n == 1 else 's' }}
-    here did not come from a fitted model.</strong> This league has too little history to fit
+    <sup class="warn">*</sup> {% trans count=fallback_n %}<strong>{{ count }} row
+    here did not come from a fitted model.</strong>{% pluralize %}<strong>{{ count }} rows
+    here did not come from a fitted model.</strong>{% endtrans %}
+    {% trans %}This league has too little history to fit
     one, so the figure is the naive midpoint: the side's own recent possession averaged
     against what its opponent concedes &mdash; on as few as two matches each. That formula
     shrinks towards 50 by construction, so it understates a mismatch. A strong side away at a
     weak one reads too low, and the edge it implies against a bookmaker's line can point the
     wrong way entirely. The Bet, Edge and Stake columns on these rows are arithmetic, not a
-    tested prediction.
+    tested prediction.{% endtrans %}
   </p>
   {% endif %}
   <p class="muted" style="font-size:12.5px;margin-bottom:0">
-    <strong>0/10</strong> means the price is against you &mdash; not a close call, a bet to skip.
+    {% trans %}<strong>0/10</strong> means the price is against you &mdash; not a close call, a bet to skip.
     Anything above that is a fraction of what you would stake at full confidence, and
     quarter-Kelly is treated as the ceiling even at 10/10, because Kelly assumes the
-    probability is exactly right and this one is an estimate.
+    probability is exactly right and this one is an estimate.{% endtrans %}
   </p>
   {% else %}
   <div class="empty">
-    No open lines recorded. Add them to <code>odds.txt</code> and they appear here.
+    {% trans %}No open lines recorded. Add them to <code>odds.txt</code> and they appear here.{% endtrans %}
   </div>
   {% endif %}
 </div>
 
 {% if not all_leagues %}
 <div class="panel">
-  <h2>Next fixtures <span class="sub">&mdash; with the naive prediction to beat</span></h2>
+  <h2>{{ _("Next fixtures") }} <span class="sub">&mdash; {{ _("with the naive prediction to beat") }}</span></h2>
   <div class="tablewrap">
     <table>
       <thead>
         <tr>
-          <th class="l">Kickoff</th><th class="l">Match</th>
-          <th>Home form</th><th>Away form</th><th>Gap</th><th>Naive home poss</th>
+          <th class="l">{{ _("Kickoff") }}</th><th class="l">{{ _("Match") }}</th>
+          <th>{{ _("Home form") }}</th><th>{{ _("Away form") }}</th><th>{{ _("Gap") }}</th><th>{{ _("Naive home poss") }}</th>
         </tr>
       </thead>
       <tbody>
         {% for f in preview %}
         <tr>
-          <td class="l muted">{{ f.kickoff.strftime('%d %b, %H:%M') }}</td>
+          <td class="l muted">{{ f.kickoff|dt('%d %b, %H:%M') }}</td>
           <td class="l">{{ f.home_team }} v {{ f.away_team }}</td>
           <td class="num muted">{{ f.home_poss_l5|num(1) }}%</td>
           <td class="num muted">{{ f.away_poss_l5|num(1) }}%</td>
@@ -326,7 +334,7 @@
       </tbody>
     </table>
   </div>
-  {% if not preview %}<div class="empty">No fixtures stored.</div>{% endif %}
+  {% if not preview %}<div class="empty">{{ _("No fixtures stored.") }}</div>{% endif %}
 </div>
 {% endif %}
 

@@ -3,41 +3,42 @@
 {% block heading %}{{ info.name }}{% endblock %}
 
 {% block content %}
+{% set res_label = {'W': _('W'), 'D': _('D'), 'L': _('L')} %}
 
 <p class="muted" style="margin-top:-12px">
   {{ info.stadium or '' }}{% if info.city %}, {{ info.city }}{% endif %}
-  {% if info.capacity %} &middot; capacity {{ '{:,}'.format(info.capacity) }}{% endif %}
+  {% if info.capacity %} &middot; {{ _("capacity %(n)s", n='{:,}'.format(info.capacity)) }}{% endif %}
 </p>
 
 {% if form %}
 <div class="tiles" style="margin-bottom:22px">
-  <div class="tile"><div class="v num">{{ form.xg_for_l5|num }}</div><div class="k">xG for (L5)</div></div>
-  <div class="tile"><div class="v num">{{ form.xg_against_l5|num }}</div><div class="k">xG against (L5)</div></div>
-  <div class="tile"><div class="v num {{ 'good' if form.xg_diff_l5 and form.xg_diff_l5 > 0 else 'bad' }}">{{ form.xg_diff_l5|signed }}</div><div class="k">xG difference (L5)</div></div>
-  <div class="tile"><div class="v num">{{ form.ppg_l5|num(2) }}</div><div class="k">Points per game (L5)</div></div>
-  <div class="tile"><div class="v num">{{ form.possession_l5|num(1) }}%</div><div class="k">Possession (L5)</div></div>
-  <div class="tile"><div class="v num {{ 'good' if form.finishing_gap_l10 and form.finishing_gap_l10 > 0 else 'muted' }}">{{ form.finishing_gap_l10|signed }}</div><div class="k">Finishing gap (L10)</div></div>
+  <div class="tile"><div class="v num">{{ form.xg_for_l5|num }}</div><div class="k">{{ _("xG for (L5)") }}</div></div>
+  <div class="tile"><div class="v num">{{ form.xg_against_l5|num }}</div><div class="k">{{ _("xG against (L5)") }}</div></div>
+  <div class="tile"><div class="v num {{ 'good' if form.xg_diff_l5 and form.xg_diff_l5 > 0 else 'bad' }}">{{ form.xg_diff_l5|signed }}</div><div class="k">{{ _("xG difference (L5)") }}</div></div>
+  <div class="tile"><div class="v num">{{ form.ppg_l5|num(2) }}</div><div class="k">{{ _("Points per game (L5)") }}</div></div>
+  <div class="tile"><div class="v num">{{ form.possession_l5|num(1) }}%</div><div class="k">{{ _("Possession (L5)") }}</div></div>
+  <div class="tile"><div class="v num {{ 'good' if form.finishing_gap_l10 and form.finishing_gap_l10 > 0 else 'muted' }}">{{ form.finishing_gap_l10|signed }}</div><div class="k">{{ _("Finishing gap (L10)") }}</div></div>
 </div>
 {% endif %}
 
 <div class="panel">
-  <h2>Match log <span class="sub">&mdash; {{ matches|length }} matches, newest first</span></h2>
+  <h2>{{ _("Match log") }} <span class="sub">&mdash; {% trans count=matches|length %}{{ count }} match, newest first{% pluralize %}{{ count }} matches, newest first{% endtrans %}</span></h2>
   <div class="tablewrap">
     <table class="sortable">
       <thead>
         <tr>
-          <th class="l">Date</th>
-          <th class="l">Opponent</th>
-          <th>H/A</th>
-          <th>Res</th>
-          <th>Score</th>
+          <th class="l">{{ _("Date") }}</th>
+          <th class="l">{{ _("Opponent") }}</th>
+          <th>{{ _("H/A") }}</th>
+          <th>{{ _("Res") }}</th>
+          <th>{{ _("Score") }}</th>
           <th>xG</th>
           <th>xGA</th>
-          <th>Poss</th>
-          <th>Shots</th>
-          <th>SoT</th>
-          <th>Big ch.</th>
-          <th>Corners</th>
+          <th>{{ _("Poss") }}</th>
+          <th>{{ _("Shots") }}</th>
+          <th>{{ _("SoT") }}</th>
+          <th>{{ _("Big ch.") }}</th>
+          <th>{{ _("Corners") }}</th>
           <th data-nosort></th>
         </tr>
       </thead>
@@ -46,8 +47,8 @@
         <tr>
           <td class="l muted" data-v="{{ m.kickoff.timestamp() }}">{{ m.kickoff|dt }}</td>
           <td class="l">{{ m.opponent_name }}</td>
-          <td class="muted">{{ 'H' if m.is_home else 'A' }}</td>
-          <td><span class="res {{ m.result }}">{{ m.result }}</span></td>
+          <td class="muted">{{ _('H') if m.is_home else _('A') }}</td>
+          <td><span class="res {{ m.result }}">{{ res_label.get(m.result, m.result) }}</span></td>
           <td class="num">{{ m.goals_for }}&ndash;{{ m.goals_against }}</td>
           <td class="num">{{ m.xg_for|num }}</td>
           <td class="num">{{ m.xg_against|num }}</td>
@@ -56,7 +57,7 @@
           <td class="num muted">{{ m.shots_on_target_for }}</td>
           <td class="num muted">{{ m.big_chances_for }}</td>
           <td class="num muted">{{ m.corners_for }}</td>
-          <td><a href="{{ url_for('match', match_id=m.match_id) }}">detail</a></td>
+          <td><a href="{{ url_for('match', match_id=m.match_id) }}">{{ _("detail") }}</a></td>
         </tr>
         {% endfor %}
       </tbody>
@@ -65,14 +66,14 @@
 </div>
 
 <div class="panel">
-  <h2>Head to head <span class="sub">&mdash; across every season stored</span></h2>
+  <h2>{{ _("Head to head") }} <span class="sub">&mdash; {{ _("across every season stored") }}</span></h2>
   <div class="tablewrap">
     <table class="sortable">
       <thead>
         <tr>
-          <th class="l">Opponent</th><th>Met</th><th>W</th><th>D</th><th>L</th>
-          <th>PPG</th><th>GF avg</th><th>GA avg</th><th>xG avg</th><th>xGA avg</th>
-          <th>Poss avg</th><th>Last</th>
+          <th class="l">{{ _("Opponent") }}</th><th>{{ _("Met") }}</th><th>{{ _("W") }}</th><th>{{ _("D") }}</th><th>{{ _("L") }}</th>
+          <th>{{ _("PPG") }}</th><th>{{ _("GF avg") }}</th><th>{{ _("GA avg") }}</th><th>{{ _("xG avg") }}</th><th>{{ _("xGA avg") }}</th>
+          <th>{{ _("Poss avg") }}</th><th>{{ _("Last") }}</th>
         </tr>
       </thead>
       <tbody>

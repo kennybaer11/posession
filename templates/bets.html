@@ -1,38 +1,38 @@
 {% extends "base.html" %}
-{% block title %}Learning &middot; PL data{% endblock %}
-{% block heading %}Learning{% endblock %}
+{% block title %}{{ _("Learning") }} &middot; PL data{% endblock %}
+{% block heading %}{{ _("Learning") }}{% endblock %}
 
 {% block content %}
 {% with tabs_all = true, tabs_active = scope %}{% include "_leaguetabs.html" %}{% endwith %}
 
 <div class="note">
-  <strong>How today's model would have done on every recorded line.</strong> This page is
+  {% trans %}<strong>How today's model would have done on every recorded line.</strong> This page is
   recalculated on every rebuild, so it improves as the model does &mdash; and for the same
   reason it is <em>not</em> a record of what the site advised: a model change can move a past
   bet from OVER to no bet. The unchangeable record of advice as given lives in the admin
   section, under Advice record. Use this page to learn whether the model is getting better;
-  use that one to judge the advice.
+  use that one to judge the advice.{% endtrans %}
   <br><br>
-  <strong>How it is graded.</strong> Each match counts once: if the market moved and a second
+  {% trans %}<strong>How it is graded.</strong> Each match counts once: if the market moved and a second
   line was recorded, only the first is graded &mdash; the opening price the scraper exists to
   capture. And a settled line is graded with the prediction the model would have made
   <em>before kickoff</em>, fitted only on matches played earlier. Grading it with a model that
   has already seen the result flatters the record badly. When this was fixed on 14 Sep 2026,
   the bets settled by then read 71% won and +30% ROI with hindsight, and 60% and +10% without.
   Predictions come from the fitted model where a league has enough history for one, with
-  each league's own error spread:
-  {% for code, name in leagues %}{{ name }} &sigma;&nbsp;=&nbsp;{{ '%.2f'|format(calibrations[code].sigma|float) if calibrations.get(code) else '%.2f'|format(default_sigma) ~ ' (default)' }}{{ ', ' if not loop.last else '.' }}{% endfor %}
-  A wider spread means less confidence in any single prediction, so the same gap to a
+  each league's own error spread:{% endtrans %}
+  {% for code, name in leagues %}{{ name }} &sigma;&nbsp;=&nbsp;{{ '%.2f'|format(calibrations[code].sigma|float) if calibrations.get(code) else '%.2f'|format(default_sigma) ~ ' (' ~ _("default") ~ ')' }}{{ ', ' if not loop.last else '.' }}{% endfor %}
+  {% trans %}A wider spread means less confidence in any single prediction, so the same gap to a
   line is worth less. Rows marked <sup class="warn">*</sup> came from the naive midpoint
-  instead, because that league cannot fit a model yet &mdash; see below the table.
+  instead, because that league cannot fit a model yet &mdash; see below the table.{% endtrans %}
 </div>
 
 <div class="tiles" style="margin-bottom:22px">
-  <div class="tile"><div class="v num">{{ totals.recorded }}</div><div class="k">Lines recorded</div></div>
-  <div class="tile"><div class="v num">{{ totals.settled }}</div><div class="k">Settled</div></div>
+  <div class="tile"><div class="v num">{{ totals.recorded }}</div><div class="k">{{ _("Lines recorded") }}</div></div>
+  <div class="tile"><div class="v num">{{ totals.settled }}</div><div class="k">{{ _("Settled") }}</div></div>
   <div class="tile">
     <div class="v num">{{ totals.staked|int }}</div>
-    <div class="k">Backed by the model<br><span style="font-size:11px">positive edge only</span></div>
+    <div class="k">{{ _("Backed by the model") }}<br><span style="font-size:11px">{{ _("positive edge only") }}</span></div>
   </div>
   {# Colour and emphasis are withheld below 30 settled bets. A green +75% on a
      single result reads as a verdict, and the number cannot support one. #}
@@ -41,28 +41,28 @@
     <div class="v num {{ ('good' if totals.pnl > 0 else 'bad') if credible and totals.pnl != 0 else 'muted' }}">
       {{ '%+.2f'|format(totals.pnl) }}
     </div>
-    <div class="k">Profit / loss (units)</div>
+    <div class="k">{{ _("Profit / loss (units)") }}</div>
   </div>
   <div class="tile">
     <div class="v num muted">
       {% if totals.roi is not none %}{{ '%+.1f'|format(totals.roi * 100) }}%{% else %}&ndash;{% endif %}
     </div>
     <div class="k">
-      Return on stake
+      {{ _("Return on stake") }}
       {% if not credible %}
-      <br><span style="font-size:11px">on {{ totals.staked|int }} bet{{ '' if totals.staked == 1 else 's' }} &mdash; not a result</span>
+      <br><span style="font-size:11px">{% trans count=totals.staked|int %}on {{ count }} bet &mdash; not a result{% pluralize %}on {{ count }} bets &mdash; not a result{% endtrans %}</span>
       {% endif %}
     </div>
   </div>
 </div>
 
 <div class="panel" style="border-left:4px solid {{ 'var(--good)' if verdict.ready else 'var(--warn)' }}">
-  <h2>Should you be betting this yet?</h2>
+  <h2>{{ _("Should you be betting this yet?") }}</h2>
   <p style="font-size:19px;font-weight:640;margin:0 0 10px">
     {% if verdict.ready %}
-      <span class="good">Yes &mdash; the record now supports it.</span>
+      <span class="good">{% trans %}Yes &mdash; the record now supports it.{% endtrans %}</span>
     {% else %}
-      <span class="warn">Not yet.</span>
+      <span class="warn">{{ _("Not yet.") }}</span>
     {% endif %}
   </p>
   <p class="muted" style="font-size:13.5px;margin:0 0 14px">{{ verdict.reason }}.</p>
@@ -70,28 +70,28 @@
   <table>
     <tbody>
       <tr>
-        <td class="l">Bets the model actually backed, settled</td>
+        <td class="l">{{ _("Bets the model actually backed, settled") }}</td>
         <td class="num">{{ verdict.n }}</td>
       </tr>
       {% if verdict.n %}
       <tr>
-        <td class="l">Won</td>
+        <td class="l">{{ _("Won") }}</td>
         <td class="num">{{ verdict.wins }} ({{ '%.0f%%'|format(verdict.rate * 100) }})</td>
       </tr>
       <tr>
         <td class="l">
-          Breakeven at these prices
+          {{ _("Breakeven at these prices") }}
           <div class="muted" style="font-size:12px;white-space:normal">
-            The average of 1/odds across the bets taken &mdash; the rate that merely breaks even
+            {% trans %}The average of 1/odds across the bets taken &mdash; the rate that merely breaks even{% endtrans %}
           </div>
         </td>
         <td class="num">{{ '%.0f%%'|format(verdict.breakeven * 100) }}</td>
       </tr>
       <tr>
         <td class="l">
-          Standard errors clear of breakeven
+          {{ _("Standard errors clear of breakeven") }}
           <div class="muted" style="font-size:12px;white-space:normal">
-            Below 2 the result is within what luck produces
+            {{ _("Below 2 the result is within what luck produces") }}
           </div>
         </td>
         <td class="num {{ 'good' if verdict.z >= 2 else 'muted' }}">{{ '%.1f'|format(verdict.z) }}</td>
@@ -101,30 +101,30 @@
   </table>
 
   <p class="muted" style="font-size:12.5px;margin:14px 0 0">
-    <strong>The rule:</strong> bet when the model has beaten the market by more than luck
+    {% trans %}<strong>The rule:</strong> bet when the model has beaten the market by more than luck
     explains &mdash; not when it claims an edge. A model's own edge estimate is a claim
     about itself; the only thing that can check it is a settled record. Two standard
     errors is the usual bar, and at these prices that means roughly 100&ndash;200 settled
     bets. That is not pessimism, it is what it costs to tell a real 5% edge from a coin
-    that landed well.
+    that landed well.{% endtrans %}
   </p>
   <p class="muted" style="font-size:12.5px;margin:8px 0 0">
-    You do <strong>not</strong> have to stake money to get there. Every recorded line is
-    graded whether or not a bet was placed, so the record builds itself for free.
+    {% trans %}You do <strong>not</strong> have to stake money to get there. Every recorded line is
+    graded whether or not a bet was placed, so the record builds itself for free.{% endtrans %}
   </p>
 </div>
 
 {% if totals.settled < 100 %}
 <div class="note" style="border-left-color: var(--warn)">
-  <strong>{{ totals.settled }} settled — far too few to conclude anything.</strong>
-  Detecting a real 5% edge with any confidence takes something closer to 100–200
+  <strong>{% trans n=totals.settled %}{{ n }} settled — far too few to conclude anything.{% endtrans %}</strong>
+  {% trans %}Detecting a real 5% edge with any confidence takes something closer to 100–200
   settled bets. Until then this page is a record, not a verdict, and a run of wins
-  is as likely to be luck as skill.
+  is as likely to be luck as skill.{% endtrans %}
   {% if totals.both_prices < totals.recorded %}
-  Note also that only {{ totals.both_prices }} of {{ totals.recorded }} lines have
+  {% trans both=totals.both_prices, total=totals.recorded %}Note also that only {{ both }} of {{ total }} lines have
   <strong>both</strong> prices, so the bookmaker's margin cannot be stripped out of the
   rest &mdash; every edge below is measured against an inflated probability, which
-  understates the true bar.
+  understates the true bar.{% endtrans %}
   {% endif %}
 </div>
 {% endif %}
@@ -134,36 +134,36 @@
     <table class="sortable">
       <thead>
         <tr>
-          <th class="l">Kickoff</th>
-          {% if all_leagues %}<th class="l">League</th>{% endif %}
-          <th class="l">Match</th>
-          <th class="l">Line is about</th>
-          <th>Line</th>
-          <th>Bet</th>
-          <th>Odds</th>
-          <th>Model</th>
-          <th>P(side)</th>
-          <th>Edge</th>
-          <th>Stake</th>
-          <th>Actual</th>
-          <th>Result</th>
+          <th class="l">{{ _("Kickoff") }}</th>
+          {% if all_leagues %}<th class="l">{{ _("League") }}</th>{% endif %}
+          <th class="l">{{ _("Match") }}</th>
+          <th class="l">{{ _("Line is about") }}</th>
+          <th>{{ _("Line") }}</th>
+          <th>{{ _("Bet") }}</th>
+          <th>{{ _("Odds") }}</th>
+          <th>{{ _("Model") }}</th>
+          <th>{{ _("P(side)") }}</th>
+          <th>{{ _("Edge") }}</th>
+          <th>{{ _("Stake") }}</th>
+          <th>{{ _("Actual") }}</th>
+          <th>{{ _("Result") }}</th>
         </tr>
       </thead>
       <tbody>
         {% for r in rows %}
         <tr>
-          <td class="l muted" data-v="{{ r.kickoff.timestamp() }}">{{ r.kickoff.strftime('%d %b') }}</td>
+          <td class="l muted" data-v="{{ r.kickoff.timestamp() }}">{{ r.kickoff|dt('%d %b') }}</td>
           {% if all_leagues %}<td class="l muted">{{ league_names.get(r.competition, r.competition) }}</td>{% endif %}
           <td class="l"><a href="{{ url_for('match', match_id=r.match_id) }}">{{ r.home_abbr }} v {{ r.away_abbr }}</a></td>
           <td class="l">{{ r.team }}</td>
           <td class="num">{{ '%.1f'|format(r.line) }}</td>
           <td>
-            {% if r.side %}<span class="chip {{ 'ok' if r.backed }}">{{ r.side }}</span>
-            {% else %}<span class="chip">no bet</span>{% endif %}
+            {% if r.side %}<span class="chip {{ 'ok' if r.backed }}">{{ _(r.side) }}</span>
+            {% else %}<span class="chip">{{ _("no bet") }}</span>{% endif %}
           </td>
           <td class="num">{{ '%.2f'|format(r.odds) if r.odds else '-' }}</td>
           <td class="num muted">{{ '%.1f'|format(r.pred) if r.pred is not none else '-'
-            }}{% if r.fallback %}<sup class="warn" title="No fitted model for this league yet - naive midpoint">*</sup>{% endif %}</td>
+            }}{% if r.fallback %}<sup class="warn" title="{{ _('No fitted model for this league yet - naive midpoint') }}">*</sup>{% endif %}</td>
           <td class="num">{{ '%.0f%%'|format(r.p_side * 100) if r.p_side is not none else '-' }}</td>
           <td class="num {{ 'good' if r.backed else 'muted' }}"
               data-v="{{ r.edge if r.edge is not none else -999 }}">
@@ -174,10 +174,10 @@
               title="{{ r.why }}">{{ r.rating }}/10</td>
           <td class="num">{{ '%.1f'|format(r.actual) if r.actual is not none else '-' }}</td>
           <td>
-            {% if not r.side %}<span class="chip">skipped</span>
-            {% elif r.hit is none %}<span class="chip">pending</span>
-            {% elif r.hit %}<span class="chip ok">won</span>
-            {% else %}<span class="chip no">lost</span>{% endif %}
+            {% if not r.side %}<span class="chip">{{ _("skipped") }}</span>
+            {% elif r.hit is none %}<span class="chip">{{ _("pending") }}</span>
+            {% elif r.hit %}<span class="chip ok">{{ _("won") }}</span>
+            {% else %}<span class="chip no">{{ _("lost") }}</span>{% endif %}
           </td>
         </tr>
         {% endfor %}
@@ -186,30 +186,31 @@
   </div>
   {% if fallback_n %}
   <p class="muted" style="font-size:12.5px;margin-bottom:0">
-    <sup class="warn">*</sup> <strong>{{ fallback_n }} row{{ '' if fallback_n == 1 else 's' }}
-    did not come from a fitted model.</strong> Their league has too little history to fit one,
+    <sup class="warn">*</sup> <strong>{% trans count=fallback_n %}{{ count }} row
+    did not come from a fitted model.{% pluralize %}{{ count }} rows
+    did not come from a fitted model.{% endtrans %}</strong> {% trans %}Their league has too little history to fit one,
     so the figure is the naive midpoint &mdash; the side's own recent possession averaged
     against what its opponent concedes, on as few as two matches each. The midpoint pulls
     hard towards 50, so it understates a mismatch: a strong side away at a weak one reads
     lower than it should, and the edge against a bookmaker's line can come out the wrong
-    way round entirely. Treat the Bet, Edge and Stake columns on these rows as unproven.
+    way round entirely. Treat the Bet, Edge and Stake columns on these rows as unproven.{% endtrans %}
   </p>
   {% endif %}
   {% if not rows %}
   <div class="empty">
-    No lines recorded yet. Add them to <code>odds.txt</code> and the next run will import them.
+    {% trans %}No lines recorded yet. Add them to <code>odds.txt</code> and the next run will import them.{% endtrans %}
   </div>
   {% endif %}
 </div>
 
 <div class="panel">
-  <h2>Adding lines</h2>
+  <h2>{{ _("Adding lines") }}</h2>
   <p class="muted" style="font-size:13.5px">
-    Edit <code>odds.txt</code> in GitHub's web editor, paste a row, commit. The hourly run
+    {% trans %}Edit <code>odds.txt</code> in GitHub's web editor, paste a row, commit. The hourly run
     imports it. Columns are
     <code>date &middot; club &middot; club &middot; whose-possession &middot; line &middot; over &middot; under</code>,
     whitespace-separated, with <code>-</code> for a price you do not have. Club order does
-    not matter. Use the abbreviations below, or names without spaces.
+    not matter. Use the abbreviations below, or names without spaces.{% endtrans %}
   </p>
   <div class="featlist">
     {% for a in ['ARS Arsenal','AVL Aston Villa','BOU Bournemouth','BRE Brentford',

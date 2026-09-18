@@ -14,7 +14,7 @@
 <div class="leaguetabs">
   {% if _all %}
   <a href="{{ url_for(_ep, league='all') }}"
-     class="{{ 'on' if _active == 'all' }}">All leagues</a>
+     class="{{ 'on' if _active == 'all' }}">{{ _("All leagues") }}</a>
   {% endif %}
   {% for code, name in leagues %}
   <a href="{{ url_for(_ep, league=code) }}"

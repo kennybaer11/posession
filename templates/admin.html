@@ -1,13 +1,13 @@
 {% extends "base.html" %}
-{% block title %}Admin &middot; PL data{% endblock %}
-{% block heading %}Import odds{% endblock %}
+{% block title %}{{ _("Admin") }} &middot; PL data{% endblock %}
+{% block heading %}{{ _("Import odds") }}{% endblock %}
 
 {% block content %}
 
 <p class="muted" style="margin-top:-12px">
-  Signed in as <strong>{{ user }}</strong> &middot;
-  <a href="{{ url_for('admin_advice') }}">advice record</a> &middot;
-  <a href="{{ url_for('admin_logout') }}">sign out</a>
+  {% trans %}Signed in as <strong>{{ user }}</strong>{% endtrans %} &middot;
+  <a href="{{ url_for('admin_advice') }}">{{ _("advice record") }}</a> &middot;
+  <a href="{{ url_for('admin_logout') }}">{{ _("sign out") }}</a>
 </p>
 
 {% if error %}
@@ -16,24 +16,23 @@
 
 {% if written is not none %}
 <div class="note" style="border-left-color: var(--good)">
-  <strong>Imported {{ written }} line{{ '' if written == 1 else 's' }}.</strong>
-  They appear on the Model and Learning pages immediately, and reach the published
-  site on the next hourly run.
+  <strong>{% trans count=written %}Imported {{ count }} line.{% pluralize %}Imported {{ count }} lines.{% endtrans %}</strong>
+  {% trans %}They appear on the Model and Learning pages immediately, and reach the published
+  site on the next hourly run.{% endtrans %}
 </div>
 {% endif %}
 
 <div class="panel">
-  <h2>Paste rows, or upload a spreadsheet</h2>
+  <h2>{{ _("Paste rows, or upload a spreadsheet") }}</h2>
   <form method="post" enctype="multipart/form-data">
-    <textarea name="pasted" rows="6" placeholder="Paste rows here - straight from
-chance.cz, from a spreadsheet, or typed:&#10;&#10;2026-09-12    ARS    CHE    ARS    54.5    O1.75    U1.94"
+    <textarea name="pasted" rows="6" placeholder="{{ _('Paste rows here - straight from chance.cz, from a spreadsheet, or typed:') }}&#10;&#10;2026-09-12    ARS    CHE    ARS    54.5    O1.75    U1.94"
       style="width:100%;padding:10px 12px;border:1px solid var(--line);border-radius:7px;
              background:var(--bg);color:var(--ink);font-size:13px;
              font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
              margin-bottom:12px;resize:vertical"></textarea>
 
     <div class="muted" style="font-size:12.5px;margin-bottom:12px">
-      &mdash; or attach a file &mdash;
+      &mdash; {{ _("or attach a file") }} &mdash;
       <input type="file" name="sheet" accept=".xlsx,.xlsm,.csv,.tsv,.txt"
              style="font-size:13px;margin-left:8px">
     </div>
@@ -41,39 +40,39 @@ chance.cz, from a spreadsheet, or typed:&#10;&#10;2026-09-12    ARS    CHE    AR
     <button type="submit" name="action" value="preview"
             style="padding:9px 20px;border:none;border-radius:7px;background:var(--accent);
                    color:#fff;font-weight:600;font-size:14px;cursor:pointer">
-      Read it
+      {{ _("Read it") }}
     </button>
   </form>
   <p class="muted" style="font-size:13px;margin-bottom:0">
-    Pasting a selection out of a spreadsheet or the bookmaker's table works &mdash; that
+    {% trans %}Pasting a selection out of a spreadsheet or the bookmaker's table works &mdash; that
     arrives as tab-separated text, which is read the same way a file is.
-    <code>.xlsx</code>, <code>.csv</code> and tab-separated text are all accepted.
+    <code>.xlsx</code>, <code>.csv</code> and tab-separated text are all accepted.{% endtrans %}
     <br><br>
-    With a header row, columns are matched <strong>by name</strong> rather than position
+    {% trans %}With a header row, columns are matched <strong>by name</strong> rather than position
     &mdash; <code>Match</code> holding "Arsenal - Chelsea", or two separate club columns,
     plus date / line / over / under, in English or the Czech chance.cz uses. Reorder or
     insert columns freely; a positional reader would silently read the wrong field, and
-    for odds that means recording the opposite bet.
+    for odds that means recording the opposite bet.{% endtrans %}
     <br><br>
-    Without a header row, use the compact form:
-    <code>date &nbsp; club &nbsp; club &nbsp; team &nbsp; line &nbsp; O&lt;over&gt; &nbsp; U&lt;under&gt;</code>.
-    Tag the prices with O and U and their column order stops mattering.
+    {{ _("Without a header row, use the compact form:") }}
+    <code>{% trans %}date &nbsp; club &nbsp; club &nbsp; team &nbsp; line &nbsp; O&lt;over&gt; &nbsp; U&lt;under&gt;{% endtrans %}</code>.
+    {{ _("Tag the prices with O and U and their column order stops mattering.") }}
   </p>
 </div>
 
 {% if preview is not none %}
 <div class="panel">
   <h2>
-    What this would import
-    <span class="sub">&mdash; {{ preview|length }} row{{ '' if preview|length == 1 else 's' }} understood{% if problems %}, {{ problems|length }} not{% endif %}</span>
+    {{ _("What this would import") }}
+    <span class="sub">&mdash; {% trans count=preview|length %}{{ count }} row understood{% pluralize %}{{ count }} rows understood{% endtrans %}{% if problems %}, {% trans n=problems|length %}{{ n }} not{% endtrans %}{% endif %}</span>
   </h2>
 
   {% if preview %}
   <div class="tablewrap">
     <table>
       <thead>
-        <tr><th class="l">Match</th><th class="l">Line is about</th><th>Line</th>
-            <th>Over</th><th>Under</th><th class="l">Note</th></tr>
+        <tr><th class="l">{{ _("Match") }}</th><th class="l">{{ _("Line is about") }}</th><th>{{ _("Line") }}</th>
+            <th>{{ _("Over") }}</th><th>{{ _("Under") }}</th><th class="l">{{ _("Note") }}</th></tr>
       </thead>
       <tbody>
         {% for r in preview %}
@@ -85,9 +84,9 @@ chance.cz, from a spreadsheet, or typed:&#10;&#10;2026-09-12    ARS    CHE    AR
           <td class="num">{{ '%.2f'|format(r.under_odds) if r.under_odds else '&ndash;'|safe }}</td>
           <td class="l muted" style="font-size:12px;white-space:normal">
             {% if not (r.over_odds and r.under_odds) %}
-              <span class="chip wa">one price</span> margin cannot be removed
+              <span class="chip wa">{{ _("one price") }}</span> {{ _("margin cannot be removed") }}
             {% endif %}
-            {% if r._flipped %}<span class="chip">clubs listed the other way round</span>{% endif %}
+            {% if r._flipped %}<span class="chip">{{ _("clubs listed the other way round") }}</span>{% endif %}
           </td>
         </tr>
         {% endfor %}
@@ -99,22 +98,22 @@ chance.cz, from a spreadsheet, or typed:&#10;&#10;2026-09-12    ARS    CHE    AR
     <button type="submit" name="action" value="commit"
             style="padding:9px 20px;border:none;border-radius:7px;background:var(--good);
                    color:#fff;font-weight:600;font-size:14px;cursor:pointer">
-      Looks right &mdash; import these {{ preview|length }}
+      {% trans n=preview|length %}Looks right &mdash; import these {{ n }}{% endtrans %}
     </button>
   </form>
   <p class="muted" style="font-size:12.5px;margin-bottom:0">
-    Nothing has been written yet. Re-importing the same line updates it rather than
-    duplicating, so a correction is just another upload.
+    {% trans %}Nothing has been written yet. Re-importing the same line updates it rather than
+    duplicating, so a correction is just another upload.{% endtrans %}
   </p>
   {% else %}
-  <div class="empty">No rows could be matched to a fixture.</div>
+  <div class="empty">{{ _("No rows could be matched to a fixture.") }}</div>
   {% endif %}
 </div>
 {% endif %}
 
 {% if problems %}
 <div class="panel">
-  <h2>Rows that could not be used</h2>
+  <h2>{{ _("Rows that could not be used") }}</h2>
   <ul class="muted" style="font-size:13px;margin:0;padding-left:20px">
     {% for p in problems %}<li>{{ p }}</li>{% endfor %}
   </ul>
@@ -122,31 +121,31 @@ chance.cz, from a spreadsheet, or typed:&#10;&#10;2026-09-12    ARS    CHE    AR
 {% endif %}
 
 <div class="panel">
-  <h2>Recently imported</h2>
+  <h2>{{ _("Recently imported") }}</h2>
   <div class="tablewrap">
     <table>
       <thead>
-        <tr><th class="l">Kickoff</th><th class="l">Match</th><th class="l">Team</th>
-            <th>Line</th><th>Over</th><th>Under</th><th class="l">Added</th></tr>
+        <tr><th class="l">{{ _("Kickoff") }}</th><th class="l">{{ _("Match") }}</th><th class="l">{{ _("Team") }}</th>
+            <th>{{ _("Line") }}</th><th>{{ _("Over") }}</th><th>{{ _("Under") }}</th><th class="l">{{ _("Added") }}</th></tr>
       </thead>
       <tbody>
         {% for r in recent %}
         <tr>
-          <td class="l muted">{{ r.kickoff.strftime('%d %b') }}</td>
+          <td class="l muted">{{ r.kickoff|dt('%d %b') }}</td>
           <td class="l">{{ r.home_abbr }} v {{ r.away_abbr }}</td>
           <td class="l">{{ r.team }}</td>
           <td class="num">{{ '%.1f'|format(r.line) }}</td>
           <td class="num muted">{{ '%.2f'|format(r.over_odds) if r.over_odds else '&ndash;'|safe }}</td>
           <td class="num muted">{{ '%.2f'|format(r.under_odds) if r.under_odds else '&ndash;'|safe }}</td>
           <td class="l muted" style="font-size:12px">
-            {{ r.captured_at.strftime('%d %b %H:%M') if r.captured_at else '&ndash;'|safe }}
+            {{ r.captured_at|dt('%d %b %H:%M') if r.captured_at else '&ndash;'|safe }}
           </td>
         </tr>
         {% endfor %}
       </tbody>
     </table>
   </div>
-  {% if not recent %}<div class="empty">Nothing imported yet.</div>{% endif %}
+  {% if not recent %}<div class="empty">{{ _("Nothing imported yet.") }}</div>{% endif %}
 </div>
 
 {% endblock %}

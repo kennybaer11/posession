@@ -81,13 +81,16 @@ _CS_DAYS = ["po", "út", "st", "čt", "pá", "so", "ne"]
 _CS_DAYS_FULL = ["pondělí", "úterý", "středa", "čtvrtek", "pátek", "sobota", "neděle"]
 _CS_MONTHS = ["led", "úno", "bře", "dub", "kvě", "čvn", "čvc", "srp", "zář",
               "říj", "lis", "pro"]
-_CS_MONTHS_FULL = ["leden", "únor", "březen", "duben", "květen", "červen",
-                   "červenec", "srpen", "září", "říjen", "listopad", "prosinec"]
+# Genitive, as a date is written in Czech: "18. září 2026", "3. května".
+_CS_MONTHS_FULL = ["ledna", "února", "března", "dubna", "května", "června",
+                   "července", "srpna", "září", "října", "listopadu", "prosince"]
 
 
 def strftime(value, fmt):
     """datetime.strftime with Czech day and month names when Czech is on."""
     if current_lang() == "cs":
+        # Czech writes the day as an ordinal: "18. zář", "18. září".
+        fmt = re.sub(r"%d(?= %[bB])", f"{value.day}.", fmt)
         fmt = re.sub(r"%([aAbB])", lambda m: {
             "a": _CS_DAYS[value.weekday()],
             "A": _CS_DAYS_FULL[value.weekday()],

@@ -173,12 +173,13 @@ def _ago(value, now=None):
     secs = (value - now).total_seconds()
     ahead, secs = secs > 0, abs(secs)
     if secs < 90:
-        return "just now"
+        return _("just now")
     d, rem = divmod(int(secs), 86400)
     h, rem = divmod(rem, 3600)
     mins = rem // 60
-    part = (f"{d}d {h}h" if d else f"{h}h {mins}m" if h else f"{mins}m")
-    return f"in {part}" if ahead else f"{part} ago"
+    part = (_("%(d)sd %(h)sh", d=d, h=h) if d else
+            _("%(h)sh %(m)sm", h=h, m=mins) if h else _("%(m)sm", m=mins))
+    return _("in %(t)s", t=part) if ahead else _("%(t)s ago", t=part)
 
 
 @app.template_filter("season")
@@ -423,6 +424,7 @@ def match(match_id):
         ("Fouls", "fouls", 0), ("Yellows", "yellows", 0),
         ("Reds", "reds", 0), ("Offsides", "offsides", 0),
     ]
+    metrics = [(_(label), key, places) for label, key, places in metrics]
     return render_template("match.html", home=home, away=away, metrics=metrics,
                            state=state, mid=mid, goals=goals)
 
@@ -447,6 +449,7 @@ def fixtures():
     # makes of it. Taken from the same helper the Model and Bets pages use, so
     # the three cannot show different verdicts for one match.
     open_lines, graded = stake_guidance(want)
+    open_lines = _explained(open_lines)
     by_match = {}
     for r in open_lines:
         by_match.setdefault(r["match_id"], []).append(r)
@@ -740,6 +743,72 @@ def stake_guidance(want=None):
     return open_lines, graded
 
 
+# model.choose_side and model.verdict explain themselves in English, and that
+# English is also what advice.py freezes into pl_advice - so it is translated
+# here, on the way to a page, never where it is made. Each pattern is one of
+# the fixed sentences model.py builds; its numbers are carried over as-is.
+_NUM = r"(?P<{}>[-+]?[\d.]+%?)"
+_EXPLAIN = [(re.compile(p.format(**{k: _NUM.format(k) for k in (
+                "odds", "gap", "be", "score", "cap", "n", "edge", "w", "rate",
+                "z", "k")}) + "$"), msgid) for p, msgid in (
+    (r"best side is (?P<side>OVER|UNDER) at {odds}, still {gap} short of its "
+     r"{be} breakeven",
+     "best side is %(side)s at %(odds)s, still %(gap)s short of its %(be)s "
+     "breakeven"),
+    (r"edge alone suggests {score}/10, capped at {cap} by (?P<label>.+) "
+     r"\({n} settled\)",
+     "edge alone suggests %(score)s/10, capped at %(cap)s %(by)s (%(n)s settled)"),
+    (r"edge of {edge} at {odds}", "edge of %(edge)s at %(odds)s"),
+    (r"{w}/{n} at {rate} against a {be} breakeven - {z} standard errors clear, "
+     r"which luck does not explain",
+     "%(w)s/%(n)s at %(rate)s against a %(be)s breakeven - %(z)s standard "
+     "errors clear, which luck does not explain"),
+    (r"{w}/{n} at {rate}, below the {be} breakeven - the model is losing to "
+     r"the price",
+     "%(w)s/%(n)s at %(rate)s, below the %(be)s breakeven - the model is "
+     "losing to the price"),
+    (r"{w}/{n} at {rate} against {be} breakeven, but only {z} standard errors "
+     r"clear; about {k} settled bets at this rate would settle it",
+     "%(w)s/%(n)s at %(rate)s against %(be)s breakeven, but only %(z)s "
+     "standard errors clear; about %(k)s settled bets at this rate would "
+     "settle it"),
+    (r"{w}/{n} at {rate} against {be} breakeven, but only {z} standard errors "
+     r"clear",
+     "%(w)s/%(n)s at %(rate)s against %(be)s breakeven, but only %(z)s "
+     "standard errors clear"),
+)]
+_ONLY_N = re.compile(r"only (\d+) settled bets?\. Below about 50 the result is "
+                     r"noise whichever way it falls$")
+
+
+def explain(text):
+    """A stake or verdict explanation from model.py, in the page's language."""
+    if not text:
+        return text
+    m = _ONLY_N.match(text)
+    if m:
+        return i18n.ngettext(
+            "only %(num)s settled bet. Below about 50 the result is noise "
+            "whichever way it falls",
+            "only %(num)s settled bets. Below about 50 the result is noise "
+            "whichever way it falls", int(m.group(1)))
+    for pattern, msgid in _EXPLAIN:
+        m = pattern.match(text)
+        if m:
+            params = m.groupdict()
+            if "side" in params:
+                params["side"] = _(params["side"])
+            if "label" in params:
+                params["by"] = _("by " + params.pop("label"))
+            return _(msgid, **params)
+    return _(text)
+
+
+def _explained(rows):
+    """Copies of line rows with `why` in the page's language, for display."""
+    return [dict(r, why=explain(r["why"])) for r in rows]
+
+
 # -- scraper status ---------------------------------------------------------
 
 WORKFLOW = Path(__file__).resolve().parent / ".github" / "workflows" / "odds.yml"
@@ -865,6 +934,8 @@ def bets():
     graded_bets = [(bool(r["hit"]), r["odds"]) for r in rows
                    if r["actual"] is not None and r["backed"] and r["odds"]]
     call = m.verdict(graded_bets)
+    call = dict(call, reason=explain(call["reason"]))
+    rows = _explained(rows)
 
     totals = {
         "recorded": len(rows), "settled": settled, "won": won,
@@ -896,6 +967,7 @@ def model():
     want = scope()
     if want == ALL:
         open_lines, graded = stake_guidance(ALL)
+        open_lines = _explained(open_lines)
         return render_template(
             "model.html", all_leagues=True, scope=ALL,
             statuses=league_status(), open_lines=open_lines, graded=graded,
@@ -959,10 +1031,10 @@ def model():
         cols = [c for c in cols if c not in seen]
         seen.update(cols)
         if cols:
-            ordered[name] = cols
+            ordered[_(name)] = cols
     rest = [c for c in feats if c not in seen]
     if rest:
-        ordered["Other"] = rest
+        ordered[_("Other")] = rest
 
     coverage = None
     if len(train):
@@ -973,6 +1045,7 @@ def model():
     # model's own recommendation; the Bets page is the record of how such
     # recommendations turned out.
     open_lines, graded = stake_guidance(lg)
+    open_lines = _explained(open_lines)
 
     # How much of the training set each h2h column actually covers - in a
     # single season most pairs have not met yet, so these are mostly empty.
@@ -1017,7 +1090,7 @@ def admin_login():
         if _login_blocked(ip):
             return render_template(
                 "admin_login.html",
-                error="Too many attempts. Wait five minutes."), 429
+                error=_("Too many attempts. Wait five minutes.")), 429
 
         user = request.form.get("username", "")
         password = request.form.get("password", "")
@@ -1035,7 +1108,7 @@ def admin_login():
         _record_login_failure(ip)
         # One message for both cases: saying which was wrong tells an attacker
         # whether the username exists.
-        error = "Wrong username or password."
+        error = _("Wrong username or password.")
     return render_template("admin_login.html", error=error)
 
 
@@ -1129,7 +1202,7 @@ def admin():
                 name = session.get("upload_name", "")
                 path = _staged_path(token) if token else None
                 if not path or not path.exists():
-                    raise ValueError("Nothing staged - upload the file again.")
+                    raise ValueError(_("Nothing staged - upload the file again."))
                 parsed = odds_sheet.parse_bytes(path.read_bytes(), name)
                 ready, problems = io_mod.resolve_rows(db_handle(), parsed)
                 for r in ready:
@@ -1153,7 +1226,7 @@ def admin():
                     raw = upload.read()
                     name = upload.filename
                 else:
-                    raise ValueError("Paste some rows or choose a file.")
+                    raise ValueError(_("Paste some rows or choose a file."))
                 # A paste with no header row is the common case: people copy
                 # the data rows and leave the titles behind, and the compact
                 # form has no header at all. parse_bytes RAISES on a missing
@@ -1169,9 +1242,9 @@ def admin():
                     parsed = import_odds_parse_text(raw.decode("utf-8", "replace"))
                 if not parsed:
                     raise ValueError(
-                        "No rows understood. Include a header row naming the "
-                        "columns, or paste lines in the compact form: "
-                        "date  club  club  team  line  O<over>  U<under>"
+                        _("No rows understood. Include a header row naming the "
+                          "columns, or paste lines in the compact form: "
+                          "date  club  club  team  line  O<over>  U<under>")
                         + (f"  ({header_problem})" if header_problem else ""))
                 preview, problems = io_mod.resolve_rows(db_handle(), parsed)
                 # The file is staged on disk, not in the session. Flask keeps
