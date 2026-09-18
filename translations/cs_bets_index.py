@@ -48,7 +48,7 @@ CS = {
         "přepočítává při každém sestavení, takže se zlepšuje spolu s modelem &mdash; a ze stejného "
         "důvodu <em>není</em> záznamem toho, co web doporučil: změna modelu může minulou sázku "
         "přesunout z VÍCE na nesázet. Neměnný záznam doporučení, jak byla skutečně dána, najdete "
-        "v sekci Admin pod Záznamem doporučení. Tahle stránka ukazuje, jestli se model zlepšuje; "
+        "na stránce Tipy. Tahle stránka ukazuje, jestli se model zlepšuje; "
         "podle té druhé posuzujte doporučení.",
     "<strong>How it is graded.</strong> Each match counts once: if the market moved and a second "
     "line was recorded, only the first is graded &mdash; the opening price the scraper exists to "

@@ -3,7 +3,7 @@ CS = {
     "Admin": "Admin",
     "Signed in as <strong>%(user)s</strong>": "Přihlášen jako <strong>%(user)s</strong>",
     "sign out": "odhlásit",
-    "advice record": "záznam doporučení",
+    "advice record": "tipy",
     "import odds": "import kurzů",
 
     # -- admin.html ----------------------------------------------------------
@@ -61,7 +61,7 @@ CS = {
     "Nothing imported yet.": "Zatím nic neimportováno.",
 
     # -- admin_advice.html ---------------------------------------------------
-    "Advice record": "Záznam doporučení",
+    "Advice record": "Tipy",
     "What the site advised, exactly as it stood at kickoff.":
         "Co web doporučoval, přesně tak, jak to stálo ve chvíli výkopu.",
     "Each line's advice is saved on every run while its match is still to be played, and locked the moment the match kicks off &mdash; the database refuses any later change. Nothing on this page is recalculated: a new model, a new &sigma; or a code fix changes the Learning page and never this one. Only the actual possession is looked up, because that is a fact about the match.":
