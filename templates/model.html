@@ -14,6 +14,37 @@
   leagues is the guidance, and which leagues are modelled at all.{% endtrans %}
 </div>
 
+{% if vs_total %}
+<div class="panel">
+  <h2>{{ _("Model vs bookmaker") }} <span class="sub">&mdash; {{ _("who came closer to the actual possession") }}</span></h2>
+  <p class="muted" style="margin-top:0">
+    {% trans %}Every settled line: the model's prediction (made only from matches played
+    before it) against the bookmaker's own line. Until the model's error is clearly below the
+    line's, its edges are its own mistakes, not the bookmaker's.{% endtrans %}
+  </p>
+  <div class="tablewrap">
+    <table>
+      <thead><tr><th class="l">{{ _("League") }}</th><th>{{ _("Lines") }}</th>
+        <th title="{{ _("Mean absolute error of the model's prediction") }}">{{ _("Model error") }}</th>
+        <th title="{{ _("Mean absolute error of the bookmaker's line") }}">{{ _("Bookmaker error") }}</th>
+        <th>{{ _("Model closer") }}</th></tr></thead>
+      <tbody>
+        {% for v in vs_leagues if v.n %}
+        <tr><td class="l">{{ v.name }}</td><td class="num">{{ v.n }}</td>
+          <td class="num {{ 'good' if v.model < v.line else 'bad' }}">{{ '%.2f'|format(v.model) }}</td>
+          <td class="num">{{ '%.2f'|format(v.line) }}</td>
+          <td class="num">{{ v.closer }} / {{ v.n }}</td></tr>
+        {% endfor %}
+        <tr><td class="l"><strong>{{ _("All leagues") }}</strong></td><td class="num"><strong>{{ vs_total.n }}</strong></td>
+          <td class="num {{ 'good' if vs_total.model < vs_total.line else 'bad' }}"><strong>{{ '%.2f'|format(vs_total.model) }}</strong></td>
+          <td class="num"><strong>{{ '%.2f'|format(vs_total.line) }}</strong></td>
+          <td class="num"><strong>{{ vs_total.closer }} / {{ vs_total.n }}</strong></td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+
 <div class="panel">
   <h2>{{ _("Modelling readiness") }} <span class="sub">&mdash; {{ _("which leagues have enough history to fit") }}</span></h2>
   <div class="tablewrap">

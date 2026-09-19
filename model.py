@@ -38,7 +38,16 @@ CORE_FEATURES = [
     "home_poss_l20", "away_poss_l20",
     "home_poss_home_l5", "away_poss_away_l5",
     "home_pass_acc_l5", "away_pass_acc_l5",
+    # How strong a favourite the home side is, from pre-match 1X2 odds
+    # (match_odds.py). Added 19 Sep 2026: -0.12 points of walk-forward error
+    # over 1,014 matches in the three leagues, t=-2.1.
+    "p_diff",
 ]
+
+# Features that come from the betting market rather than match history. An
+# upcoming fixture without them yet is predicted by a model fitted without
+# them, rather than on an imputed median that would pretend to know the odds.
+ODDS_FEATURES = ["p_diff"]
 
 
 class NaiveMidpoint:

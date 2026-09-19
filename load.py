@@ -132,10 +132,25 @@ def training_set(min_history=None, season="config", half_life_days=None,
 
     sql = sql.replace("ORDER BY kickoff",
                       f"AND {TARGET} IS NOT NULL ORDER BY kickoff")
-    df = pd.read_sql(sql, engine(), params=params, parse_dates=["kickoff"])
+    df = with_match_odds(pd.read_sql(sql, engine(), params=params,
+                                     parse_dates=["kickoff"]))
     df["weight"] = (decay_weights(df["kickoff"], half_life_days)
                     if len(df) else pd.Series(dtype="float64"))
     return df
+
+
+def with_match_odds(df):
+    """Add p_diff - the home side's de-vigged 1X2 win probability minus the
+    away side's - from pl_match_odds (see match_odds.py). NaN where no odds
+    were found; model.build() imputes those in training, and upcoming fixtures
+    without odds are predicted by a model fitted without the column."""
+    odds = pd.read_sql("SELECT match_id, (p_home - p_away)::float AS p_diff "
+                       "FROM pl_match_odds", engine())
+    if "p_diff" in df.columns:
+        df = df.drop(columns=["p_diff"])
+    out = df.merge(odds, on="match_id", how="left")
+    out.index = df.index
+    return out
 
 
 def baselines(train, target=TARGET):
@@ -173,8 +188,8 @@ def fixtures(competition="config"):
     if competition and competition != "all":
         sql += " WHERE competition = %(competition)s"
         params["competition"] = competition
-    return pd.read_sql(sql + " ORDER BY kickoff", engine(), params=params,
-                       parse_dates=["kickoff"])
+    return with_match_odds(pd.read_sql(sql + " ORDER BY kickoff", engine(),
+                                       params=params, parse_dates=["kickoff"]))
 
 
 def feature_columns(train, upcoming):

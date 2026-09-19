@@ -706,6 +706,17 @@ def _fitted_predictor(competition, settled_ids=()):
                    ridge__sample_weight=train["weight"])
         preds = dict(zip(upcoming["match_id"].astype(str),
                          fitted.predict(upcoming[feats])))
+        # Fixtures whose 1X2 odds are not out yet: predicted without them.
+        odds_cols = [c for c in m.ODDS_FEATURES if c in feats]
+        if odds_cols:
+            missing = upcoming[upcoming[odds_cols].isna().any(axis=1)]
+            base = [c for c in feats if c not in odds_cols]
+            if len(missing) and base:
+                plain = m.build(alpha=1.0)
+                plain.fit(train[base], train[loader.TARGET],
+                          ridge__sample_weight=train["weight"])
+                preds.update(zip(missing["match_id"].astype(str),
+                                 plain.predict(missing[base])))
 
         # Settled lines: one out-of-sample fit each, on strictly earlier matches.
         wanted = {str(x) for x in settled_ids}
@@ -853,13 +864,40 @@ def _line_rows(want=None):
     return out, graded
 
 
-def stake_guidance(want=None):
+def vs_bookmaker(rows):
+    """How close the model's prediction and the bookmaker's line each came to
+    the actual possession, over every settled line - per league and overall.
+
+    The honest scoreboard for the whole project. A model whose predictions are
+    no closer than the line has no edge whatever the stake guidance says: any
+    gap between the two is then its own error, not the bookmaker's.
+    """
+    settled = [r for r in rows
+               if r["actual"] is not None and r["pred"] is not None]
+
+    def summary(sub):
+        if not sub:
+            return None
+        n = len(sub)
+        model_err = [abs(r["pred"] - r["actual"]) for r in sub]
+        line_err = [abs(r["line"] - r["actual"]) for r in sub]
+        return {"n": n, "model": sum(model_err) / n, "line": sum(line_err) / n,
+                "closer": sum(1 for a, b in zip(model_err, line_err) if a < b)}
+
+    out = [dict(code=code, name=name,
+                **(summary([r for r in settled if r["competition"] == code])
+                   or {"n": 0}))
+           for code, name in LEAGUES]
+    return out, summary(settled)
+
+
+def stake_guidance(want=None, with_rows=False):
     """Lines on matches that have not been played yet."""
     rows, graded = _line_rows(want)
     open_lines = [r for r in rows if r["actual"] is None]
     open_lines.sort(key=lambda r: (-r["rating"],
                                    -(r["edge"] if r["edge"] is not None else -9)))
-    return open_lines, graded
+    return (open_lines, graded, rows) if with_rows else (open_lines, graded)
 
 
 # model.choose_side and model.verdict explain themselves in English, and that
@@ -1088,10 +1126,12 @@ def model():
     # is what the combined view shows.
     want = scope()
     if want == ALL:
-        open_lines, graded = stake_guidance(ALL)
+        open_lines, graded, all_rows = stake_guidance(ALL, with_rows=True)
+        vs_leagues, vs_total = vs_bookmaker(all_rows)
         open_lines = _explained(open_lines)
         return render_template(
             "model.html", all_leagues=True, scope=ALL,
+            vs_leagues=vs_leagues, vs_total=vs_total,
             statuses=league_status(), open_lines=open_lines, graded=graded,
             default_sigma=DEFAULT_SIGMA,
             fallback_n=sum(1 for r in open_lines if r["fallback"]),

@@ -166,4 +166,13 @@ CS = {
     "Matches of history behind each side's form": "Počet zápasů historie za formou každého týmu (D/H)",
     "price is against you": "kurz je proti vám",
     "No upcoming fixtures stored. Run the scraper.": "Nejsou uložené žádné nadcházející zápasy. Spusťte stahování.",
+    "Model vs bookmaker": "Model vs sázková kancelář",
+    "who came closer to the actual possession": "kdo byl blíž skutečnému držení míče",
+    "Every settled line: the model's prediction (made only from matches played before it) against the bookmaker's own line. Until the model's error is clearly below the line's, its edges are its own mistakes, not the bookmaker's.":
+        "Každá vyhodnocená hranice: předpověď modelu (spočítaná jen ze zápasů odehraných před ní) proti hranici sázkové kanceláře. Dokud chyba modelu není zřetelně nižší než chyba hranice, jeho výhody jsou jeho vlastní omyly, ne omyly sázkové kanceláře.",
+    "Mean absolute error of the model's prediction": "Průměrná absolutní chyba předpovědi modelu",
+    "Mean absolute error of the bookmaker's line": "Průměrná absolutní chyba hranice sázkové kanceláře",
+    "Model error": "Chyba modelu",
+    "Bookmaker error": "Chyba kanceláře",
+    "Model closer": "Model blíž",
 }
