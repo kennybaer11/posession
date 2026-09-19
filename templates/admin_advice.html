@@ -95,9 +95,11 @@
     </table>
   </div>
   <p class="muted" style="font-size:12.5px;margin-bottom:0">
+    {% if user %}
     {% trans count=totals.no_bet %}{{ count }} settled line carried no advised bet
     and does not count towards the totals.{% pluralize %}{{ count }} settled lines carried no advised bet
     and do not count towards the totals.{% endtrans %}
+    {% endif %}
     {% trans %}<sup class="warn">*</sup> marks advice that came from the
     naive midpoint because the league could not fit a model at the time.{% endtrans %}
   </p>

@@ -1348,6 +1348,11 @@ def admin_advice():
         "no_bet": sum(1 for r in settled if not r["backed"]),
     }
     call = m.verdict([(bool(r["hit"]), r["odds"]) for r in bets])
+    # Visitors see the bets only; "no bet" lines stay visible to the admin.
+    # The totals already count advised bets alone, so they do not change.
+    if not session.get("admin"):
+        settled = [r for r in settled if r["backed"]]
+        pending = [r for r in pending if r["backed"]]
     return render_template("admin_advice.html", settled=settled,
                            pending=pending, totals=totals, verdict=call,
                            league_names=LEAGUE_NAMES, user=session.get("admin"))
