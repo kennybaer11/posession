@@ -499,7 +499,11 @@ def recent_run(db, hours):
     with db.conn.cursor() as cur:
         cur.execute("""
             SELECT started_at, source, status FROM pl_scrape_run
-            WHERE started_at > now() - (%s * INTERVAL '1 hour')
+            -- Five minutes' slack: runs are scheduled exactly three hours
+            -- apart, and on 19 Sep the 12:20:02 run was held off by one that
+            -- started at 09:20:03 - one second inside the gap - which handed
+            -- every slot to whichever runner came second.
+            WHERE started_at > now() - (%s * INTERVAL '1 hour') + INTERVAL '5 minutes'
               AND NOT reused_jobs
               -- A timeout that never queued the match pages read nothing: on
               -- 17 Sep the 08:20 UTC listing job queued for 36 minutes and
