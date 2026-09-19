@@ -143,6 +143,21 @@ ALWAYS_RETRY_WITHIN_HOURS = 12
 # on the morning of the match. One read a day costs a credit per parked fixture.
 PARKED_RECHECK_HOURS = 24
 
+# ...and every six hours once kickoff is within two days. A day was too slow
+# there: Bayern v Union's market opened the day before (17 Sep) and would have
+# waited until the next morning, and on 19 Sep five Sunday LaLiga fixtures sat
+# unread from Friday evening. Four extra reads a day for the handful of parked
+# matches in that window - a few credits.
+SOON_WITHIN_HOURS = 48
+SOON_RECHECK_HOURS = 6
+
+
+def recheck_sql(kickoff="m.kickoff"):
+    """How long a parked fixture waits between reads, as an SQL interval."""
+    return (f"(CASE WHEN {kickoff} <= now() + INTERVAL '{SOON_WITHIN_HOURS} hours' "
+            f"THEN INTERVAL '{SOON_RECHECK_HOURS} hours' "
+            f"ELSE INTERVAL '{PARKED_RECHECK_HOURS} hours' END)")
+
 
 def unpark_round(db, found_match_ids):
     """Un-park every unpriced fixture in a round where a market just opened.
@@ -190,7 +205,8 @@ def upcoming_fixtures(db, hours, skip_priced=False, retry_all=False):
     appear closer to kickoff - but not on every run. Chance prices some matches
     and never prices others, and the ones it never prices would otherwise cost a
     credit each, every run, to learn the same nothing. After MAX_EMPTY_ATTEMPTS
-    empty reads a fixture is parked: read again once every PARKED_RECHECK_HOURS,
+    empty reads a fixture is parked: read again once every PARKED_RECHECK_HOURS
+    (SOON_RECHECK_HOURS within SOON_WITHIN_HOURS of kickoff),
     and on every run once kickoff is within ALWAYS_RETRY_WITHIN_HOURS.
     retry_all ignores the parking.
     """
@@ -210,10 +226,10 @@ def upcoming_fixtures(db, hours, skip_priced=False, retry_all=False):
                                 WHERE a.match_id = m.match_id), 0) < %s
                    OR COALESCE((SELECT a.last_attempt FROM pl_odds_attempt a
                                 WHERE a.match_id = m.match_id), '-infinity')
-                      < now() - (%s * INTERVAL '1 hour'))
+                      < now() - """ + recheck_sql() + """)
             ORDER BY m.kickoff
         """, (hours, skip_priced, retry_all, ALWAYS_RETRY_WITHIN_HOURS,
-              MAX_EMPTY_ATTEMPTS, PARKED_RECHECK_HOURS))
+              MAX_EMPTY_ATTEMPTS))
         return cur.fetchall()
 
 

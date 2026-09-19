@@ -998,8 +998,8 @@ def status():
                a.last_attempt,
                (COALESCE(a.attempts, 0) >= %(max)s
                 AND m.kickoff > now() + (%(near)s * INTERVAL '1 hour')
-                AND a.last_attempt >= now() - (%(recheck)s * INTERVAL '1 hour')) AS parked,
-               LEAST(a.last_attempt + (%(recheck)s * INTERVAL '1 hour'),
+                AND a.last_attempt >= now() - """ + op.recheck_sql() + """) AS parked,
+               LEAST(a.last_attempt + """ + op.recheck_sql() + """,
                      m.kickoff - (%(near)s * INTERVAL '1 hour')) AS next_read
         FROM pl_matches m
         JOIN pl_teams ht  ON ht.team_id = m.home_team_id
