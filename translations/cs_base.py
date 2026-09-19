@@ -9,4 +9,5 @@ CS = {
     "Read-only view of the Neon database": "Pouze pro čtení z databáze Neon",
     "rendered": "vygenerováno",
     "version": "verze",
+    "Menu": "Menu",
 }

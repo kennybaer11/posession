@@ -9,7 +9,11 @@
 <body>
 <header class="topbar">
   <a class="brand" href="{{ url_for('admin_advice') }}">posession<span>.cz</span></a>
-  <nav>
+  {% if members %}
+  <button class="navtoggle" type="button" aria-controls="mainnav" aria-expanded="false"
+          aria-label="{{ _('Menu') }}"><span></span><span></span><span></span></button>
+  {% endif %}
+  <nav id="mainnav" class="{{ 'collapsible' if members }}">
     {# Visitors see the advice record only; everything else is behind the
        admin login on the public server (members_only in app.py). #}
     <a href="{{ url_for('admin_advice') }}" class="{{ 'on' if request.endpoint == 'admin_advice' }}">{{ _("Advice record") }}</a>
@@ -51,6 +55,28 @@
 <footer>{{ _("Read-only view of the Neon database") }} &middot; {{ _("rendered") }} {{ now|dt('%d %b %Y %H:%M') }} UTC{% if code_version %} &middot; {{ _("version") }} {{ code_version }}{% endif %}</footer>
 
 <script>
+// Phone-width menu: the hamburger opens and closes the nav (see .navtoggle).
+(function () {
+  const btn = document.querySelector('.navtoggle');
+  const nav = document.getElementById('mainnav');
+  if (!btn || !nav) return;
+  btn.addEventListener('click', function () {
+    const open = nav.classList.toggle('open');
+    btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+  });
+})();
+
+// Every table scrolls sideways inside its own box on a narrow screen instead
+// of stretching the whole page. Most templates wrap theirs in .tablewrap
+// already; this catches the ones that do not.
+document.querySelectorAll('table').forEach(function (t) {
+  if (t.closest('.tablewrap')) return;
+  const w = document.createElement('div');
+  w.className = 'tablewrap';
+  t.parentNode.insertBefore(w, t);
+  w.appendChild(t);
+});
+
 // Click a th[data-sort] to sort its table. Numeric when every cell parses as a
 // number, otherwise lexical. Kept here so no build step or CDN is needed.
 document.querySelectorAll('table.sortable').forEach(function (table) {

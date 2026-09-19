@@ -1188,10 +1188,6 @@ def model():
         preview=upcoming.head(10).to_dict("records") if len(upcoming) else [])
 
 
-if __name__ == "__main__":
-    app.run(debug=True, port=5000)
-
-
 # -- admin -------------------------------------------------------------------
 #
 # Deliberately NOT part of the published site. export_static.py renders a fixed
@@ -1443,3 +1439,7 @@ def db_handle():
 # a worker starts.
 if DEPLOYED:
     warm_caches()
+
+
+if __name__ == "__main__":
+    app.run(debug=True, port=5000)
