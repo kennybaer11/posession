@@ -884,11 +884,35 @@ def vs_bookmaker(rows):
         return {"n": n, "model": sum(model_err) / n, "line": sum(line_err) / n,
                 "closer": sum(1 for a, b in zip(model_err, line_err) if a < b)}
 
-    out = [dict(code=code, name=name,
-                **(summary([r for r in settled if r["competition"] == code])
-                   or {"n": 0}))
-           for code, name in LEAGUES]
-    return out, summary(settled)
+    def information(sub):
+        """actual - line = a + b * (pred - line), fitted by least squares.
+
+        b is how much of the model's disagreement with the line comes true:
+        0 means the model knows nothing the bookmaker does not, 1 that the
+        line is off by as much as the model says. Measured 19 Sep 2026 on 51
+        lines at 0.42 +- 0.32 - undecided; ~230 lines should settle it.
+        """
+        if len(sub) < 10:
+            return None
+        import numpy as np
+        x = np.array([r["pred"] - r["line"] for r in sub], dtype=float)
+        y = np.array([r["actual"] - r["line"] for r in sub], dtype=float)
+        X = np.column_stack([np.ones(len(x)), x])
+        beta, *_ = np.linalg.lstsq(X, y, rcond=None)
+        resid = y - X @ beta
+        cov = (resid @ resid / (len(x) - 2)) * np.linalg.inv(X.T @ X)
+        b, se = float(beta[1]), float(np.sqrt(cov[1, 1]))
+        return {"b": b, "se": se, "lo": b - 1.96 * se, "hi": b + 1.96 * se}
+
+    out = []
+    for code, name in LEAGUES:
+        sub = [r for r in settled if r["competition"] == code]
+        out.append(dict(code=code, name=name, info=information(sub),
+                        **(summary(sub) or {"n": 0})))
+    total = summary(settled)
+    if total:
+        total["info"] = information(settled)
+    return out, total
 
 
 def stake_guidance(want=None, with_rows=False):

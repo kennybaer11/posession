@@ -27,21 +27,39 @@
       <thead><tr><th class="l">{{ _("League") }}</th><th>{{ _("Lines") }}</th>
         <th title="{{ _("Mean absolute error of the model's prediction") }}">{{ _("Model error") }}</th>
         <th title="{{ _("Mean absolute error of the bookmaker's line") }}">{{ _("Bookmaker error") }}</th>
-        <th>{{ _("Model closer") }}</th></tr></thead>
+        <th>{{ _("Model closer") }}</th>
+        <th title="{{ _("Share of the model's disagreement with the line that came true, with its 95% range") }}">b</th></tr></thead>
       <tbody>
         {% for v in vs_leagues if v.n %}
         <tr><td class="l">{{ v.name }}</td><td class="num">{{ v.n }}</td>
           <td class="num {{ 'good' if v.model < v.line else 'bad' }}">{{ '%.2f'|format(v.model) }}</td>
           <td class="num">{{ '%.2f'|format(v.line) }}</td>
-          <td class="num">{{ v.closer }} / {{ v.n }}</td></tr>
+          <td class="num">{{ v.closer }} / {{ v.n }}</td>
+          <td class="num">{% if v.info %}{{ '%+.2f'|format(v.info.b) }} <span class="muted">({{ '%+.2f'|format(v.info.lo) }}&hellip;{{ '%+.2f'|format(v.info.hi) }})</span>{% else %}&ndash;{% endif %}</td></tr>
         {% endfor %}
         <tr><td class="l"><strong>{{ _("All leagues") }}</strong></td><td class="num"><strong>{{ vs_total.n }}</strong></td>
           <td class="num {{ 'good' if vs_total.model < vs_total.line else 'bad' }}"><strong>{{ '%.2f'|format(vs_total.model) }}</strong></td>
           <td class="num"><strong>{{ '%.2f'|format(vs_total.line) }}</strong></td>
-          <td class="num"><strong>{{ vs_total.closer }} / {{ vs_total.n }}</strong></td></tr>
+          <td class="num"><strong>{{ vs_total.closer }} / {{ vs_total.n }}</strong></td>
+          <td class="num">{% if vs_total.info %}<strong>{{ '%+.2f'|format(vs_total.info.b) }}</strong> <span class="muted">({{ '%+.2f'|format(vs_total.info.lo) }}&hellip;{{ '%+.2f'|format(vs_total.info.hi) }})</span>{% else %}&ndash;{% endif %}</td></tr>
       </tbody>
     </table>
   </div>
+  {% if vs_total.info %}
+  <p class="muted" style="margin-bottom:0">
+    {% if vs_total.info.lo > 0 %}
+      <strong class="good">{{ _("The model knows something the bookmaker does not.") }}</strong>
+    {% elif vs_total.info.hi < 0.25 %}
+      <strong class="bad">{{ _("The model adds nothing to the bookmaker's line.") }}</strong>
+    {% else %}
+      <strong>{{ _("Not decided yet.") }}</strong>
+    {% endif %}
+    {% trans %}<em>b</em> is how much of the model's disagreement with the line came true:
+    0 means the model knows nothing the bookmaker does not, 1 means the line was off by as much
+    as the model said. It is decided once the whole 95% range sits above 0 (the model has real
+    information) or close to 0 (it has none) &mdash; roughly 230 settled lines.{% endtrans %}
+  </p>
+  {% endif %}
 </div>
 {% endif %}
 

@@ -175,4 +175,11 @@ CS = {
     "Model error": "Chyba modelu",
     "Bookmaker error": "Chyba kanceláře",
     "Model closer": "Model blíž",
+    "Share of the model's disagreement with the line that came true, with its 95% range":
+        "Jaká část nesouhlasu modelu s hranicí se potvrdila, s 95% rozpětím",
+    "The model knows something the bookmaker does not.": "Model ví něco, co sázková kancelář ne.",
+    "The model adds nothing to the bookmaker's line.": "Model k hranici sázkové kanceláře nic nepřidává.",
+    "Not decided yet.": "Zatím nerozhodnuto.",
+    "<em>b</em> is how much of the model's disagreement with the line came true: 0 means the model knows nothing the bookmaker does not, 1 means the line was off by as much as the model said. It is decided once the whole 95%% range sits above 0 (the model has real information) or close to 0 (it has none) &mdash; roughly 230 settled lines.":
+        "<em>b</em> udává, jaká část nesouhlasu modelu s hranicí se potvrdila: 0 znamená, že model neví nic navíc oproti sázkové kanceláři, 1 znamená, že hranice byla vedle přesně o tolik, kolik model tvrdil. Rozhodnuto je, až celé 95%% rozpětí leží nad 0 (model má skutečnou informaci), nebo těsně u 0 (nemá žádnou) &mdash; zhruba po 230 vyhodnocených hranicích.",
 }
