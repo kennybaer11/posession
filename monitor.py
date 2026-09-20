@@ -154,7 +154,33 @@ def checks(db):
                         f"{STALE_HOURS}h+</b>\n{lines}\nA market opening now would be missed.",
                         ("alerts", [f"overdue:{r['match_id']}" for r in overdue])))
 
-        # 5. Credits.
+        # 5. A fixture we have a line for moved to another date: that bet is
+        # void, and the line stops being about any real market. Levante v
+        # Athletic was suspended on 16 Sep 2026 and rescheduled three weeks
+        # later, and its line sat on the site as an upcoming tip until someone
+        # noticed. pl_advice keeps the kickoff each advice was given for.
+        cur.execute("""
+            SELECT DISTINCT a.match_id, a.kickoff AS advised_for, m.kickoff AS now_at,
+                   ht.name AS home, at_.name AS away
+            FROM pl_advice a
+            JOIN pl_matches m ON m.match_id = a.match_id
+            JOIN pl_teams ht  ON ht.team_id = m.home_team_id
+            JOIN pl_teams at_ ON at_.team_id = m.away_team_id
+            WHERE m.kickoff <> a.kickoff""")
+        moved = [r for r in cur.fetchall()
+                 if due(cur, f"postponed:{r['match_id']}", 24 * 7)]
+        if moved:
+            lines = "\n".join(
+                f"• {e(r['home'])} v {e(r['away'])} - advised for {local(r['advised_for'])}, "
+                f"now {local(r['now_at'])}" for r in moved)
+            out.append((None,
+                        f"📅 <b>{len(moved)} match(es) postponed after the advice was "
+                        f"given</b>\n{lines}\nThose bets are void; the lines are hidden "
+                        f"and count nowhere. A new line follows when the bookmaker "
+                        f"prices the new date.",
+                        ("alerts", [f"postponed:{r['match_id']}" for r in moved])))
+
+        # 6. Credits.
         cur.execute("""SELECT credits FROM pl_scrape_run WHERE credits IS NOT NULL
                        ORDER BY started_at DESC LIMIT 1""")
         row = cur.fetchone()

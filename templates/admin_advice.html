@@ -146,4 +146,38 @@
   {% endif %}
 </div>
 
+{% if postponed %}
+<div class="panel">
+  <h2>{{ _("Postponed") }} <span class="sub">&mdash; {{ _("the match moved, so the bet was void") }}</span></h2>
+  <div class="tablewrap">
+    <table>
+      <thead>
+        <tr><th class="l">{{ _("Advised for") }}</th><th class="l">{{ _("Now kicks off") }}</th>
+            <th class="l">{{ _("League") }}</th><th class="l">{{ _("Match") }}</th>
+            <th class="l">{{ _("Line is about") }}</th><th>{{ _("Line") }}</th>
+            <th>{{ _("Advised") }}</th><th>{{ _("Stake") }}</th></tr>
+      </thead>
+      <tbody>
+        {% for r in postponed %}
+        <tr>
+          <td class="l muted">{{ r.kickoff|dt('%d %b %H:%M') }}</td>
+          <td class="l muted">{{ r.fixture_kickoff|dt('%d %b %H:%M') }}</td>
+          <td class="l muted">{{ league_names.get(r.competition, r.competition) }}</td>
+          <td class="l">{{ r.home_abbr }} v {{ r.away_abbr }}</td>
+          <td class="l">{{ r.team }}</td>
+          <td class="num">{{ '%.1f'|format(r.line) }}</td>
+          <td>{% if r.backed %}<span class="chip">{{ _(r.side) }}</span>{% else %}<span class="chip">{{ _("no bet") }}</span>{% endif %}</td>
+          <td class="num muted">{{ r.rating }}/10</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <p class="muted" style="font-size:12.5px;margin-bottom:0">
+    {% trans %}These count nowhere: the market they were priced for no longer exists. When the
+    bookmaker prices the new date, the match gets a new line and new advice.{% endtrans %}
+  </p>
+</div>
+{% endif %}
+
 {% endblock %}

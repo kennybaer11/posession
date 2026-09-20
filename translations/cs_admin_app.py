@@ -236,4 +236,10 @@ CS = {
         "směrodatné chyby výš",
     "ROI, 1 unit each": "ROI, 1 jednotka na sázku",
     "at the advised stake": "při doporučeném vkladu",
+    "Postponed": "Odloženo",
+    "the match moved, so the bet was void": "zápas se přesunul, sázka je neplatná",
+    "Advised for": "Doporučeno na",
+    "Now kicks off": "Nyní se hraje",
+    "These count nowhere: the market they were priced for no longer exists. When the bookmaker prices the new date, the match gets a new line and new advice.":
+        "Nikam se nepočítají: trh, na který byly vypsané, už neexistuje. Až kancelář vypíše nový termín, zápas dostane novou hranici i nové doporučení.",
 }

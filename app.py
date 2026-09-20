@@ -781,6 +781,15 @@ def _line_rows(want=None):
             LEFT JOIN pl_team_match tm ON tm.match_id = l.match_id
                                       AND tm.team_id = l.team_id
             WHERE m.competition = ANY(%(cs)s)
+              -- A postponed match voids the line that was priced for the old
+              -- date: Levante v Athletic was suspended on 16 Sep 2026 and
+              -- rescheduled to 21 Oct, and its September line hung around as
+              -- an upcoming tip. pl_advice keeps the kickoff the advice was
+              -- given for, so a mismatch with the fixture's kickoff is the
+              -- postponement. The new date gets a new market, and a new line.
+              AND NOT EXISTS (SELECT 1 FROM pl_advice a
+                              WHERE a.match_id = l.match_id
+                                AND a.kickoff <> m.kickoff)
             ORDER BY l.match_id, l.bookmaker, l.captured_at ASC NULLS LAST, l.line
         ) first_lines
         ORDER BY kickoff DESC
@@ -1308,7 +1317,8 @@ def admin_advice():
     import model as m
     rows = query("""
         SELECT a.*, t.name AS team, ht.abbr AS home_abbr, at_.abbr AS away_abbr,
-               tm.possession AS actual
+               tm.possession AS actual, m.kickoff AS fixture_kickoff,
+               (m.kickoff <> a.kickoff) AS postponed
         FROM pl_advice a
         JOIN pl_matches m ON m.match_id = a.match_id
         JOIN pl_teams t   ON t.team_id = a.team_id
@@ -1318,11 +1328,16 @@ def admin_advice():
                                   AND tm.team_id = a.team_id
         ORDER BY a.kickoff DESC
     """)
-    settled, pending = [], []
+    settled, pending, postponed = [], [], []
     for r in rows:
         r = dict(r)
         for k in ("line", "odds", "edge", "pred", "p_over", "sigma", "actual"):
             r[k] = float(r[k]) if r[k] is not None else None
+        if r["postponed"]:
+            # The match moved after this advice was given, so the bet was void.
+            # Not settled, not pending - just history, and only for the admin.
+            postponed.append(r)
+            continue
         if r["actual"] is None:
             pending.append(r)
             continue
@@ -1353,8 +1368,10 @@ def admin_advice():
     if not session.get("admin"):
         settled = [r for r in settled if r["backed"]]
         pending = [r for r in pending if r["backed"]]
+        postponed = []
     return render_template("admin_advice.html", settled=settled,
-                           pending=pending, totals=totals, verdict=call,
+                           pending=pending, postponed=postponed,
+                           totals=totals, verdict=call,
                            league_names=LEAGUE_NAMES, user=session.get("admin"))
 
 
