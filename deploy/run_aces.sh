@@ -31,5 +31,7 @@ DATABASE_URL="$(.venv/bin/python -c 'from dotenv import dotenv_values; print(dot
     || { echo "!! no DATABASE_URL in /home/app/scraper/.env"; exit 1; }
 export DATABASE_URL
 
-timeout 20m .venv/bin/python odds.py || echo "!! odds.py exited $?"
+# --advise: WTA aces only, at +10% EV or more (odds.py VALIDATED_TOURS,
+# ADVISE_MARKETS, EDGE) - switched on 2026-10-01.
+timeout 20m .venv/bin/python odds.py --advise || echo "!! odds.py exited $?"
 echo "== $(date '+%F %T') done"
