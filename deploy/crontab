@@ -3,3 +3,5 @@
 17 * * * * flock -n /home/app/locks/data.lock /home/app/scraper/deploy/run_data.sh >> /home/app/logs/data.log 2>&1
 20 * * * * flock -n /home/app/locks/odds.lock /home/app/scraper/deploy/run_odds.sh >> /home/app/logs/odds.log 2>&1
 * * * * * /home/app/scraper/deploy/deploy.sh >> /home/app/logs/deploy.log 2>&1
+# Betano WTA ace/DF odds for the aces project - every three hours, see run_aces.sh.
+40 */3 * * * flock -n /home/app/locks/aces.lock /home/app/scraper/deploy/run_aces.sh >> /home/app/logs/aces.log 2>&1
