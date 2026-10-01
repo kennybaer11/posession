@@ -69,7 +69,7 @@ if DEPLOYED:
 # a request on any other public domain is sent to the same path there,
 # permanently. Left unset until betken.cz answers with a certificate, so a
 # push cannot strand posession.cz visitors on a domain that does not work yet.
-CANONICAL_HOST = None           # "betken.cz" once it is live
+CANONICAL_HOST = "betken.cz"
 OLD_HOSTS = ("posession.cz", "www.posession.cz", "www.betken.cz")
 
 
