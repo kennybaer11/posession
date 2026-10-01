@@ -64,6 +64,31 @@ if DEPLOYED:
     from werkzeug.middleware.proxy_fix import ProxyFix
     app.wsgi_app = ProxyFix(app.wsgi_app, x_proto=1, x_host=1)
 
+# The site moved to betken.cz, which carries the tennis lines as well as the
+# possession ones. Both domains reach this one app; once CANONICAL_HOST is set,
+# a request on any other public domain is sent to the same path there,
+# permanently. Left unset until betken.cz answers with a certificate, so a
+# push cannot strand posession.cz visitors on a domain that does not work yet.
+CANONICAL_HOST = None           # "betken.cz" once it is live
+OLD_HOSTS = ("posession.cz", "www.posession.cz", "www.betken.cz")
+
+
+def site_name():
+    """The domain to put in the brand and page titles."""
+    if CANONICAL_HOST:
+        return CANONICAL_HOST
+    host = request.host.split(":")[0].lower() if request else ""
+    return "betken.cz" if host.endswith("betken.cz") else "posession.cz"
+
+
+@app.before_request
+def _canonical_host():
+    if not (DEPLOYED and CANONICAL_HOST):
+        return None
+    if request.host.split(":")[0].lower() in OLD_HOSTS:
+        return redirect(f"https://{CANONICAL_HOST}{request.full_path.rstrip('?')}", code=301)
+    return None
+
 # Login throttling. A password exposed to the internet gets guessed at, and
 # without a limit the only defence is password length. Keyed by IP, in memory:
 # good enough for a single small instance, and it resets on restart, which is
@@ -251,7 +276,8 @@ CODE_VERSION = _code_version()
 
 @app.context_processor
 def _globals():
-    return {"now": datetime.now(timezone.utc), "code_version": CODE_VERSION}
+    return {"now": datetime.now(timezone.utc), "code_version": CODE_VERSION,
+            "site_name": site_name()}
 
 
 
@@ -1373,6 +1399,61 @@ def admin_advice():
                            pending=pending, postponed=postponed,
                            totals=totals, verdict=call,
                            league_names=LEAGUE_NAMES, user=session.get("admin"))
+
+
+@app.route("/tennis")
+def tennis():
+    """WTA ace and double-fault lines, priced by the aces project.
+
+    The rows are aces.line, written by aces/price.py when a line is priced and
+    settled by its daily refresh. As with the possession advice, nothing is
+    recomputed here: the model's probability and the advised side are what
+    they were when the line was priced.
+    """
+    import model as m
+    if not one("SELECT to_regclass('aces.line') AS t")["t"]:
+        rows = []
+    else:
+        rows = query("""
+            SELECT l.*, (l.p_over::float) AS p, (l.line::float) AS ln,
+                   (l.over_odds::float) AS oo, (l.under_odds::float) AS uo,
+                   (l.model_mean::float) AS mean
+              FROM aces.line l
+             ORDER BY l.date DESC, l.player_1, l.market, l.line""")
+    settled, pending, void = [], [], []
+    for r in rows:
+        r = dict(r)
+        stat, _sep, who = r["market"].partition(":")
+        r["stat"] = stat                       # aces | df
+        r["about"] = {"1": r["player_1"], "2": r["player_2"]}.get(who)
+        r["odds"] = r["oo"] if r["bet"] == "over" else r["uo"] if r["bet"] == "under" else None
+        r["p_bet"] = (r["p"] if r["bet"] == "over" else 1 - r["p"]) if r["bet"] else None
+        r["edge"] = r["p_bet"] * r["odds"] - 1 if r["odds"] else None
+        if r["void"]:
+            void.append(r)
+        elif r["actual"] is None:
+            pending.append(r)
+        else:
+            if r["bet"] == "over":
+                r["hit"] = r["actual"] > r["ln"]
+            elif r["bet"] == "under":
+                r["hit"] = r["actual"] < r["ln"]
+            settled.append(r)
+
+    bets = [r for r in settled if r["bet"] and r["odds"]]
+    returned = sum(r["odds"] for r in bets if r["hit"])
+    totals = {"bets": len(bets), "won": sum(1 for r in bets if r["hit"]),
+              "pnl": returned - len(bets),
+              "roi": (returned - len(bets)) / len(bets) if bets else None,
+              "no_bet": sum(1 for r in settled if not r["bet"])}
+    call = m.verdict([(bool(r["hit"]), r["odds"]) for r in bets])
+    if not session.get("admin"):
+        # Visitors see advised bets only, as on the possession record.
+        settled = [r for r in settled if r["bet"]]
+        pending = [r for r in pending if r["bet"]]
+        void = []
+    return render_template("tennis.html", settled=settled, pending=pending, void=void,
+                           totals=totals, verdict=call, user=session.get("admin"))
 
 
 @app.route("/admin/logout")

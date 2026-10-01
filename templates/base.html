@@ -3,12 +3,12 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>{% block title %}posession.cz{% endblock %}</title>
+<title>{% block title %}{{ site_name }}{% endblock %}</title>
 <link rel="stylesheet" href="{{ url_for('static', filename='style.css', v=code_version) }}">
 </head>
 <body>
 <header class="topbar">
-  <a class="brand" href="{{ url_for('admin_advice') }}">posession<span>.cz</span></a>
+  <a class="brand" href="{{ url_for('admin_advice') }}">{{ site_name.rsplit(".", 1)[0] }}<span>.{{ site_name.rsplit(".", 1)[1] }}</span></a>
   {% if members %}
   <button class="navtoggle" type="button" aria-controls="mainnav" aria-expanded="false"
           aria-label="{{ _('Menu') }}"><span></span><span></span><span></span></button>
@@ -16,7 +16,8 @@
   <nav id="mainnav" class="{{ 'collapsible' if members }}">
     {# Visitors see the advice record only; everything else is behind the
        admin login on the public server (members_only in app.py). #}
-    <a href="{{ url_for('admin_advice') }}" class="{{ 'on' if request.endpoint == 'admin_advice' }}">{{ _("Advice record") }}</a>
+    <a href="{{ url_for('admin_advice') }}" class="{{ 'on' if request.endpoint == 'admin_advice' }}">{{ _("Football") }}</a>
+    <a href="{{ url_for('tennis') }}" class="{{ 'on' if request.endpoint == 'tennis' }}">{{ _("Tennis") }}</a>
     {% if members %}
       <a href="{{ url_for('index', league=league) }}"    class="{{ 'on' if request.endpoint == 'index' }}">{{ _("Overview") }}</a>
       <a href="{{ url_for('teams', league=league) }}"    class="{{ 'on' if request.endpoint in ('teams','team') }}">{{ _("Teams") }}</a>
