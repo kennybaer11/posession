@@ -20,5 +20,7 @@ CS = {
     "Bookmaker": "Sázková kancelář",
     "All bookmakers": "Všechny kanceláře",
     "Manual": "Ručně",
+    "Collected, not yet priced": "Stažené, zatím neoceněné",
+    "the model has no history for these players yet": "model pro tyto hráče zatím nemá historii",
     "retired or walked over; admin only": "skreč nebo kontumace; jen pro admina",
 }

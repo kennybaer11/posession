@@ -1470,7 +1470,42 @@ def tennis():
         void = []
     return render_template("tennis.html", settled=settled, pending=pending, void=void,
                            totals=totals, verdict=call, user=session.get("admin"),
-                           book=book, books=TENNIS_BOOKS)
+                           book=book, books=TENNIS_BOOKS, waiting=_tennis_waiting(book))
+
+
+def _tennis_waiting(book):
+    """Collected odds the model has not priced: matches still to start with
+    prices in aces.odds but no row in aces.line - usually players the model
+    has no history for yet. Shown so a bookmaker's lines are visible from the
+    moment they are collected, not only once they are priced."""
+    if not one("SELECT to_regclass('aces.odds') AS t")["t"]:
+        return []
+    rows = query("""
+        SELECT e.source, e.event_id, e.kickoff, e.league, e.name_1, e.name_2,
+               o.market, o.at_least, o.side, o.price::float AS price
+          FROM aces.event e
+          JOIN aces.odds o USING (source, event_id)
+         WHERE e.kickoff > now()
+           AND (%(book)s::text IS NULL OR e.source = %(book)s)
+           AND o.fetched_at = (SELECT max(fetched_at) FROM aces.odds x
+                                WHERE (x.source, x.event_id) = (e.source, e.event_id))
+           AND NOT EXISTS (SELECT 1 FROM aces.line l
+                            WHERE (l.source, l.event_id) = (e.source, e.event_id))
+         ORDER BY e.kickoff, e.event_id, o.market, o.at_least, o.side""", {"book": book})
+    out = {}
+    for r in rows:
+        ev = out.setdefault((r["source"], r["event_id"]), {
+            "book": r["source"], "kickoff": r["kickoff"], "league": r["league"],
+            "match": f"{r['name_1']} v {r['name_2']}", "markets": {}})
+        quotes = ev["markets"].setdefault(r["market"], {})
+        q = quotes.setdefault(r["at_least"], {})
+        q[r["side"]] = r["price"]
+    for ev in out.values():
+        ev["markets"] = [
+            (mk, [(f"{n - 0.5:.1f}" if len(q) == 2 or "under" in q else f"{n}+", q.get("over"), q.get("under"))
+                  for n, q in sorted(quotes.items())])
+            for mk, quotes in sorted(ev["markets"].items())]
+    return list(out.values())
 
 
 @app.route("/admin/logout")

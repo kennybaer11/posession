@@ -125,6 +125,33 @@
   {% endif %}
 </div>
 
+{% if waiting %}
+<div class="panel">
+  <h2>{{ _("Collected, not yet priced") }} <span class="sub">&mdash; {{ _("the model has no history for these players yet") }}</span></h2>
+  <div class="tablewrap">
+    <table>
+      <thead>
+        <tr><th class="l">{{ _("Date") }}</th><th class="l">{{ _("Match") }}</th><th class="l">{{ _("Bookmaker") }}</th>
+            <th class="l">{{ _("Market") }}</th><th class="l">{{ _("Line") }}</th><th>{{ _("Over") }}</th><th>{{ _("Under") }}</th></tr>
+      </thead>
+      <tbody>
+        {% for ev in waiting %}{% for mk, quotes in ev.markets %}{% for label, over, under in quotes %}
+        <tr>
+          <td class="l muted">{% if loop.first %}{{ ev.kickoff|dt('%d %b %H:%M') }}{% endif %}</td>
+          <td class="l">{% if loop.first %}{{ ev.match }}{% endif %}</td>
+          <td class="l">{% if loop.first %}<span class="chip">{{ _(books[ev.book]) }}</span>{% endif %}</td>
+          <td class="l">{% if loop.first %}{{ market({'stat': mk.partition(':')[0], 'about': {'1': ev.match.split(' v ')[0], '2': ev.match.split(' v ')[1]}.get(mk.partition(':')[2])}) }}{% endif %}</td>
+          <td class="l num">{{ label }}</td>
+          <td class="num">{{ '%.2f'|format(over) if over else '-' }}</td>
+          <td class="num">{{ '%.2f'|format(under) if under else '-' }}</td>
+        </tr>
+        {% endfor %}{% endfor %}{% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+
 {% if void %}
 <div class="panel">
   <h2>{{ _("Void") }} <span class="sub">&mdash; {{ _("retired or walked over; admin only") }}</span></h2>
