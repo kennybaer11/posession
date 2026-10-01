@@ -1426,9 +1426,15 @@ def tennis():
         stat, _sep, who = r["market"].partition(":")
         r["stat"] = stat                       # aces | df
         r["about"] = {"1": r["player_1"], "2": r["player_2"]}.get(who)
-        r["odds"] = r["oo"] if r["bet"] == "over" else r["uo"] if r["bet"] == "under" else None
-        r["p_bet"] = (r["p"] if r["bet"] == "over" else 1 - r["p"]) if r["bet"] else None
+        # An unadvised line still shows the price and the model's edge on it,
+        # the over side unless only an under was quoted.
+        side = r["bet"] or ("over" if r["oo"] else "under" if r["uo"] else None)
+        r["odds"] = r["oo"] if side == "over" else r["uo"] if side == "under" else None
+        r["p_bet"] = (r["p"] if side == "over" else 1 - r["p"]) if side else None
         r["edge"] = r["p_bet"] * r["odds"] - 1 if r["odds"] else None
+        # Betano quotes "N or more"; show it that way rather than as N - 0.5.
+        r["line_label"] = (f"{r['ln'] + 0.5:.0f}+" if r.get("source") == "betano"
+                           else f"{r['ln']:.1f}")
         if r["void"]:
             void.append(r)
         elif r["actual"] is None:

@@ -56,7 +56,7 @@
           <td class="l muted">{{ r.date.strftime('%d %b') }}</td>
           <td class="l">{{ r.player_1 }} v {{ r.player_2 }}</td>
           <td class="l">{{ market(r) }}</td>
-          <td class="num">{{ '%.1f'|format(r.ln) }}</td>
+          <td class="num">{{ r.line_label }}</td>
           <td class="num muted">{{ '%.2f'|format(r.mean) }}</td>
           <td class="num muted">{{ '%.0f%%'|format(100 * r.p) }}</td>
           <td>{% if r.bet %}<span class="chip ok">{{ _(r.bet|upper) }}</span>{% else %}<span class="chip">{{ _("no bet") }}</span>{% endif %}</td>
@@ -88,7 +88,7 @@
           <td class="l muted" data-v="{{ r.date.isoformat() }}">{{ r.date.strftime('%d %b') }}</td>
           <td class="l">{{ r.player_1 }} v {{ r.player_2 }}</td>
           <td class="l">{{ market(r) }}</td>
-          <td class="num">{{ '%.1f'|format(r.ln) }}</td>
+          <td class="num">{{ r.line_label }}</td>
           <td class="num muted">{{ '%.2f'|format(r.mean) }}</td>
           <td>{% if r.bet %}<span class="chip ok">{{ _(r.bet|upper) }}</span>{% else %}<span class="chip">{{ _("no bet") }}</span>{% endif %}</td>
           <td class="num">{{ '%.2f'|format(r.odds) if r.odds else '-' }}</td>
@@ -120,7 +120,7 @@
 <div class="panel">
   <h2>{{ _("Void") }} <span class="sub">&mdash; {{ _("retired or walked over; admin only") }}</span></h2>
   <ul>
-    {% for r in void %}<li>{{ r.date.strftime('%d %b') }} &middot; {{ r.player_1 }} v {{ r.player_2 }} &middot; {{ market(r) }} {{ '%.1f'|format(r.ln) }}</li>{% endfor %}
+    {% for r in void %}<li>{{ r.date.strftime('%d %b') }} &middot; {{ r.player_1 }} v {{ r.player_2 }} &middot; {{ market(r) }} {{ r.line_label }}</li>{% endfor %}
   </ul>
 </div>
 {% endif %}
