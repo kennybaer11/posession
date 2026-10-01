@@ -17,6 +17,13 @@
   or walkover voids the line.{% endtrans %}
 </div>
 
+<p class="muted" style="margin:-6px 0 16px">
+  {% if not book %}<strong>{{ _("All bookmakers") }}</strong>{% else %}<a href="{{ url_for('tennis') }}">{{ _("All bookmakers") }}</a>{% endif %}
+  {% for key, label in books.items() if key != 'manual' %}
+    &middot; {% if book == key %}<strong>{{ label }}</strong>{% else %}<a href="{{ url_for('tennis', book=key) }}">{{ label }}</a>{% endif %}
+  {% endfor %}
+</p>
+
 <div class="tiles" style="margin-bottom:22px">
   <div class="tile"><div class="v num">{{ totals.bets }}</div><div class="k">{{ _("Bets advised, settled") }}</div></div>
   <div class="tile"><div class="v num">{{ totals.won }}{% if totals.bets %} <span class="muted" style="font-size:14px">({{ '%.0f%%'|format(100 * totals.won / totals.bets) }})</span>{% endif %}</div><div class="k">{{ _("Won") }}</div></div>
@@ -46,7 +53,7 @@
   <div class="tablewrap">
     <table>
       <thead>
-        <tr><th class="l">{{ _("Date") }}</th><th class="l">{{ _("Match") }}</th><th class="l">{{ _("Market") }}</th>
+        <tr><th class="l">{{ _("Date") }}</th><th class="l">{{ _("Match") }}</th><th class="l">{{ _("Market") }}</th><th class="l">{{ _("Bookmaker") }}</th>
             <th>{{ _("Line") }}</th><th>{{ _("Model mean") }}</th><th>{{ _("P(over)") }}</th>
             <th>{{ _("Advised") }}</th><th>{{ _("Odds") }}</th><th>{{ _("Edge") }}</th></tr>
       </thead>
@@ -56,6 +63,7 @@
           <td class="l muted">{{ r.date.strftime('%d %b') }}</td>
           <td class="l">{{ r.player_1 }} v {{ r.player_2 }}</td>
           <td class="l">{{ market(r) }}</td>
+          <td class="l"><span class="chip">{{ _(books[r.book]) }}</span></td>
           <td class="num">{{ r.line_label }}</td>
           <td class="num muted">{{ '%.2f'|format(r.mean) }}</td>
           <td class="num muted">{{ '%.0f%%'|format(100 * r.p) }}</td>
@@ -78,7 +86,7 @@
   <div class="tablewrap">
     <table class="sortable">
       <thead>
-        <tr><th class="l">{{ _("Date") }}</th><th class="l">{{ _("Match") }}</th><th class="l">{{ _("Market") }}</th>
+        <tr><th class="l">{{ _("Date") }}</th><th class="l">{{ _("Match") }}</th><th class="l">{{ _("Market") }}</th><th class="l">{{ _("Bookmaker") }}</th>
             <th>{{ _("Line") }}</th><th>{{ _("Model mean") }}</th><th>{{ _("Advised") }}</th><th>{{ _("Odds") }}</th>
             <th>{{ _("Edge") }}</th><th>{{ _("Actual") }}</th><th>{{ _("Result") }}</th></tr>
       </thead>
@@ -88,6 +96,7 @@
           <td class="l muted" data-v="{{ r.date.isoformat() }}">{{ r.date.strftime('%d %b') }}</td>
           <td class="l">{{ r.player_1 }} v {{ r.player_2 }}</td>
           <td class="l">{{ market(r) }}</td>
+          <td class="l"><span class="chip">{{ _(books[r.book]) }}</span></td>
           <td class="num">{{ r.line_label }}</td>
           <td class="num muted">{{ '%.2f'|format(r.mean) }}</td>
           <td>{% if r.bet %}<span class="chip ok">{{ _(r.bet|upper) }}</span>{% else %}<span class="chip">{{ _("no bet") }}</span>{% endif %}</td>
@@ -120,7 +129,7 @@
 <div class="panel">
   <h2>{{ _("Void") }} <span class="sub">&mdash; {{ _("retired or walked over; admin only") }}</span></h2>
   <ul>
-    {% for r in void %}<li>{{ r.date.strftime('%d %b') }} &middot; {{ r.player_1 }} v {{ r.player_2 }} &middot; {{ market(r) }} {{ r.line_label }}</li>{% endfor %}
+    {% for r in void %}<li>{{ r.date.strftime('%d %b') }} &middot; {{ r.player_1 }} v {{ r.player_2 }} &middot; {{ market(r) }} {{ r.line_label }} &middot; {{ _(books[r.book]) }}</li>{% endfor %}
   </ul>
 </div>
 {% endif %}

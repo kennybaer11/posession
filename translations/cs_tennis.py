@@ -17,5 +17,8 @@ CS = {
     "No open tennis line with an advised bet.": "Žádná otevřená tenisová hranice s doporučenou sázkou.",
     "No tennis line has settled yet.": "Zatím žádná vyhodnocená tenisová hranice.",
     "Void": "Zrušené",
+    "Bookmaker": "Sázková kancelář",
+    "All bookmakers": "Všechny kanceláře",
+    "Manual": "Ručně",
     "retired or walked over; admin only": "skreč nebo kontumace; jen pro admina",
 }

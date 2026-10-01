@@ -1401,16 +1401,23 @@ def admin_advice():
                            league_names=LEAGUE_NAMES, user=session.get("admin"))
 
 
+# Bookmakers whose lines the aces project collects, as they are labelled here.
+TENNIS_BOOKS = {"betano": "Betano", "chance": "Chance", "manual": "Manual"}
+
+
 @app.route("/tennis")
 def tennis():
-    """WTA ace and double-fault lines, priced by the aces project.
+    """Ace and double-fault lines, priced by the aces project.
 
-    The rows are aces.line, written by aces/price.py when a line is priced and
-    settled by its daily refresh. As with the possession advice, nothing is
+    The rows are aces.line, written by aces/odds.py (Betano), load_chance.py
+    (Chance.cz) or price.py (typed by hand), and settled by its daily refresh.
+    ?book=betano|chance shows one bookmaker; the totals follow the filter. As with the possession advice, nothing is
     recomputed here: the model's probability and the advised side are what
     they were when the line was priced.
     """
     import model as m
+    book = request.args.get("book")
+    book = book if book in TENNIS_BOOKS else None
     if not one("SELECT to_regclass('aces.line') AS t")["t"]:
         rows = []
     else:
@@ -1423,6 +1430,9 @@ def tennis():
     settled, pending, void = [], [], []
     for r in rows:
         r = dict(r)
+        r["book"] = r.get("source") if r.get("source") in TENNIS_BOOKS else "manual"
+        if book and r["book"] != book:
+            continue
         stat, _sep, who = r["market"].partition(":")
         r["stat"] = stat                       # aces | df
         r["about"] = {"1": r["player_1"], "2": r["player_2"]}.get(who)
@@ -1459,7 +1469,8 @@ def tennis():
         pending = [r for r in pending if r["bet"]]
         void = []
     return render_template("tennis.html", settled=settled, pending=pending, void=void,
-                           totals=totals, verdict=call, user=session.get("admin"))
+                           totals=totals, verdict=call, user=session.get("admin"),
+                           book=book, books=TENNIS_BOOKS)
 
 
 @app.route("/admin/logout")
