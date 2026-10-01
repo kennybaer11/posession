@@ -20,7 +20,13 @@ CS = {
     "Bookmaker": "Sázková kancelář",
     "All bookmakers": "Všechny kanceláře",
     "Manual": "Ručně",
-    "Collected, not yet priced": "Stažené, zatím neoceněné",
-    "the model has no history for these players yet": "model pro tyto hráče zatím nemá historii",
+    "Odds comparison": "Srovnání kurzů",
+    "every bookmaker's price beside the model's fair price; the best price per side in bold, green where it beats the model by 10% or more - aces only, the model is no better than a player's own average on double faults":
+        "kurzy všech kanceláří vedle férového kurzu modelu; nejlepší kurz na každé straně tučně, zeleně tam, kde model poráží o 10 % a víc – jen esa, u dvojchyb model není lepší než prostý průměr hráčky",
+    "best": "nejlepší",
+    "no model price yet": "zatím bez ceny modelu",
+    "Fair over": "Férový nad",
+    "Fair under": "Férový pod",
+    "Best EV": "Nejlepší EV",
     "retired or walked over; admin only": "skreč nebo kontumace; jen pro admina",
 }

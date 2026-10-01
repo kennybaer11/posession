@@ -1470,42 +1470,88 @@ def tennis():
         void = []
     return render_template("tennis.html", settled=settled, pending=pending, void=void,
                            totals=totals, verdict=call, user=session.get("admin"),
-                           book=book, books=TENNIS_BOOKS, waiting=_tennis_waiting(book))
+                           book=book, books=TENNIS_BOOKS,
+                           # Model prices on every line are tips in all but name, so
+                           # visitors get them only once advice is switched on.
+                           compare=_tennis_compare() if session.get("admin") else [])
 
 
-def _tennis_waiting(book):
-    """Collected odds the model has not priced: matches still to start with
-    prices in aces.odds but no row in aces.line - usually players the model
-    has no history for yet. Shown so a bookmaker's lines are visible from the
-    moment they are collected, not only once they are priced."""
+def _tennis_compare():
+    """Every upcoming match's ace and DF prices, bookmaker beside bookmaker.
+
+    One row per market and threshold ("at least N", the over side of N - 0.5):
+    the model's fair prices, then each bookmaker's latest over (and under,
+    where it quotes one). A match is the same at every bookmaker through
+    aces.event.match_key. Bookmakers list the players in different orders, so
+    each one's player 1 and 2 are mapped onto the match key's order first -
+    otherwise Betano's "aces:1" and Chance's "aces:1" could be two players.
+    """
     if not one("SELECT to_regclass('aces.odds') AS t")["t"]:
         return []
     rows = query("""
-        SELECT e.source, e.event_id, e.kickoff, e.league, e.name_1, e.name_2,
-               o.market, o.at_least, o.side, o.price::float AS price
+        SELECT e.source, e.event_id, e.kickoff, e.league, e.tour, e.match_key,
+               e.name_1, e.name_2, e.player_1_id, e.player_2_id,
+               o.market, o.at_least, o.side, o.price::float AS price, o.p_model::float AS p_model
           FROM aces.event e
           JOIN aces.odds o USING (source, event_id)
-         WHERE e.kickoff > now()
-           AND (%(book)s::text IS NULL OR e.source = %(book)s)
+         WHERE e.kickoff > now() AND e.match_key IS NOT NULL
            AND o.fetched_at = (SELECT max(fetched_at) FROM aces.odds x
                                 WHERE (x.source, x.event_id) = (e.source, e.event_id))
-           AND NOT EXISTS (SELECT 1 FROM aces.line l
-                            WHERE (l.source, l.event_id) = (e.source, e.event_id))
-         ORDER BY e.kickoff, e.event_id, o.market, o.at_least, o.side""", {"book": book})
-    out = {}
+         ORDER BY e.kickoff, e.match_key""")
+    import unicodedata
+
+    def words(name):
+        s = unicodedata.normalize("NFKD", name).encode("ascii", "ignore").decode().lower()
+        return " ".join(sorted(re.sub(r"[^a-z ]", " ", s).split()))
+
+    matches = {}
     for r in rows:
-        ev = out.setdefault((r["source"], r["event_id"]), {
-            "book": r["source"], "kickoff": r["kickoff"], "league": r["league"],
-            "match": f"{r['name_1']} v {r['name_2']}", "markets": {}})
-        quotes = ev["markets"].setdefault(r["market"], {})
-        q = quotes.setdefault(r["at_least"], {})
-        q[r["side"]] = r["price"]
-    for ev in out.values():
-        ev["markets"] = [
-            (mk, [(f"{n - 0.5:.1f}" if len(q) == 2 or "under" in q else f"{n}+", q.get("over"), q.get("under"))
-                  for n, q in sorted(quotes.items())])
-            for mk, quotes in sorted(ev["markets"].items())]
-    return list(out.values())
+        _date, key_a, key_b = r["match_key"].split("|")
+        m = matches.setdefault(r["match_key"], {
+            "kickoff": r["kickoff"], "tour": r["tour"], "league": r["league"],
+            "names": {}, "rows": {}, "books": set()})
+        # Which of this bookmaker's players is the key's first?
+        first_is_1 = (r["player_1_id"] == key_a) if r["player_1_id"] else (words(r["name_1"]) == key_a)
+        names = (r["name_1"], r["name_2"]) if first_is_1 else (r["name_2"], r["name_1"])
+        if r["source"] == "betano" or not m["names"]:
+            m["names"] = {"A": names[0], "B": names[1]}
+        stat, _, who = r["market"].partition(":")
+        if who:
+            who = "A" if (who == "1") == first_is_1 else "B"
+        cell = m["rows"].setdefault((stat, who, r["at_least"]), {"p": None, "books": {}})
+        if r["p_model"] is not None:
+            cell["p"] = r["p_model"]
+        cell["books"].setdefault(r["source"], {})[r["side"]] = r["price"]
+        m["books"].add(r["source"])
+
+    out = []
+    for key, m in matches.items():
+        lines, best = [], None
+        for (stat, who, n), cell in sorted(m["rows"].items(), key=lambda kv: (kv[0][0], kv[0][1], kv[0][2])):
+            p = cell["p"]
+            line = {"stat": stat, "about": m["names"].get(who) if who else None, "n": n,
+                    "label": f"{n - 0.5:.1f}", "p": p,
+                    "fair_over": 1 / p if p else None, "fair_under": 1 / (1 - p) if p and p < 1 else None,
+                    "books": cell["books"], "best": {}}
+            for side in ("over", "under"):
+                quotes = [(b, q[side]) for b, q in cell["books"].items() if q.get(side)]
+                if not quotes:
+                    continue
+                b, price = max(quotes, key=lambda bq: bq[1])
+                ev = (p * price - 1 if side == "over" else (1 - p) * price - 1) if p is not None else None
+                # Only aces are trusted: on double faults the model ties each
+                # player's own average (aces backtest), so a DF "edge" is shown
+                # but never highlighted or offered as the match's best.
+                line["best"][side] = {"book": b, "price": price, "ev": ev, "trusted": stat == "aces"}
+                if ev is not None and stat == "aces" and (best is None or ev > best["ev"]):
+                    best = {"ev": ev, "book": b, "side": side, "stat": stat,
+                            "about": line["about"], "label": line["label"], "price": price}
+            lines.append(line)
+        out.append({"key": key, "kickoff": m["kickoff"], "tour": m["tour"], "league": m["league"],
+                    "match": f"{m['names'].get('A')} v {m['names'].get('B')}",
+                    "books": sorted(m["books"]), "lines": lines, "best": best,
+                    "priced": any(l["p"] is not None for l in lines)})
+    return out
 
 
 @app.route("/admin/logout")
