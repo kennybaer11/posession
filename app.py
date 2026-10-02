@@ -1473,6 +1473,9 @@ def tennis():
         settled = [r for r in settled if r["bet"]]
         pending = [r for r in pending if r["bet"]]
         void = []
+    # Upcoming: advised bets first, each group by kick-off.
+    far = datetime.max.replace(tzinfo=timezone.utc)
+    pending.sort(key=lambda r: (r["bet"] is None, r["kickoff"] or far, r["player_1"], r["market"]))
     # Newest first for the results list; the full table stays sortable.
     latest = sorted([r for r in settled if r["bet"]],
                     key=lambda r: (r["kickoff"] or datetime.min.replace(tzinfo=timezone.utc), r["date"]),
