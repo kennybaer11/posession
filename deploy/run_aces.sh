@@ -37,7 +37,7 @@ export DATABASE_URL
 timeout 20m .venv/bin/python collect.py --years recent || echo "!! collect.py exited $?"
 timeout 5m .venv/bin/python price.py --settle || echo "!! price.py --settle exited $?"
 
-# --advise: WTA aces only, at +10% EV or more (odds.py VALIDATED_TOURS,
-# ADVISE_MARKETS, EDGE) - switched on 2026-10-01.
+# --advise: aces only, WTA (since 1 Oct) and ATP (since 2 Oct), at +10% EV or more (odds.py VALIDATED_TOURS,
+# ADVISE_MARKETS, EDGE, MIN_P).
 timeout 20m .venv/bin/python odds.py --advise || echo "!! odds.py exited $?"
 echo "== $(date '+%F %T') done"
