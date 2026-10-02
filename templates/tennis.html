@@ -3,6 +3,10 @@
 {% block heading %}{{ _("Tennis: aces and double faults") }}{% endblock %}
 
 {% from "_tennis.html" import market with context %}
+{% macro tick(r) -%}
+  <td class="l tick"><input type="checkbox" data-key="{{ r.key }}" {{ 'checked' if r.placed }}
+       title="{{ _('I placed this bet (the side and price shown)') }}" aria-label="{{ _('Placed') }}"></td>
+{%- endmacro %}
 
 {% block content %}
 
@@ -36,6 +40,14 @@
 </div>
 {% endif %}
 
+{% if user %}
+<div class="tiles mine" style="margin-bottom:22px">
+  <div class="tile"><div class="v num">{{ mine.settled }}{% if mine.settled %} <span class="muted" style="font-size:14px">({{ mine.won }} {{ _("won") }})</span>{% endif %}</div><div class="k">{{ _("My bets, settled") }}</div></div>
+  <div class="tile"><div class="v num {{ 'good' if mine.pnl > 0 else ('bad' if mine.pnl < 0 else '') }}">{{ '%+.2f'|format(mine.pnl) }}</div><div class="k">{{ _("My P/L, 1 unit each") }}</div></div>
+  <div class="tile"><div class="v num">{{ mine.open }}</div><div class="k">{{ _("My bets, open") }}{% if mine.void %} &middot; {{ mine.void }} {{ _("void") }}{% endif %}</div></div>
+</div>
+{% endif %}
+
 <div class="panel">
   <h2>{{ _("Upcoming") }}</h2>
   {% if pending %}
@@ -44,13 +56,14 @@
       <thead>
         {# The decision first - advise or not, at what price and edge - then
            the bet, and the model's working last. Advised rows come first. #}
-        <tr><th class="l">{{ _("Advised") }}</th><th class="l">{{ _("Match") }}</th><th class="l">{{ _("Market") }}</th>
+        <tr>{% if user %}<th class="l">{{ _("Placed") }}</th>{% endif %}<th class="l">{{ _("Advised") }}</th><th class="l">{{ _("Match") }}</th><th class="l">{{ _("Market") }}</th>
             <th>{{ _("Line") }}</th><th>{{ _("Odds") }}</th><th>{{ _("Edge") }}</th><th class="l">{{ _("Date") }}</th>
             <th>{{ _("P(over)") }}</th><th>{{ _("Model mean") }}</th><th class="l">{{ _("Bookmaker") }}</th></tr>
       </thead>
       <tbody>
         {% for r in pending %}
-        <tr{% if r.bet %} class="advised"{% endif %}>
+        <tr class="{{ 'advised' if r.bet }} {{ 'placed' if r.placed }}">
+          {% if user %}{{ tick(r) }}{% endif %}
           <td class="l">{% if r.bet %}<span class="chip ok">{{ _(r.bet|upper) }}</span>{% else %}<span class="chip">{{ _("no bet") }}</span>{% endif %}</td>
           <td class="l">{{ r.player_1 }} v {{ r.player_2 }}</td>
           <td class="l">{{ market(r) }}</td>
@@ -77,13 +90,14 @@
   <div class="tablewrap">
     <table class="sortable">
       <thead>
-        <tr><th class="l">{{ _("Result") }}</th><th class="l">{{ _("Date") }}</th><th class="l">{{ _("Match") }}</th><th class="l">{{ _("Market") }}</th>
+        <tr>{% if user %}<th class="l">{{ _("Placed") }}</th>{% endif %}<th class="l">{{ _("Result") }}</th><th class="l">{{ _("Date") }}</th><th class="l">{{ _("Match") }}</th><th class="l">{{ _("Market") }}</th>
             <th>{{ _("Line") }}</th><th>{{ _("Actual") }}</th><th>{{ _("Odds") }}</th><th>{{ _("Advised") }}</th>
             <th>{{ _("Model mean") }}</th><th>{{ _("Edge") }}</th><th class="l">{{ _("Bookmaker") }}</th></tr>
       </thead>
       <tbody>
         {% for r in settled %}
-        <tr>
+        <tr class="{{ 'placed' if r.placed }}">
+          {% if user %}{{ tick(r) }}{% endif %}
           <td class="l">
             {% if not r.bet %}<span class="muted">&ndash;</span>
             {% elif r.hit %}<span class="chip ok">&#10003; {{ _("won") }}</span>
@@ -133,5 +147,29 @@
   recalculated afterwards. Results are filled in by the next morning's refresh. A retirement
   or walkover voids the line.{% endtrans %}
 </div>
+
+{% if user %}
+<script>
+// Tick a row as placed: saved at once, so it is the same on every device.
+// On failure the tick is put back and the reason shown.
+document.querySelectorAll('td.tick input[data-key]').forEach(function (box) {
+  box.addEventListener('change', function () {
+    const want = box.checked, row = box.closest('tr');
+    box.disabled = true;
+    fetch('{{ url_for("tennis_placed") }}', {
+      method: 'POST', credentials: 'same-origin',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({key: box.dataset.key, placed: want})
+    }).then(function (r) {
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      row.classList.toggle('placed', want);
+    }).catch(function (e) {
+      box.checked = !want;
+      alert('{{ _("Could not save") }}: ' + e.message);
+    }).finally(function () { box.disabled = false; });
+  });
+});
+</script>
+{% endif %}
 
 {% endblock %}

@@ -268,3 +268,9 @@ td a:hover, .panel a:hover { text-decoration: underline; }
 
 /* Advised rows stand out from the unadvised ones the admin also sees. */
 tr.advised td { background: color-mix(in srgb, var(--good) 8%, transparent); }
+
+/* "Placed" ticks on the tennis tables. */
+td.tick { width: 1%; }
+td.tick input { width: 18px; height: 18px; cursor: pointer; accent-color: var(--accent); }
+tr.placed td { box-shadow: inset 3px 0 0 var(--accent); }
+tr.placed td + td { box-shadow: none; }

@@ -1391,6 +1391,13 @@ def admin_advice():
         "no_bet": sum(1 for r in settled if not r["backed"]),
     }
     call = m.verdict([(bool(r["hit"]), r["odds"]) for r in bets])
+    # The admin's own bets: lines ticked as placed, whether advised or not,
+    # settled on the side shown at the price shown.
+    mine_done = [r for r in settled if r.get("placed") and r["odds"]]
+    mine = {"settled": len(mine_done), "won": sum(1 for r in mine_done if r["side_won"]),
+            "pnl": sum((r["odds"] - 1) if r["side_won"] else -1.0 for r in mine_done),
+            "open": sum(1 for r in pending if r.get("placed")),
+            "void": sum(1 for r in void if r.get("placed"))}
     # Visitors see the bets only; "no bet" lines stay visible to the admin.
     # The totals already count advised bets alone, so they do not change.
     if not session.get("admin"):
@@ -1441,6 +1448,10 @@ def tennis():
         # An unadvised line still shows the price and the model's edge on it,
         # the over side unless only an under was quoted.
         side = r["bet"] or ("over" if r["oo"] else "under" if r["uo"] else None)
+        r["side"] = side
+        # Identifies the row for the "placed" tick (aces.line's primary key).
+        r["key"] = "|".join([r["date"].isoformat(), r["player_1_id"], r["player_2_id"],
+                             r["market"], str(r["line"])])
         r["odds"] = r["oo"] if side == "over" else r["uo"] if side == "under" else None
         r["p_bet"] = (r["p"] if side == "over" else 1 - r["p"]) if side else None
         r["edge"] = r["p_bet"] * r["odds"] - 1 if r["odds"] else None
@@ -1456,6 +1467,9 @@ def tennis():
                 r["hit"] = r["actual"] > r["ln"]
             elif r["bet"] == "under":
                 r["hit"] = r["actual"] < r["ln"]
+            # How the side shown did - what a placed bet is settled on.
+            r["side_won"] = (r["actual"] > r["ln"] if side == "over"
+                             else r["actual"] < r["ln"] if side == "under" else None)
             settled.append(r)
 
     bets = [r for r in settled if r["bet"] and r["odds"]]
@@ -1465,6 +1479,13 @@ def tennis():
               "roi": (returned - len(bets)) / len(bets) if bets else None,
               "no_bet": sum(1 for r in settled if not r["bet"])}
     call = m.verdict([(bool(r["hit"]), r["odds"]) for r in bets])
+    # The admin's own bets: lines ticked as placed, whether advised or not,
+    # settled on the side shown at the price shown.
+    mine_done = [r for r in settled if r.get("placed") and r["odds"]]
+    mine = {"settled": len(mine_done), "won": sum(1 for r in mine_done if r["side_won"]),
+            "pnl": sum((r["odds"] - 1) if r["side_won"] else -1.0 for r in mine_done),
+            "open": sum(1 for r in pending if r.get("placed")),
+            "void": sum(1 for r in void if r.get("placed"))}
     if not session.get("admin"):
         # Visitors see advised bets only, as on the possession record.
         settled = [r for r in settled if r["bet"]]
@@ -1475,7 +1496,40 @@ def tennis():
     pending.sort(key=lambda r: (r["bet"] is None, r["kickoff"] or far, r["player_1"], r["market"]))
     return render_template("tennis.html", settled=settled, pending=pending, void=void,
                            totals=totals, verdict=call, user=session.get("admin"),
-                           book=book, books=TENNIS_BOOKS)
+                           book=book, books=TENNIS_BOOKS, mine=mine)
+
+
+@app.route("/tennis/placed", methods=["POST"])
+@members_only
+def tennis_placed():
+    """Tick or untick a tennis line as a bet the admin actually placed.
+
+    JSON only, and refused when the Origin is another site: a cross-site form
+    cannot send JSON, and the session cookie is SameSite=Lax, so another page
+    cannot tick lines on the admin's behalf. The aces collectors leave a placed
+    line alone from then on, so it keeps the price that was taken."""
+    origin = request.headers.get("Origin")
+    if origin and origin.split("://", 1)[-1] != request.host:
+        abort(403)
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict) or "key" not in data:
+        abort(400)
+    try:
+        day, p1, p2, market, line = str(data["key"]).split("|")
+    except ValueError:
+        abort(400)
+    placed = bool(data.get("placed"))
+    conn = db()
+    with conn.cursor() as cur:
+        cur.execute("""UPDATE aces.line SET placed = %s, placed_at = CASE WHEN %s THEN now() END
+                        WHERE date = %s AND player_1_id = %s AND player_2_id = %s
+                          AND market = %s AND line = %s::numeric""",
+                    (placed, placed, day, p1, p2, market, line))
+        n = cur.rowcount
+    conn.commit()
+    if n != 1:
+        abort(404)
+    return {"placed": placed}
 
 
 @app.route("/tennis/compare")
