@@ -31,6 +31,12 @@ DATABASE_URL="$(.venv/bin/python -c 'from dotenv import dotenv_values; print(dot
     || { echo "!! no DATABASE_URL in /home/app/scraper/.env"; exit 1; }
 export DATABASE_URL
 
+# Results first: the WTA's finished matches, then settle the stored lines, so
+# a bet's result is in within three hours of the match - not at the mercy of
+# GitHub's schedule - and still arrives if Betano refuses this server.
+timeout 20m .venv/bin/python collect.py --years recent || echo "!! collect.py exited $?"
+timeout 5m .venv/bin/python price.py --settle || echo "!! price.py --settle exited $?"
+
 # --advise: WTA aces only, at +10% EV or more (odds.py VALIDATED_TOURS,
 # ADVISE_MARKETS, EDGE) - switched on 2026-10-01.
 timeout 20m .venv/bin/python odds.py --advise || echo "!! odds.py exited $?"
