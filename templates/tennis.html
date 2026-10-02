@@ -6,27 +6,6 @@
 
 {% block content %}
 
-<div class="panel results-panel">
-  <h2>{{ _("Latest results") }}</h2>
-  {% if latest %}
-  <ul class="results">
-    {% for r in latest %}
-    <li>
-      {% if r.hit %}<span class="chip ok">&#10003; {{ _("won") }}</span>{% else %}<span class="chip no">&#10007; {{ _("lost") }}</span>{% endif %}
-      <div class="what">
-        <strong>{{ market(r) }} {{ r.line_label }}</strong> <span class="muted">@ {{ '%.2f'|format(r.odds) }}</span>
-        &middot; {{ _("actual") }} <strong>{{ r.actual }}</strong>
-        <div class="muted sub">{{ r.player_1 }} v {{ r.player_2 }} &middot; {{ r.date.strftime('%d.%m.') }} &middot; {{ _(books[r.book]) }}</div>
-      </div>
-      <span class="pl num {{ 'good' if r.pl > 0 else 'bad' }}">{{ '%+.2f'|format(r.pl) }}</span>
-    </li>
-    {% endfor %}
-  </ul>
-  {% else %}
-  <div class="empty">{{ _("No tennis line has settled yet.") }}</div>
-  {% endif %}
-</div>
-
 <p class="muted" style="margin:-6px 0 16px">
   {% if not book %}<strong>{{ _("All bookmakers") }}</strong>{% else %}<a href="{{ url_for('tennis') }}">{{ _("All bookmakers") }}</a>{% endif %}
   {% for key, label in books.items() if key != 'manual' %}

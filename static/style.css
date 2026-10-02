@@ -266,16 +266,5 @@ td a:hover, .panel a:hover { text-decoration: underline; }
 
 .empty { color: var(--muted); text-align: center; padding: 34px 0; }
 
-/* Tennis tips: the latest results as a list that fits a phone - outcome,
-   bet, profit on one line - rather than a table that scrolls sideways. */
-.results { list-style: none; margin: 0; padding: 0; }
-.results li { display: flex; align-items: center; gap: 12px; padding: 10px 0;
-  border-top: 1px solid var(--line); }
-.results li:first-child { border-top: 0; padding-top: 2px; }
-.results .chip { flex: 0 0 auto; }
-.results .what { flex: 1 1 auto; min-width: 0; line-height: 1.35; }
-.results .what .sub { font-size: 12.5px; }
-.results .pl { flex: 0 0 auto; font-weight: 700; font-size: 16px; }
-
 /* Advised rows stand out from the unadvised ones the admin also sees. */
 tr.advised td { background: color-mix(in srgb, var(--good) 8%, transparent); }
