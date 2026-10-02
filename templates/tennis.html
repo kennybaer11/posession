@@ -1,24 +1,21 @@
 {% extends "base.html" %}
 {% block title %}{{ _("Tennis") }} &middot; {{ site_name }}{% endblock %}
-{% block heading %}{{ _("Tennis: aces and double faults") }}{% endblock %}
-
+{% block heading %}{{ _("Tennis tips") }}{% endblock %}
 {% from "_tennis.html" import market with context %}
+
 {% macro tick(r) -%}
   <td class="l tick"><input type="checkbox" data-key="{{ r.key }}" {{ 'checked' if r.placed }}
        title="{{ _('I placed this bet (the side and price shown)') }}" aria-label="{{ _('Placed') }}"></td>
 {%- endmacro %}
 
+{% macro side(r) -%}
+  <span class="chip ok">{{ _(r.side|upper) }}</span>
+{%- endmacro %}
+
 {% block content %}
 
-<p class="muted" style="margin:-6px 0 16px">
-  {% if not book %}<strong>{{ _("All bookmakers") }}</strong>{% else %}<a href="{{ url_for('tennis') }}">{{ _("All bookmakers") }}</a>{% endif %}
-  {% for key, label in books.items() if key != 'manual' %}
-    &middot; {% if book == key %}<strong>{{ label }}</strong>{% else %}<a href="{{ url_for('tennis', book=key) }}">{{ label }}</a>{% endif %}
-  {% endfor %}
-</p>
-
 <div class="tiles" style="margin-bottom:22px">
-  <div class="tile"><div class="v num">{{ totals.bets }}</div><div class="k">{{ _("Bets advised, settled") }}</div></div>
+  <div class="tile"><div class="v num">{{ totals.bets }}</div><div class="k">{{ _("Tips, settled") }}</div></div>
   <div class="tile"><div class="v num">{{ totals.won }}{% if totals.bets %} <span class="muted" style="font-size:14px">({{ '%.0f%%'|format(100 * totals.won / totals.bets) }})</span>{% endif %}</div><div class="k">{{ _("Won") }}</div></div>
   <div class="tile">
     <div class="v num {{ 'good' if totals.pnl > 0 else ('bad' if totals.pnl < 0 else '') }}">{{ '%+.2f'|format(totals.pnl) }}</div>
@@ -30,6 +27,14 @@
   </div>
 </div>
 
+{% if mine %}
+<div class="tiles mine" style="margin-bottom:22px">
+  <div class="tile"><div class="v num">{{ mine.settled }}{% if mine.settled %} <span class="muted" style="font-size:14px">({{ mine.won }} {{ _("won") }})</span>{% endif %}</div><div class="k">{{ _("My bets, settled") }}</div></div>
+  <div class="tile"><div class="v num {{ 'good' if mine.pnl > 0 else ('bad' if mine.pnl < 0 else '') }}">{{ '%+.2f'|format(mine.pnl) }}</div><div class="k">{{ _("My P/L, 1 unit each") }}</div></div>
+  <div class="tile"><div class="v num">{{ mine.open }}</div><div class="k">{{ _("My bets, open") }}{% if mine.void %} &middot; {{ mine.void }} {{ _("void") }}{% endif %}</div></div>
+</div>
+{% endif %}
+
 {% if totals.bets %}
 <div class="note" style="border-left-color: {{ 'var(--good)' if verdict.ready else 'var(--warn)' }}">
   <strong>{{ _('Beating the market by more than luck explains.') if verdict.ready else _('Not yet distinguishable from luck.') }}</strong>
@@ -40,117 +45,106 @@
 </div>
 {% endif %}
 
-{% if user %}
-<div class="tiles mine" style="margin-bottom:22px">
-  <div class="tile"><div class="v num">{{ mine.settled }}{% if mine.settled %} <span class="muted" style="font-size:14px">({{ mine.won }} {{ _("won") }})</span>{% endif %}</div><div class="k">{{ _("My bets, settled") }}</div></div>
-  <div class="tile"><div class="v num {{ 'good' if mine.pnl > 0 else ('bad' if mine.pnl < 0 else '') }}">{{ '%+.2f'|format(mine.pnl) }}</div><div class="k">{{ _("My P/L, 1 unit each") }}</div></div>
-  <div class="tile"><div class="v num">{{ mine.open }}</div><div class="k">{{ _("My bets, open") }}{% if mine.void %} &middot; {{ mine.void }} {{ _("void") }}{% endif %}</div></div>
-</div>
-{% endif %}
-
 <div class="panel">
-  <h2>{{ _("Upcoming") }}</h2>
-  {% if pending %}
+  <h2>{{ _("Upcoming") }} <span class="sub">&mdash; {{ _("still updating until the match starts") }}</span></h2>
+  {% if upcoming %}
   <div class="tablewrap">
     <table>
       <thead>
-        {# The decision first - advise or not, at what price and edge - then
-           the bet, and the model's working last. Advised rows come first. #}
-        <tr>{% if user %}<th class="l">{{ _("Placed") }}</th>{% endif %}<th class="l">{{ _("Advised") }}</th><th class="l">{{ _("Match") }}</th><th class="l">{{ _("Market") }}</th>
-            <th>{{ _("Line") }}</th><th>{{ _("Odds") }}</th><th>{{ _("Edge") }}</th><th class="l">{{ _("Date") }}</th>
-            <th>{{ _("P(over)") }}</th><th>{{ _("Model mean") }}</th><th class="l">{{ _("Bookmaker") }}</th></tr>
+        <tr>{% if user %}<th class="l">{{ _("Placed") }}</th>{% endif %}<th class="l">{{ _("Advised") }}</th><th class="l">{{ _("Match") }}</th>
+            <th class="l">{{ _("Market") }}</th><th>{{ _("Line") }}</th><th>{{ _("Odds") }}</th><th>{{ _("Edge") }}</th>
+            <th class="l">{{ _("Start") }}</th><th>{{ _("Model") }}</th><th class="l">{{ _("Bookmaker") }}</th>
+            <th class="l" title="{{ _('Last time the tip was saved before the start') }}">{{ _("Advice as of") }}</th></tr>
       </thead>
       <tbody>
-        {% for r in pending %}
-        <tr class="{{ 'advised' if r.bet }} {{ 'placed' if r.placed }}">
+        {% for r in upcoming %}
+        <tr class="advised {{ 'placed' if r.placed }}">
           {% if user %}{{ tick(r) }}{% endif %}
-          <td class="l">{% if r.bet %}<span class="chip ok">{{ _(r.bet|upper) }}</span>{% else %}<span class="chip">{{ _("no bet") }}</span>{% endif %}</td>
+          <td class="l">{{ side(r) }}</td>
           <td class="l">{{ r.player_1 }} v {{ r.player_2 }}</td>
           <td class="l">{{ market(r) }}</td>
           <td class="num"><strong>{{ r.line_label }}</strong></td>
-          <td class="num"><strong>{{ '%.2f'|format(r.odds) if r.odds else '-' }}</strong></td>
-          <td class="num {{ 'good' if r.bet else 'muted' }}">{{ '%+.1f%%'|format(r.edge * 100) if r.edge is not none else '-' }}</td>
-          <td class="l muted">{{ r.date.strftime('%d.%m.') }}</td>
+          <td class="num"><strong>{{ '%.2f'|format(r.o) }}</strong></td>
+          <td class="num good">{{ '%+.1f%%'|format(r.e * 100) }}</td>
+          <td class="l muted">{{ r.kickoff|dt('%d %b %H:%M') }}{% if r.started %} <span class="chip">{{ _("started") }}</span>{% endif %}</td>
           <td class="num muted">{{ '%.0f%%'|format(100 * r.p) }}</td>
-          <td class="num muted">{{ '%.2f'|format(r.mean) }}</td>
           <td class="l"><span class="chip">{{ _(books[r.book]) }}</span></td>
+          <td class="l muted" style="font-size:12px">{{ r.advised_at|dt('%d %b %H:%M') }}</td>
         </tr>
         {% endfor %}
       </tbody>
     </table>
   </div>
   {% else %}
-  <div class="empty">{{ _("No open tennis line with an advised bet.") }}</div>
+  <div class="empty">{{ _("No open tip. New ones appear when the bookmakers' lines are collected and priced.") }}</div>
   {% endif %}
 </div>
 
 <div class="panel">
-  <h2>{{ _("All settled lines") }}</h2>
+  <h2>{{ _("Settled") }} <span class="sub">&mdash; {{ _("advice frozen at the start") }}</span></h2>
   {% if settled %}
   <div class="tablewrap">
     <table class="sortable">
       <thead>
-        <tr>{% if user %}<th class="l">{{ _("Placed") }}</th>{% endif %}<th class="l">{{ _("Result") }}</th><th class="l">{{ _("Date") }}</th><th class="l">{{ _("Match") }}</th><th class="l">{{ _("Market") }}</th>
-            <th>{{ _("Line") }}</th><th>{{ _("Actual") }}</th><th>{{ _("Odds") }}</th><th>{{ _("Advised") }}</th>
-            <th>{{ _("Model mean") }}</th><th>{{ _("Edge") }}</th><th class="l">{{ _("Bookmaker") }}</th></tr>
+        <tr>{% if user %}<th class="l">{{ _("Placed") }}</th>{% endif %}<th class="l">{{ _("Result") }}</th><th class="l">{{ _("Match") }}</th>
+            <th class="l">{{ _("Market") }}</th><th>{{ _("Line") }}</th><th>{{ _("Actual") }}</th><th>{{ _("Odds") }}</th><th>{{ _("P/L") }}</th>
+            <th class="l">{{ _("Start") }}</th><th>{{ _("Model") }}</th><th>{{ _("Edge") }}</th><th class="l">{{ _("Bookmaker") }}</th></tr>
       </thead>
       <tbody>
         {% for r in settled %}
         <tr class="{{ 'placed' if r.placed }}">
           {% if user %}{{ tick(r) }}{% endif %}
-          <td class="l">
-            {% if not r.bet %}<span class="muted">&ndash;</span>
-            {% elif r.hit %}<span class="chip ok">&#10003; {{ _("won") }}</span>
-            {% else %}<span class="chip no">&#10007; {{ _("lost") }}</span>{% endif %}
-          </td>
-          <td class="l muted" data-v="{{ r.date.isoformat() }}">{{ r.date.strftime('%d %b') }}</td>
+          <td class="l">{% if r.hit %}<span class="chip ok">&#10003; {{ _("won") }}</span>{% else %}<span class="chip no">&#10007; {{ _("lost") }}</span>{% endif %}</td>
           <td class="l">{{ r.player_1 }} v {{ r.player_2 }}</td>
-          <td class="l">{{ market(r) }}</td>
+          <td class="l">{{ market(r) }} <span class="muted">{{ _(r.side|upper)|lower }}</span></td>
           <td class="num">{{ r.line_label }}</td>
-          <td class="num">{{ r.actual }}</td>
-          <td class="num">{{ '%.2f'|format(r.odds) if r.odds else '-' }}</td>
-          <td>{% if r.bet %}<span class="chip ok">{{ _(r.bet|upper) }}</span>{% else %}<span class="chip">{{ _("no bet") }}</span>{% endif %}</td>
-          <td class="num muted">{{ '%.2f'|format(r.mean) }}</td>
-          <td class="num {{ 'good' if r.bet else 'muted' }}">{{ '%+.1f%%'|format(r.edge * 100) if r.edge is not none else '-' }}</td>
+          <td class="num"><strong>{{ r.actual }}</strong></td>
+          <td class="num">{{ '%.2f'|format(r.o) }}</td>
+          <td class="num {{ 'good' if r.pl > 0 else 'bad' }}">{{ '%+.2f'|format(r.pl) }}</td>
+          <td class="l muted" data-v="{{ r.kickoff.timestamp() }}">{{ r.kickoff|dt('%d %b %H:%M') }}</td>
+          <td class="num muted">{{ '%.0f%%'|format(100 * r.p) }}</td>
+          <td class="num muted">{{ '%+.1f%%'|format(r.e * 100) }}</td>
           <td class="l"><span class="chip">{{ _(books[r.book]) }}</span></td>
         </tr>
         {% endfor %}
       </tbody>
     </table>
   </div>
-  {% if user and totals.no_bet %}
-  <p class="muted" style="font-size:12.5px;margin-bottom:0">
-    {% trans count=totals.no_bet %}{{ count }} settled line carried no advised bet
-    and does not count towards the totals.{% pluralize %}{{ count }} settled lines carried no advised bet
-    and do not count towards the totals.{% endtrans %}
-  </p>
-  {% endif %}
   {% else %}
-  <div class="empty">{{ _("No tennis line has settled yet.") }}</div>
+  <div class="empty">{{ _("No tip has settled yet.") }}</div>
   {% endif %}
 </div>
 
 {% if void %}
 <div class="panel">
-  <h2>{{ _("Void") }} <span class="sub">&mdash; {{ _("retired or walked over; admin only") }}</span></h2>
+  <h2>{{ _("Void") }} <span class="sub">&mdash; {{ _("retired or walked over; stake returned") }}</span></h2>
   <ul>
-    {% for r in void %}<li>{{ r.date.strftime('%d %b') }} &middot; {{ r.player_1 }} v {{ r.player_2 }} &middot; {{ market(r) }} {{ r.line_label }} &middot; {{ _(books[r.book]) }}</li>{% endfor %}
+    {% for r in void %}<li>{{ r.kickoff|dt('%d %b') }} &middot; {{ r.player_1 }} v {{ r.player_2 }} &middot; {{ market(r) }} {{ _(r.side|upper)|lower }} {{ r.line_label }} @ {{ '%.2f'|format(r.o) }} &middot; {{ _(books[r.book]) }}{% if r.placed %} &middot; <strong>{{ _("placed") }}</strong>{% endif %}</li>{% endfor %}
+  </ul>
+</div>
+{% endif %}
+
+{% if withdrawn %}
+<div class="panel">
+  <h2>{{ _("Withdrawn before the start") }} <span class="sub">&mdash; {{ _("advised, then the odds moved; not counted; admin only") }}</span></h2>
+  <ul>
+    {% for r in withdrawn %}<li class="muted">{{ r.kickoff|dt('%d %b %H:%M') }} &middot; {{ r.player_1 }} v {{ r.player_2 }} &middot; {{ market(r) }} {{ _(r.side|upper)|lower }} {{ r.line_label }} @ {{ '%.2f'|format(r.o) }} &middot; {{ _(books[r.book]) }}</li>{% endfor %}
   </ul>
 </div>
 {% endif %}
 
 <div class="note">
-  <strong>{{ _("WTA lines, priced when they were entered.") }}</strong>
-  {% trans %}The model rates each player's ace and double-fault rate per serve point,
-  on the surface and against this opponent, and simulates how many points each will serve.
-  The probability and the advised side are saved when the line is priced; nothing here is
-  recalculated afterwards. Results are filled in by the next morning's refresh. A retirement
-  or walkover voids the line.{% endtrans %}
+  <strong>{{ _("What the site advised, as it stood when each match started.") }}</strong>
+  {% trans %}Each tip is saved every time the bookmakers' lines are collected and priced, and locked
+  the moment its match starts &mdash; the database refuses any later change. Nothing here is
+  recalculated: a new model or a code fix changes the price list, never this record. Only the
+  count of aces is looked up, because that is a fact about the match. Tips are aces only, at +10%
+  value or more against the model; a retirement or walkover voids the bet.{% endtrans %}
 </div>
 
 {% if user %}
 <script>
-// Tick a row as placed: saved at once, so it is the same on every device.
+// Tick a tip as placed: saved at once, so it is the same on every device.
 // On failure the tick is put back and the reason shown.
 document.querySelectorAll('td.tick input[data-key]').forEach(function (box) {
   box.addEventListener('change', function () {

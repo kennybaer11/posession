@@ -22,6 +22,27 @@ CS = {
     "Manual": "Ručně",
     "Odds comparison": "Srovnání kurzů",
     "Tips": "Tipy",
+    "Tennis tips": "Tenisové tipy",
+    "All lines": "Všechny hranice",
+    "Tips, settled": "Tipy, vyhodnocené",
+    "still updating until the match starts": "aktualizují se až do začátku zápasu",
+    "Start": "Začátek",
+    "Last time the tip was saved before the start": "Kdy byl tip naposledy uložen před začátkem",
+    "started": "začal",
+    "No open tip. New ones appear when the bookmakers' lines are collected and priced.": "Žádný otevřený tip. Nové přibudou, jakmile se stáhnou a ocení kurzy kanceláří.",
+    "advice frozen at the start": "tip zmrazený při začátku zápasu",
+    "P/L": "Zisk",
+    "No tip has settled yet.": "Zatím žádný vyhodnocený tip.",
+    "retired or walked over; stake returned": "skreč nebo kontumace; vklad se vrací",
+    "placed": "vsazeno",
+    "Withdrawn before the start": "Staženo před začátkem",
+    "advised, then the odds moved; not counted; admin only": "doporučeno, pak se kurz změnil; nepočítá se; jen pro admina",
+    "What the site advised, as it stood when each match started.": "Co web doporučil, přesně jak to stálo na začátku každého zápasu.",
+    "Each tip is saved every time the bookmakers' lines are collected and priced, and locked the moment its match starts &mdash; the database refuses any later change. Nothing here is recalculated: a new model or a code fix changes the price list, never this record. Only the count of aces is looked up, because that is a fact about the match. Tips are aces only, at +10% value or more against the model; a retirement or walkover voids the bet.":
+        "Každý tip se uloží při každém stažení a ocenění kurzů a zamkne se ve chvíli, kdy zápas začne &mdash; "
+        "databáze pozdější změnu odmítne. Nic se tu nepřepočítává: nový model nebo oprava kódu změní ceník, "
+        "nikdy tento záznam. Dohledává se jen počet es, protože to je fakt o zápase. Tipy jsou jen na esa, "
+        "s výhodou aspoň +10 % proti modelu; skreč nebo kontumace sázku ruší.",
     "Placed": "Vsazeno",
     "I placed this bet (the side and price shown)": "Tuto sázku jsem podal (zobrazená strana a kurz)",
     "My bets, settled": "Moje sázky, vyhodnocené",

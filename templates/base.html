@@ -33,6 +33,7 @@
 <nav class="subnav" aria-label="{{ _('Football') if section == 'football' else _('Tennis') }}">
   {% if section == 'tennis' %}
     <a href="{{ url_for('tennis') }}"         class="{{ 'on' if request.endpoint == 'tennis' }}">{{ _("Tips") }}</a>
+    <a href="{{ url_for('tennis_lines') }}"   class="{{ 'on' if request.endpoint == 'tennis_lines' }}">{{ _("All lines") }}</a>
     <a href="{{ url_for('tennis_compare') }}" class="{{ 'on' if request.endpoint == 'tennis_compare' }}">{{ _("Odds comparison") }}</a>
     <a href="{{ url_for('tennis_status') }}"  class="{{ 'on' if request.endpoint == 'tennis_status' }}">{{ _("Tennis data") }}</a>
   {% else %}
