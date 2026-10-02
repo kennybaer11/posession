@@ -6,13 +6,25 @@
 
 {% block content %}
 
-<div class="note">
-  <strong>{{ _("WTA lines, priced when they were entered.") }}</strong>
-  {% trans %}The model rates each player's ace and double-fault rate per serve point,
-  on the surface and against this opponent, and simulates how many points each will serve.
-  The probability and the advised side are saved when the line is priced; nothing here is
-  recalculated afterwards. Results are filled in by the next morning's refresh. A retirement
-  or walkover voids the line.{% endtrans %}
+<div class="panel results-panel">
+  <h2>{{ _("Latest results") }}</h2>
+  {% if latest %}
+  <ul class="results">
+    {% for r in latest %}
+    <li>
+      {% if r.hit %}<span class="chip ok">&#10003; {{ _("won") }}</span>{% else %}<span class="chip no">&#10007; {{ _("lost") }}</span>{% endif %}
+      <div class="what">
+        <strong>{{ market(r) }} {{ r.line_label }}</strong> <span class="muted">@ {{ '%.2f'|format(r.odds) }}</span>
+        &middot; {{ _("actual") }} <strong>{{ r.actual }}</strong>
+        <div class="muted sub">{{ r.player_1 }} v {{ r.player_2 }} &middot; {{ r.date.strftime('%d.%m.') }} &middot; {{ _(books[r.book]) }}</div>
+      </div>
+      <span class="pl num {{ 'good' if r.pl > 0 else 'bad' }}">{{ '%+.2f'|format(r.pl) }}</span>
+    </li>
+    {% endfor %}
+  </ul>
+  {% else %}
+  <div class="empty">{{ _("No tennis line has settled yet.") }}</div>
+  {% endif %}
 </div>
 
 <p class="muted" style="margin:-6px 0 16px">
@@ -79,33 +91,33 @@
 </div>
 
 <div class="panel">
-  <h2>{{ _("Settled") }}</h2>
+  <h2>{{ _("All settled lines") }}</h2>
   {% if settled %}
   <div class="tablewrap">
     <table class="sortable">
       <thead>
-        <tr><th class="l">{{ _("Date") }}</th><th class="l">{{ _("Match") }}</th><th class="l">{{ _("Market") }}</th><th class="l">{{ _("Bookmaker") }}</th>
-            <th>{{ _("Line") }}</th><th>{{ _("Model mean") }}</th><th>{{ _("Advised") }}</th><th>{{ _("Odds") }}</th>
-            <th>{{ _("Edge") }}</th><th>{{ _("Actual") }}</th><th>{{ _("Result") }}</th></tr>
+        <tr><th class="l">{{ _("Result") }}</th><th class="l">{{ _("Date") }}</th><th class="l">{{ _("Match") }}</th><th class="l">{{ _("Market") }}</th>
+            <th>{{ _("Line") }}</th><th>{{ _("Actual") }}</th><th>{{ _("Odds") }}</th><th>{{ _("Advised") }}</th>
+            <th>{{ _("Model mean") }}</th><th>{{ _("Edge") }}</th><th class="l">{{ _("Bookmaker") }}</th></tr>
       </thead>
       <tbody>
         {% for r in settled %}
         <tr>
+          <td class="l">
+            {% if not r.bet %}<span class="muted">&ndash;</span>
+            {% elif r.hit %}<span class="chip ok">&#10003; {{ _("won") }}</span>
+            {% else %}<span class="chip no">&#10007; {{ _("lost") }}</span>{% endif %}
+          </td>
           <td class="l muted" data-v="{{ r.date.isoformat() }}">{{ r.date.strftime('%d %b') }}</td>
           <td class="l">{{ r.player_1 }} v {{ r.player_2 }}</td>
           <td class="l">{{ market(r) }}</td>
-          <td class="l"><span class="chip">{{ _(books[r.book]) }}</span></td>
           <td class="num">{{ r.line_label }}</td>
-          <td class="num muted">{{ '%.2f'|format(r.mean) }}</td>
-          <td>{% if r.bet %}<span class="chip ok">{{ _(r.bet|upper) }}</span>{% else %}<span class="chip">{{ _("no bet") }}</span>{% endif %}</td>
-          <td class="num">{{ '%.2f'|format(r.odds) if r.odds else '-' }}</td>
-          <td class="num {{ 'good' if r.bet else 'muted' }}">{{ '%+.1f%%'|format(r.edge * 100) if r.edge is not none else '-' }}</td>
           <td class="num">{{ r.actual }}</td>
-          <td>
-            {% if not r.bet %}<span class="muted">&ndash;</span>
-            {% elif r.hit %}<span class="chip ok">{{ _("won") }}</span>
-            {% else %}<span class="chip no">{{ _("lost") }}</span>{% endif %}
-          </td>
+          <td class="num">{{ '%.2f'|format(r.odds) if r.odds else '-' }}</td>
+          <td>{% if r.bet %}<span class="chip ok">{{ _(r.bet|upper) }}</span>{% else %}<span class="chip">{{ _("no bet") }}</span>{% endif %}</td>
+          <td class="num muted">{{ '%.2f'|format(r.mean) }}</td>
+          <td class="num {{ 'good' if r.bet else 'muted' }}">{{ '%+.1f%%'|format(r.edge * 100) if r.edge is not none else '-' }}</td>
+          <td class="l"><span class="chip">{{ _(books[r.book]) }}</span></td>
         </tr>
         {% endfor %}
       </tbody>
@@ -131,5 +143,14 @@
   </ul>
 </div>
 {% endif %}
+
+<div class="note">
+  <strong>{{ _("WTA lines, priced when they were entered.") }}</strong>
+  {% trans %}The model rates each player's ace and double-fault rate per serve point,
+  on the surface and against this opponent, and simulates how many points each will serve.
+  The probability and the advised side are saved when the line is priced; nothing here is
+  recalculated afterwards. Results are filled in by the next morning's refresh. A retirement
+  or walkover voids the line.{% endtrans %}
+</div>
 
 {% endblock %}

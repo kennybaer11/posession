@@ -1456,6 +1456,9 @@ def tennis():
                 r["hit"] = r["actual"] > r["ln"]
             elif r["bet"] == "under":
                 r["hit"] = r["actual"] < r["ln"]
+            # Profit on a 1-unit stake, for the results list at the top.
+            r["pl"] = ((r["odds"] - 1 if r["hit"] else -1.0)
+                       if r["bet"] and r["odds"] else None)
             settled.append(r)
 
     bets = [r for r in settled if r["bet"] and r["odds"]]
@@ -1470,9 +1473,13 @@ def tennis():
         settled = [r for r in settled if r["bet"]]
         pending = [r for r in pending if r["bet"]]
         void = []
+    # Newest first for the results list; the full table stays sortable.
+    latest = sorted([r for r in settled if r["bet"]],
+                    key=lambda r: (r["kickoff"] or datetime.min.replace(tzinfo=timezone.utc), r["date"]),
+                    reverse=True)[:10]
     return render_template("tennis.html", settled=settled, pending=pending, void=void,
                            totals=totals, verdict=call, user=session.get("admin"),
-                           book=book, books=TENNIS_BOOKS)
+                           book=book, books=TENNIS_BOOKS, latest=latest)
 
 
 @app.route("/tennis/compare")

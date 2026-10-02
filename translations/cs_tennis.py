@@ -22,6 +22,11 @@ CS = {
     "Manual": "Ručně",
     "Odds comparison": "Srovnání kurzů",
     "Tips": "Tipy",
+    "Latest results": "Poslední výsledky",
+    "All settled lines": "Všechny vyhodnocené hranice",
+    "Bet": "Sázka",
+    "P/L": "Zisk",
+    "actual": "skutečnost",
     "Tennis data": "Stav dat",
     "No upcoming match with ace or double-fault odds collected.": "Žádný nadcházející zápas se staženými kurzy na esa nebo dvojchyby.",
     "Whether the aces pipeline is alive. Betano is collected by the server every three hours; Chance.cz only when it is read in a browser session. The tour data feeds the ratings: the WTA's own API refreshes daily, the ATP comes from tennistourdata.com. All times are UTC.":
