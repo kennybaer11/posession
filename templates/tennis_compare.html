@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+{% block title %}{{ _("Odds comparison") }} &middot; {{ site_name }}{% endblock %}
+{% block heading %}{{ _("Odds comparison") }}{% endblock %}
+{% from "_tennis.html" import market, px with context %}
+
+{% block content %}
+{% if compare %}
+<div class="panel">
+  <h2>{{ _("Odds comparison") }} <span class="sub">&mdash; {{ _("every bookmaker's price beside the model's fair price; the best price per side in bold, green where it beats the model by 10% or more - aces only, the model is no better than a player's own average on double faults") }}</span></h2>
+  {% for m in compare %}
+  <details style="margin:6px 0;border-top:1px solid var(--line, #e5e7eb);padding-top:6px">
+    <summary style="cursor:pointer">
+      <span class="muted">{{ m.kickoff|dt('%d %b %H:%M') }}</span> &middot; <strong>{{ m.match }}</strong>
+      <span class="muted">&middot; {{ m.tour }} &middot; {% for b in m.books %}{{ books[b] }}{% if not loop.last %}, {% endif %}{% endfor %}</span>
+      {% if m.best %} &middot; {{ _("best") }}: {{ _("Aces") if m.best.stat == "aces" else _("Double faults") }}{% if m.best.about %} {{ m.best.about }}{% endif %}
+        {{ _(m.best.side|upper) }} {{ m.best.label }} @ {{ '%.2f'|format(m.best.price) }} ({{ books[m.best.book] }})
+        <span class="{{ 'good' if m.best.ev >= 0.10 else 'muted' }}">{{ '%+.0f%%'|format(m.best.ev * 100) }}</span>
+      {% elif not m.priced %} &middot; <span class="muted">{{ _("no model price yet") }}</span>{% endif %}
+    </summary>
+    <div class="tablewrap">
+      <table>
+        <thead>
+          <tr><th class="l">{{ _("Market") }}</th><th>{{ _("Line") }}</th><th>{{ _("P(over)") }}</th>
+              <th>{{ _("Fair over") }}</th><th>{{ _("Fair under") }}</th>
+              {% for b in m.books %}<th>{{ books[b] }} {{ _("Over")|lower }}</th>{% if b != 'betano' %}<th>{{ books[b] }} {{ _("Under")|lower }}</th>{% endif %}{% endfor %}
+              <th>{{ _("Best EV") }}</th></tr>
+        </thead>
+        <tbody>
+          {% for line in m.lines %}
+          <tr>
+            <td class="l">{{ market({'stat': line.stat, 'about': line.about}) }}</td>
+            <td class="num">{{ line.label }}</td>
+            <td class="num muted">{{ '%.0f%%'|format(100 * line.p) if line.p is not none else '-' }}</td>
+            <td class="num muted">{{ '%.2f'|format(line.fair_over) if line.fair_over else '-' }}</td>
+            <td class="num muted">{{ '%.2f'|format(line.fair_under) if line.fair_under else '-' }}</td>
+            {% for b in m.books %}
+              <td class="num">{{ px(line.books.get(b), 'over', line) }}</td>
+              {% if b != 'betano' %}<td class="num">{{ px(line.books.get(b), 'under', line) }}</td>{% endif %}
+            {% endfor %}
+            {% set evs = line.best.values()|selectattr('ev')|map(attribute='ev')|list %}
+            <td class="num {{ 'good' if line.stat == 'aces' and evs and evs|max >= 0.10 else 'muted' }}">{{ '%+.0f%%'|format(evs|max * 100) if evs else '-' }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </details>
+  {% endfor %}
+</div>
+{% endif %}
+{% if not compare %}
+<div class="empty">{{ _("No upcoming match with ace or double-fault odds collected.") }}</div>
+{% endif %}
+{% endblock %}

@@ -319,7 +319,9 @@ def _members():
     # Whether the full menu shows: always locally, only when signed in on the
     # public server.
     local = not DEPLOYED and not app.config.get("STATIC_EXPORT")
-    return {"members": local or bool(session.get("admin"))}
+    return {"members": local or bool(session.get("admin")),
+            # Which sport's categories the second menu row shows.
+            "section": "tennis" if (request.endpoint or "").startswith("tennis") else "football"}
 
 
 @app.context_processor
@@ -1470,10 +1472,58 @@ def tennis():
         void = []
     return render_template("tennis.html", settled=settled, pending=pending, void=void,
                            totals=totals, verdict=call, user=session.get("admin"),
-                           book=book, books=TENNIS_BOOKS,
-                           # Model prices on every line are tips in all but name, so
-                           # visitors get them only once advice is switched on.
-                           compare=_tennis_compare() if session.get("admin") else [])
+                           book=book, books=TENNIS_BOOKS)
+
+
+@app.route("/tennis/compare")
+@members_only
+def tennis_compare():
+    """Every bookmaker's ace and DF prices beside the model's fair price.
+    Admin only: model prices on every line are tips in all but name."""
+    return render_template("tennis_compare.html", compare=_tennis_compare(), books=TENNIS_BOOKS)
+
+
+@app.route("/tennis/status")
+@members_only
+def tennis_status():
+    """Is the aces pipeline alive? When each bookmaker was last collected and
+    how often, what is on offer and how much of it could be priced, and how
+    fresh the tour data the ratings come from is."""
+    if not one("SELECT to_regclass('aces.odds') AS t")["t"]:
+        return render_template("tennis_status.html", books=TENNIS_BOOKS, collections=[],
+                               tours=[], unmatched=[], lines={})
+    collections = query("""
+        SELECT e.source,
+               max(o.fetched_at) AS last_fetch,
+               count(DISTINCT o.fetched_at) FILTER (WHERE o.fetched_at > now() - interval '24 hours') AS runs_24h,
+               count(DISTINCT e.event_id) FILTER (WHERE e.kickoff > now()) AS upcoming,
+               count(DISTINCT e.event_id) FILTER (WHERE e.kickoff > now()
+                     AND (e.player_1_id IS NULL OR e.player_2_id IS NULL)) AS unmatched,
+               count(DISTINCT e.event_id) FILTER (WHERE e.kickoff > now() AND e.tour = 'WTA') AS wta,
+               count(DISTINCT e.event_id) FILTER (WHERE e.kickoff > now() AND e.tour = 'ATP') AS atp
+          FROM aces.event e LEFT JOIN aces.odds o USING (source, event_id)
+         GROUP BY e.source ORDER BY e.source""")
+    tours = query("""
+        SELECT m.tour, count(*) AS matches, max(m.played_at) AS latest,
+               count(*) FILTER (WHERE m.played_at > now() - interval '7 days') AS last_7d,
+               count(*) FILTER (WHERE m.completed) AS completed
+          FROM aces.match m GROUP BY m.tour ORDER BY m.tour""")
+    unmatched = query("""
+        SELECT e.source, e.tour, e.kickoff, e.league, e.name_1, e.name_2,
+               e.player_1_id IS NULL AS miss_1, e.player_2_id IS NULL AS miss_2
+          FROM aces.event e
+         WHERE e.kickoff > now() AND (e.player_1_id IS NULL OR e.player_2_id IS NULL)
+         ORDER BY e.kickoff""")
+    lines = one("""
+        SELECT count(*) FILTER (WHERE bet IS NOT NULL AND actual IS NULL AND void IS NOT TRUE
+                                  AND kickoff > now()) AS open_bets,
+               count(*) FILTER (WHERE bet IS NOT NULL AND actual IS NULL AND void IS NOT TRUE
+                                  AND kickoff <= now()) AS awaiting_result,
+               count(*) FILTER (WHERE bet IS NOT NULL AND actual IS NOT NULL) AS settled_bets,
+               max(priced_at) AS last_priced
+          FROM aces.line""")
+    return render_template("tennis_status.html", books=TENNIS_BOOKS, collections=collections,
+                           tours=tours, unmatched=unmatched, lines=lines)
 
 
 def _tennis_compare():

@@ -9,29 +9,11 @@
 <body>
 <header class="topbar">
   <a class="brand" href="{{ url_for('admin_advice') }}">{{ site_name.rsplit(".", 1)[0] }}<span>.{{ site_name.rsplit(".", 1)[1] }}</span></a>
-  {% if members %}
-  <button class="navtoggle" type="button" aria-controls="mainnav" aria-expanded="false"
-          aria-label="{{ _('Menu') }}"><span></span><span></span><span></span></button>
-  {% endif %}
-  <nav id="mainnav" class="{{ 'collapsible' if members }}">
-    {# Visitors see the advice record only; everything else is behind the
-       admin login on the public server (members_only in app.py). #}
-    <a href="{{ url_for('admin_advice') }}" class="{{ 'on' if request.endpoint == 'admin_advice' }}">{{ _("Football") }}</a>
-    <a href="{{ url_for('tennis') }}" class="{{ 'on' if request.endpoint == 'tennis' }}">{{ _("Tennis") }}</a>
-    {% if members %}
-      <a href="{{ url_for('index', league=league) }}"    class="{{ 'on' if request.endpoint == 'index' }}">{{ _("Overview") }}</a>
-      <a href="{{ url_for('teams', league=league) }}"    class="{{ 'on' if request.endpoint in ('teams','team') }}">{{ _("Teams") }}</a>
-      <a href="{{ url_for('matches', league=league) }}"  class="{{ 'on' if request.endpoint in ('matches','match') }}">{{ _("Matches") }}</a>
-      <a href="{{ url_for('fixtures', league='all') }}"  class="{{ 'on' if request.endpoint == 'fixtures' }}">{{ _("Fixtures") }}</a>
-      {# These three serve every league at once, so the menu lands on that view
-         rather than silently picking the Premier League. The others carry the
-         league you were looking at, because they have no combined view to go
-         to - see _leaguetabs.html. #}
-      <a href="{{ url_for('model', league='all') }}"     class="{{ 'on' if request.endpoint == 'model' }}">{{ _("Model") }}</a>
-      <a href="{{ url_for('bets', league='all') }}"      class="{{ 'on' if request.endpoint == 'bets' }}">{{ _("Learning") }}</a>
-      <a href="{{ url_for('status') }}"                  class="{{ 'on' if request.endpoint == 'status' }}">{{ _("Scraper") }}</a>
-      <a href="{{ url_for('admin') }}"                   class="{{ 'on' if request.endpoint == 'admin' }}">{{ _("Admin") }}</a>
-    {% endif %}
+  {# Two sports, each with its own categories. Visitors see each sport's tips
+     only; signed in, the second row lists the current sport's pages. #}
+  <nav id="mainnav">
+    <a href="{{ url_for('admin_advice') }}" class="{{ 'on' if section == 'football' }}">{{ _("Football") }}</a>
+    <a href="{{ url_for('tennis') }}" class="{{ 'on' if section == 'tennis' }}">{{ _("Tennis") }}</a>
   </nav>
   {% if not config.STATIC_EXPORT %}
   {# The static GitHub Pages copy has no server to set the cookie, so it
@@ -47,6 +29,28 @@
   </div>
   {% endif %}
 </header>
+{% if members %}
+<nav class="subnav" aria-label="{{ _('Football') if section == 'football' else _('Tennis') }}">
+  {% if section == 'tennis' %}
+    <a href="{{ url_for('tennis') }}"         class="{{ 'on' if request.endpoint == 'tennis' }}">{{ _("Tips") }}</a>
+    <a href="{{ url_for('tennis_compare') }}" class="{{ 'on' if request.endpoint == 'tennis_compare' }}">{{ _("Odds comparison") }}</a>
+    <a href="{{ url_for('tennis_status') }}"  class="{{ 'on' if request.endpoint == 'tennis_status' }}">{{ _("Tennis data") }}</a>
+  {% else %}
+    <a href="{{ url_for('admin_advice') }}"            class="{{ 'on' if request.endpoint == 'admin_advice' }}">{{ _("Tips") }}</a>
+    <a href="{{ url_for('index', league=league) }}"    class="{{ 'on' if request.endpoint == 'index' }}">{{ _("Overview") }}</a>
+    <a href="{{ url_for('teams', league=league) }}"    class="{{ 'on' if request.endpoint in ('teams','team') }}">{{ _("Teams") }}</a>
+    <a href="{{ url_for('matches', league=league) }}"  class="{{ 'on' if request.endpoint in ('matches','match') }}">{{ _("Matches") }}</a>
+    <a href="{{ url_for('fixtures', league='all') }}"  class="{{ 'on' if request.endpoint == 'fixtures' }}">{{ _("Fixtures") }}</a>
+    {# These three serve every league at once, so the menu lands on that view
+       rather than silently picking the Premier League. The others carry the
+       league you were looking at - see _leaguetabs.html. #}
+    <a href="{{ url_for('model', league='all') }}"     class="{{ 'on' if request.endpoint == 'model' }}">{{ _("Model") }}</a>
+    <a href="{{ url_for('bets', league='all') }}"      class="{{ 'on' if request.endpoint == 'bets' }}">{{ _("Learning") }}</a>
+    <a href="{{ url_for('status') }}"                  class="{{ 'on' if request.endpoint == 'status' }}">{{ _("Scraper") }}</a>
+    <a href="{{ url_for('admin') }}"                   class="{{ 'on' if request.endpoint == 'admin' }}">{{ _("Import odds") }}</a>
+  {% endif %}
+</nav>
+{% endif %}
 
 <main>
   <h1 class="page-title">{% block heading %}{% endblock %}</h1>
@@ -56,16 +60,6 @@
 <footer>{{ _("Read-only view of the Neon database") }} &middot; {{ _("rendered") }} {{ now|dt('%d %b %Y %H:%M') }} UTC{% if code_version %} &middot; {{ _("version") }} {{ code_version }}{% endif %}</footer>
 
 <script>
-// Phone-width menu: the hamburger opens and closes the nav (see .navtoggle).
-(function () {
-  const btn = document.querySelector('.navtoggle');
-  const nav = document.getElementById('mainnav');
-  if (!btn || !nav) return;
-  btn.addEventListener('click', function () {
-    const open = nav.classList.toggle('open');
-    btn.setAttribute('aria-expanded', open ? 'true' : 'false');
-  });
-})();
 
 // Every table scrolls sideways inside its own box on a narrow screen instead
 // of stretching the whole page. Most templates wrap theirs in .tablewrap

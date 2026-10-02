@@ -1,0 +1,107 @@
+{% extends "base.html" %}
+{% block title %}{{ _("Tennis data") }} &middot; {{ site_name }}{% endblock %}
+{% block heading %}{{ _("Tennis data") }}{% endblock %}
+
+{% block content %}
+
+<div class="note">
+  {% trans %}Whether the aces pipeline is alive. Betano is collected by the server every three
+  hours; Chance.cz only when it is read in a browser session. The tour data feeds the ratings:
+  the WTA's own API refreshes daily, the ATP comes from tennistourdata.com. All times are UTC.{% endtrans %}
+</div>
+
+<div class="panel">
+  <h2>{{ _("Bookmaker collections") }}</h2>
+  {% if collections %}
+  <div class="tablewrap">
+    <table>
+      <thead>
+        <tr><th class="l">{{ _("Bookmaker") }}</th><th class="l">{{ _("Last collected") }}</th><th>{{ _("Runs, last 24h") }}</th>
+            <th>{{ _("Upcoming matches") }}</th><th>WTA</th><th>ATP</th><th>{{ _("Players not matched") }}</th></tr>
+      </thead>
+      <tbody>
+        {% for c in collections %}
+        {% set hours = ((now - c.last_fetch).total_seconds() / 3600) if c.last_fetch else none %}
+        <tr>
+          <td class="l"><span class="chip">{{ books.get(c.source, c.source) }}</span></td>
+          <td class="l {{ 'bad' if c.source == 'betano' and hours is not none and hours > 4 else '' }}">
+            {{ c.last_fetch|dt('%d %b %H:%M') if c.last_fetch else '-' }}
+            {% if hours is not none %}<span class="muted">({{ '%.0f'|format(hours) }} h)</span>{% endif %}
+          </td>
+          <td class="num">{{ c.runs_24h }}</td>
+          <td class="num">{{ c.upcoming }}</td>
+          <td class="num">{{ c.wta }}</td>
+          <td class="num">{{ c.atp }}</td>
+          <td class="num {{ 'bad' if c.unmatched else 'muted' }}">{{ c.unmatched }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <p class="muted" style="font-size:12.5px;margin-bottom:0">
+    {% trans %}Betano in red: more than four hours since the last collection, so at least one
+    of the server's three-hourly runs stored nothing - see /home/app/logs/aces.log on the server.{% endtrans %}
+  </p>
+  {% else %}
+  <div class="empty">{{ _("Nothing collected yet.") }}</div>
+  {% endif %}
+</div>
+
+<div class="panel">
+  <h2>{{ _("Lines") }}</h2>
+  <div class="tiles">
+    <div class="tile"><div class="v num">{{ lines.open_bets or 0 }}</div><div class="k">{{ _("Advised, not started") }}</div></div>
+    <div class="tile"><div class="v num">{{ lines.awaiting_result or 0 }}</div><div class="k">{{ _("Advised, awaiting result") }}</div></div>
+    <div class="tile"><div class="v num">{{ lines.settled_bets or 0 }}</div><div class="k">{{ _("Advised, settled") }}</div></div>
+    <div class="tile"><div class="v" style="font-size:16px">{{ lines.last_priced|dt('%d %b %H:%M') if lines.last_priced else '-' }}</div><div class="k">{{ _("Last priced") }}</div></div>
+  </div>
+</div>
+
+<div class="panel">
+  <h2>{{ _("Tour data") }} <span class="sub">&mdash; {{ _("what the ratings are built from") }}</span></h2>
+  <div class="tablewrap">
+    <table>
+      <thead>
+        <tr><th class="l">{{ _("Tour") }}</th><th>{{ _("Matches") }}</th><th>{{ _("Completed") }}</th>
+            <th class="l">{{ _("Latest match") }}</th><th>{{ _("Last 7 days") }}</th></tr>
+      </thead>
+      <tbody>
+        {% for t in tours %}
+        {% set days = ((now - t.latest).total_seconds() / 86400) if t.latest else none %}
+        <tr>
+          <td class="l">{{ t.tour }}</td>
+          <td class="num">{{ t.matches }}</td>
+          <td class="num">{{ t.completed }}</td>
+          <td class="l {{ 'bad' if days is not none and days > 3 else '' }}">{{ t.latest|dt('%d %b %Y') if t.latest else '-' }}
+            {% if days is not none %}<span class="muted">({{ '%.0f'|format(days) }} {{ _("days ago") }})</span>{% endif %}</td>
+          <td class="num">{{ t.last_7d }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+{% if unmatched %}
+<div class="panel">
+  <h2>{{ _("Players not matched") }} <span class="sub">&mdash; {{ _("upcoming matches the model cannot price: no tour history under that name") }}</span></h2>
+  <div class="tablewrap">
+    <table>
+      <thead><tr><th class="l">{{ _("Date") }}</th><th class="l">{{ _("Bookmaker") }}</th><th class="l">{{ _("Tour") }}</th><th class="l">{{ _("Match") }}</th></tr></thead>
+      <tbody>
+        {% for u in unmatched %}
+        <tr>
+          <td class="l muted">{{ u.kickoff|dt('%d %b %H:%M') }}</td>
+          <td class="l"><span class="chip">{{ books.get(u.source, u.source) }}</span></td>
+          <td class="l">{{ u.tour or '-' }}</td>
+          <td class="l">{% if u.miss_1 %}<strong class="bad">{{ u.name_1 }}</strong>{% else %}{{ u.name_1 }}{% endif %} v
+                        {% if u.miss_2 %}<strong class="bad">{{ u.name_2 }}</strong>{% else %}{{ u.name_2 }}{% endif %}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+
+{% endblock %}

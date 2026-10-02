@@ -1,0 +1,15 @@
+{# Shared by the tennis pages. Import "with context" so _() is available. #}
+
+{% macro market(r) -%}
+  {{ _("Aces") if r.stat == "aces" else _("Double faults") }}{% if r.about %}: {{ r.about }}{% else %} {{ _("(match)") }}{% endif %}
+{%- endmacro %}
+
+{# One bookmaker's price in the comparison: bold when it is the best on its
+   side, green when that best also beats the model by EDGE on a trusted market. #}
+{% macro px(q, side, line) -%}
+  {%- set b = line.best.get(side) -%}
+  {%- if q and q.get(side) -%}
+    {%- set is_best = b and b.price == q.get(side) -%}
+    <span class="{{ 'good' if is_best and b.trusted and b.ev is not none and b.ev >= 0.10 else '' }}">{% if is_best %}<strong>{{ '%.2f'|format(q.get(side)) }}</strong>{% else %}{{ '%.2f'|format(q.get(side)) }}{% endif %}</span>
+  {%- else -%}<span class="muted">&ndash;</span>{%- endif -%}
+{%- endmacro %}
