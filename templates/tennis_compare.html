@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% block title %}{{ _("Odds comparison") }} &middot; {{ site_name }}{% endblock %}
 {% block heading %}{{ _("Odds comparison") }}{% endblock %}
-{% from "_tennis.html" import market, px with context %}
+{% from "_tennis.html" import market, px, book with context %}
 
 {% block content %}
 {% if compare %}
@@ -11,9 +11,9 @@
   <details style="margin:6px 0;border-top:1px solid var(--line, #e5e7eb);padding-top:6px">
     <summary style="cursor:pointer">
       <span class="muted">{{ m.kickoff|dt('%d %b %H:%M') }}</span> &middot; <strong>{{ m.match }}</strong>
-      <span class="muted">&middot; {{ m.tour }} &middot; {% for b in m.books %}{{ books[b] }}{% if not loop.last %}, {% endif %}{% endfor %}</span>
+      <span class="muted">&middot; {{ m.tour }} &middot; {% for b in m.books %}{{ book(b) }}{% if not loop.last %} {% endif %}{% endfor %}</span>
       {% if m.best %} &middot; {{ _("best") }}: {{ _("Aces") if m.best.stat == "aces" else _("Double faults") }}{% if m.best.about %} {{ m.best.about }}{% endif %}
-        {{ _(m.best.side|upper) }} {{ m.best.label }} @ {{ '%.2f'|format(m.best.price) }} ({{ books[m.best.book] }})
+        {{ _(m.best.side|upper) }} {{ m.best.label }} @ {{ '%.2f'|format(m.best.price) }} {{ book(m.best.book) }}
         <span class="{{ 'good' if m.best.ev >= 0.10 else 'muted' }}">{{ '%+.0f%%'|format(m.best.ev * 100) }}</span>
       {% elif not m.priced %} &middot; <span class="muted">{{ _("no model price yet") }}</span>{% endif %}
     </summary>
@@ -22,7 +22,7 @@
         <thead>
           <tr><th class="l">{{ _("Market") }}</th><th>{{ _("Line") }}</th><th>{{ _("P(over)") }}</th>
               <th>{{ _("Fair over") }}</th><th>{{ _("Fair under") }}</th>
-              {% for b in m.books %}<th>{{ books[b] }} {{ _("Over")|lower }}</th>{% if b != 'betano' %}<th>{{ books[b] }} {{ _("Under")|lower }}</th>{% endif %}{% endfor %}
+              {% for b in m.books %}<th>{{ book(b) }} {{ _("Over")|lower }}</th>{% if b != 'betano' %}<th>{{ book(b) }} {{ _("Under")|lower }}</th>{% endif %}{% endfor %}
               <th>{{ _("Best EV") }}</th></tr>
         </thead>
         <tbody>

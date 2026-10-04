@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% block title %}{{ _("Tennis") }} &middot; {{ site_name }}{% endblock %}
 {% block heading %}{{ _("Tennis tips") }}{% endblock %}
-{% from "_tennis.html" import market with context %}
+{% from "_tennis.html" import market, book with context %}
 
 {% macro tick(r) -%}
   <td class="l tick"><input type="checkbox" data-key="{{ r.key }}" {{ 'checked' if r.placed }}
@@ -68,7 +68,7 @@
           <td class="num good">{{ '%+.1f%%'|format(r.e * 100) }}</td>
           <td class="l muted">{{ r.kickoff|dt('%d %b %H:%M') }}{% if r.started %} <span class="chip">{{ _("started") }}</span>{% endif %}</td>
           <td class="num muted">{{ '%.0f%%'|format(100 * r.p) }}</td>
-          <td class="l"><span class="chip">{{ _(books[r.book]) }}</span></td>
+          <td class="l">{{ book(r.book) }}</td>
           <td class="l muted" style="font-size:12px">{{ r.advised_at|dt('%d %b %H:%M') }}</td>
         </tr>
         {% endfor %}
@@ -104,7 +104,7 @@
           <td class="l muted" data-v="{{ r.kickoff.timestamp() }}">{{ r.kickoff|dt('%d %b %H:%M') }}</td>
           <td class="num muted">{{ '%.0f%%'|format(100 * r.p) }}</td>
           <td class="num muted">{{ '%+.1f%%'|format(r.e * 100) }}</td>
-          <td class="l"><span class="chip">{{ _(books[r.book]) }}</span></td>
+          <td class="l">{{ book(r.book) }}</td>
         </tr>
         {% endfor %}
       </tbody>
@@ -119,7 +119,7 @@
 <div class="panel">
   <h2>{{ _("Void") }} <span class="sub">&mdash; {{ _("retired or walked over; stake returned") }}</span></h2>
   <ul>
-    {% for r in void %}<li>{{ r.kickoff|dt('%d %b') }} &middot; {{ r.player_1 }} v {{ r.player_2 }} &middot; {{ market(r) }} {{ _(r.side|upper)|lower }} {{ r.line_label }} @ {{ '%.2f'|format(r.o) }} &middot; {{ _(books[r.book]) }}{% if r.placed %} &middot; <strong>{{ _("placed") }}</strong>{% endif %}</li>{% endfor %}
+    {% for r in void %}<li>{{ r.kickoff|dt('%d %b') }} &middot; {{ r.player_1 }} v {{ r.player_2 }} &middot; {{ market(r) }} {{ _(r.side|upper)|lower }} {{ r.line_label }} @ {{ '%.2f'|format(r.o) }} &middot; {{ book(r.book) }}{% if r.placed %} &middot; <strong>{{ _("placed") }}</strong>{% endif %}</li>{% endfor %}
   </ul>
 </div>
 {% endif %}
@@ -128,7 +128,7 @@
 <div class="panel">
   <h2>{{ _("Withdrawn before the start") }} <span class="sub">&mdash; {{ _("advised, then the odds moved; not counted; admin only") }}</span></h2>
   <ul>
-    {% for r in withdrawn %}<li class="muted">{{ r.kickoff|dt('%d %b %H:%M') }} &middot; {{ r.player_1 }} v {{ r.player_2 }} &middot; {{ market(r) }} {{ _(r.side|upper)|lower }} {{ r.line_label }} @ {{ '%.2f'|format(r.o) }} &middot; {{ _(books[r.book]) }}</li>{% endfor %}
+    {% for r in withdrawn %}<li class="muted">{{ r.kickoff|dt('%d %b %H:%M') }} &middot; {{ r.player_1 }} v {{ r.player_2 }} &middot; {{ market(r) }} {{ _(r.side|upper)|lower }} {{ r.line_label }} @ {{ '%.2f'|format(r.o) }} &middot; {{ book(r.book) }}</li>{% endfor %}
   </ul>
 </div>
 {% endif %}

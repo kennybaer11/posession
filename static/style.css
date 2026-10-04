@@ -274,3 +274,6 @@ td.tick { width: 1%; }
 td.tick input { width: 18px; height: 18px; cursor: pointer; accent-color: var(--accent); }
 tr.placed td { box-shadow: inset 3px 0 0 var(--accent); }
 tr.placed td + td { box-shadow: none; }
+
+/* Bookmaker icons in the tennis tables. */
+img.booklogo { width: 18px; height: 18px; border-radius: 4px; vertical-align: -4px; }

@@ -2,6 +2,8 @@
 {% block title %}{{ _("Tennis data") }} &middot; {{ site_name }}{% endblock %}
 {% block heading %}{{ _("Tennis data") }}{% endblock %}
 
+{% from "_tennis.html" import book with context %}
+
 {% block content %}
 
 <div class="note">
@@ -23,7 +25,7 @@
         {% for c in collections %}
         {% set hours = ((now - c.last_fetch).total_seconds() / 3600) if c.last_fetch else none %}
         <tr>
-          <td class="l"><span class="chip">{{ books.get(c.source, c.source) }}</span></td>
+          <td class="l">{{ book(c.source) }} {{ books.get(c.source, c.source) }}</td>
           <td class="l {{ 'bad' if c.source == 'betano' and hours is not none and hours > 4 else '' }}">
             {{ c.last_fetch|dt('%d %b %H:%M') if c.last_fetch else '-' }}
             {% if hours is not none %}<span class="muted">({{ '%.0f'|format(hours) }} h)</span>{% endif %}
@@ -92,7 +94,7 @@
         {% for u in unmatched %}
         <tr>
           <td class="l muted">{{ u.kickoff|dt('%d %b %H:%M') }}</td>
-          <td class="l"><span class="chip">{{ books.get(u.source, u.source) }}</span></td>
+          <td class="l">{{ book(u.source) }}</td>
           <td class="l">{{ u.tour or '-' }}</td>
           <td class="l">{% if u.miss_1 %}<strong class="bad">{{ u.name_1 }}</strong>{% else %}{{ u.name_1 }}{% endif %} v
                         {% if u.miss_2 %}<strong class="bad">{{ u.name_2 }}</strong>{% else %}{{ u.name_2 }}{% endif %}</td>

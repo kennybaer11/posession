@@ -2,7 +2,7 @@
 {% block title %}{{ _("All lines") }} &middot; {{ site_name }}{% endblock %}
 {% block heading %}{{ _("All lines") }}{% endblock %}
 
-{% from "_tennis.html" import market with context %}
+{% from "_tennis.html" import market, book with context %}
 
 {% block content %}
 
@@ -60,7 +60,7 @@
           <td class="l muted">{{ r.date.strftime('%d.%m.') }}</td>
           <td class="num muted">{{ '%.0f%%'|format(100 * r.p) }}</td>
           <td class="num muted">{{ '%.2f'|format(r.mean) }}</td>
-          <td class="l"><span class="chip">{{ _(books[r.book]) }}</span></td>
+          <td class="l">{{ book(r.book) }}</td>
         </tr>
         {% endfor %}
       </tbody>
@@ -98,7 +98,7 @@
           <td>{% if r.bet %}<span class="chip ok">{{ _(r.bet|upper) }}</span>{% else %}<span class="chip">{{ _("no bet") }}</span>{% endif %}</td>
           <td class="num muted">{{ '%.2f'|format(r.mean) }}</td>
           <td class="num {{ 'good' if r.bet else 'muted' }}">{{ '%+.1f%%'|format(r.edge * 100) if r.edge is not none else '-' }}</td>
-          <td class="l"><span class="chip">{{ _(books[r.book]) }}</span></td>
+          <td class="l">{{ book(r.book) }}</td>
         </tr>
         {% endfor %}
       </tbody>
@@ -120,7 +120,7 @@
 <div class="panel">
   <h2>{{ _("Void") }} <span class="sub">&mdash; {{ _("retired or walked over; admin only") }}</span></h2>
   <ul>
-    {% for r in void %}<li>{{ r.date.strftime('%d %b') }} &middot; {{ r.player_1 }} v {{ r.player_2 }} &middot; {{ market(r) }} {{ r.line_label }} &middot; {{ _(books[r.book]) }}</li>{% endfor %}
+    {% for r in void %}<li>{{ r.date.strftime('%d %b') }} &middot; {{ r.player_1 }} v {{ r.player_2 }} &middot; {{ market(r) }} {{ r.line_label }} &middot; {{ book(r.book) }}</li>{% endfor %}
   </ul>
 </div>
 {% endif %}
