@@ -13,7 +13,7 @@ import secrets
 import tempfile
 import threading
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import psycopg
@@ -53,6 +53,7 @@ app.config.update(
     # session on plain-http://127.0.0.1, so it is conditional rather than
     # always-on.
     SESSION_COOKIE_SECURE=DEPLOYED,
+    PERMANENT_SESSION_LIFETIME=timedelta(days=30),   # SESSION_DAYS, see admin_login
 )
 
 app.config["DEPLOYED_SITE"] = DEPLOYED
@@ -1315,7 +1316,12 @@ def admin_login():
         if user == ADMIN_USER and check_password_hash(ADMIN_PASSWORD_HASH,
                                                       password):
             session["admin"] = user
-            session.permanent = False
+            # Stay signed in for SESSION_DAYS, not just until the browser
+            # closes: a session cookie dies with the browser - on a phone,
+            # often - and signed out the tennis page hides the "placed" ticks,
+            # which then looked lost. The cookie stays HttpOnly, Secure and
+            # SameSite=Lax; "sign out" ends it at once.
+            session.permanent = True
             target = request.args.get("next") or url_for("admin")
             # Only ever redirect within this app: an attacker-supplied ?next=
             # pointing elsewhere would turn the login into an open redirect.
