@@ -22,6 +22,12 @@ CS = {
     "Manual": "Ručně",
     "Odds comparison": "Srovnání kurzů",
     "Tips": "Tipy",
+    "Tenths of a unit: 10/10 is a full unit": "Desetiny jednotky: 10/10 je celá jednotka",
+    "%(n)s tips with a stake": "%(n)s tipů s vkladem",
+    "<strong>Stake</strong> is in tenths of a unit: 10/10 is a full unit, whatever size you choose for one. It is quarter Kelly on the model's chance blended half and half with the bookmaker's, lower for long odds, and tips on the same match share one stake. Tips given before 5 Oct 2026 have none.":
+        "<strong>Vklad</strong> je v desetinách jednotky: 10/10 je celá jednotka, ať si ji zvolíte jakkoli velkou. "
+        "Počítá se jako čtvrtinový Kelly ze šance modelu smíchané napůl se šancí kanceláře, u vysokých kurzů je nižší "
+        "a tipy na stejný zápas sdílejí jeden vklad. Tipy z doby před 5. 10. 2026 vklad nemají.",
     "Tennis tips": "Tenisové tipy",
     "All lines": "Všechny hranice",
     "Tips, settled": "Tipy, vyhodnocené",

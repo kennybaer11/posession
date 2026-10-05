@@ -22,8 +22,13 @@
     <div class="k">{{ _("P/L, 1 unit each") }}</div>
   </div>
   <div class="tile">
+    <div class="v num {{ 'good' if totals.pnl_r > 0 else ('bad' if totals.pnl_r < 0 else '') }}">{{ '%+.2f'|format(totals.pnl_r) }}</div>
+    <div class="k">{{ _("P/L at the advised stake") }}{% if totals.rated < totals.bets %}<br><span class="muted">{% trans n=totals.rated %}{{ n }} tips with a stake{% endtrans %}</span>{% endif %}</div>
+  </div>
+  <div class="tile">
     <div class="v num {{ 'good' if (totals.roi or 0) > 0 else ('bad' if (totals.roi or 0) < 0 else '') }}">{{ '%+.1f%%'|format(100 * totals.roi) if totals.roi is not none else '-' }}</div>
-    <div class="k">{{ _("ROI, 1 unit each") }}</div>
+    <div class="k">{{ _("ROI, 1 unit each") }}<br>
+      {{ _("at the advised stake") }}: <span class="num {{ 'good' if (totals.roi_r or 0) > 0 else ('bad' if (totals.roi_r or 0) < 0 else '') }}">{{ '%+.1f%%'|format(100 * totals.roi_r) if totals.roi_r is not none else '-' }}</span></div>
   </div>
 </div>
 
@@ -52,7 +57,7 @@
     <table>
       <thead>
         <tr>{% if user %}<th class="l">{{ _("Placed") }}</th>{% endif %}<th class="l">{{ _("Advised") }}</th><th class="l">{{ _("Match") }}</th>
-            <th class="l">{{ _("Market") }}</th><th>{{ _("Line") }}</th><th>{{ _("Odds") }}</th><th>{{ _("Edge") }}</th>
+            <th class="l">{{ _("Market") }}</th><th>{{ _("Line") }}</th><th>{{ _("Odds") }}</th><th>{{ _("Edge") }}</th><th title="{{ _('Tenths of a unit: 10/10 is a full unit') }}">{{ _("Stake") }}</th>
             <th class="l">{{ _("Start") }}</th><th>{{ _("Model") }}</th><th class="l">{{ _("Bookmaker") }}</th>
             <th class="l" title="{{ _('Last time the tip was saved before the start') }}">{{ _("Advice as of") }}</th></tr>
       </thead>
@@ -66,6 +71,7 @@
           <td class="num"><strong>{{ r.line_label }}</strong></td>
           <td class="num"><strong>{{ '%.2f'|format(r.o) }}</strong></td>
           <td class="num good">{{ '%+.1f%%'|format(r.e * 100) }}</td>
+          <td class="num"><strong>{{ '%d/10'|format(r.rating) if r.rating else '-' }}</strong></td>
           <td class="l muted">{{ r.kickoff|dt('%d %b %H:%M') }}{% if r.started %} <span class="chip">{{ _("started") }}</span>{% endif %}</td>
           <td class="num muted">{{ '%.0f%%'|format(100 * r.p) }}</td>
           <td class="l">{{ book(r.book) }}</td>
@@ -87,7 +93,7 @@
     <table class="sortable">
       <thead>
         <tr>{% if user %}<th class="l">{{ _("Placed") }}</th>{% endif %}<th class="l">{{ _("Result") }}</th><th class="l">{{ _("Match") }}</th>
-            <th class="l">{{ _("Market") }}</th><th>{{ _("Line") }}</th><th>{{ _("Actual") }}</th><th>{{ _("Odds") }}</th><th>{{ _("P/L") }}</th>
+            <th class="l">{{ _("Market") }}</th><th>{{ _("Line") }}</th><th>{{ _("Actual") }}</th><th>{{ _("Odds") }}</th><th>{{ _("P/L") }}</th><th>{{ _("Stake") }}</th>
             <th class="l">{{ _("Start") }}</th><th>{{ _("Model") }}</th><th>{{ _("Edge") }}</th><th class="l">{{ _("Bookmaker") }}</th></tr>
       </thead>
       <tbody>
@@ -101,6 +107,7 @@
           <td class="num"><strong>{{ r.actual }}</strong></td>
           <td class="num">{{ '%.2f'|format(r.o) }}</td>
           <td class="num {{ 'good' if r.pl > 0 else 'bad' }}">{{ '%+.2f'|format(r.pl) }}</td>
+          <td class="num muted">{{ '%d/10'|format(r.rating) if r.rating else '-' }}</td>
           <td class="l muted" data-v="{{ r.kickoff.timestamp() }}">{{ r.kickoff|dt('%d %b %H:%M') }}</td>
           <td class="num muted">{{ '%.0f%%'|format(100 * r.p) }}</td>
           <td class="num muted">{{ '%+.1f%%'|format(r.e * 100) }}</td>
@@ -140,6 +147,11 @@
   recalculated: a new model or a code fix changes the price list, never this record. Only the
   count of aces is looked up, because that is a fact about the match. Tips are aces only, at +10%
   value or more against the model; a retirement or walkover voids the bet.{% endtrans %}
+  <br><br>
+  {% trans %}<strong>Stake</strong> is in tenths of a unit: 10/10 is a full unit, whatever size you
+  choose for one. It is quarter Kelly on the model's chance blended half and half with the
+  bookmaker's, lower for long odds, and tips on the same match share one stake. Tips given before
+  5 Oct 2026 have none.{% endtrans %}
 </div>
 
 {% if user %}

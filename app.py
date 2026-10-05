@@ -1527,9 +1527,15 @@ def tennis():
     upcoming.sort(key=lambda r: (r["kickoff"], r["player_1"], r["market"]))
 
     returned = sum(r["o"] for r in settled if r["hit"])
+    # Also at the advised stake: a rating of N is N tenths of a unit. Tips
+    # from before 5 Oct 2026 carry no rating and weigh nothing here.
+    staked_r = sum((r["rating"] or 0) / 10 for r in settled)
+    pnl_r = sum((r["rating"] or 0) / 10 * r["pl"] for r in settled)
     totals = {"bets": len(settled), "won": sum(1 for r in settled if r["hit"]),
               "pnl": returned - len(settled),
-              "roi": (returned - len(settled)) / len(settled) if settled else None}
+              "roi": (returned - len(settled)) / len(settled) if settled else None,
+              "rated": sum(1 for r in settled if r["rating"]),
+              "pnl_r": pnl_r, "roi_r": pnl_r / staked_r if staked_r else None}
     call = m.verdict([(bool(r["hit"]), r["o"]) for r in settled])
     mine = None
     if session.get("admin"):
