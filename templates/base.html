@@ -53,7 +53,7 @@
 </nav>
 {% endif %}
 
-<main>
+<main class="{% block mainclass %}{% endblock %}">
   <h1 class="page-title">{% block heading %}{% endblock %}</h1>
   {% block content %}{% endblock %}
 </main>

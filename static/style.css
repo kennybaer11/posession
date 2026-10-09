@@ -124,6 +124,9 @@ body {
 .leagues a:hover:not(.on) { color: var(--ink); }
 
 main { max-width: 1240px; margin: 0 auto; padding: 26px 24px 60px; }
+/* Pages with wide tables (the tennis record): more room, tighter cells. */
+main.wide { max-width: 1560px; }
+main.wide th, main.wide td { padding: 7px 8px; }
 
 .page-title { font-size: 23px; font-weight: 650; letter-spacing: -0.4px; margin: 0 0 20px; }
 .page-title:empty { display: none; }
