@@ -123,16 +123,14 @@ body {
 .leagues a.on { background: var(--accent); border-color: var(--accent); color: #fff; }
 .leagues a:hover:not(.on) { color: var(--ink); }
 
-main { max-width: 1240px; margin: 0 auto; padding: 26px 24px 60px; }
-/* Pages with wide tables (the tennis record): more room, tighter cells. */
-main.wide { max-width: 1560px; }
-main.wide th, main.wide td { padding: 7px 8px; }
+/* Wide enough for the widest tables (the tennis record, the bet lists). */
+main { max-width: 1560px; margin: 0 auto; padding: 26px 24px 60px; }
 
 .page-title { font-size: 23px; font-weight: 650; letter-spacing: -0.4px; margin: 0 0 20px; }
 .page-title:empty { display: none; }
 
 footer {
-  max-width: 1240px; margin: 0 auto; padding: 0 24px 40px;
+  max-width: 1560px; margin: 0 auto; padding: 0 24px 40px;
   color: var(--muted); font-size: 12.5px;
 }
 
@@ -172,7 +170,7 @@ footer {
 table { border-collapse: collapse; width: 100%; font-size: 13.5px; }
 
 th, td {
-  text-align: right; padding: 8px 10px;
+  text-align: right; padding: 7px 8px;
   border-bottom: 1px solid var(--line); white-space: nowrap;
 }
 th:first-child, td:first-child,
