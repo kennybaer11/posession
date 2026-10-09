@@ -227,6 +227,16 @@ td a:hover, .panel a:hover { text-decoration: underline; }
 }
 .filters a.on { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
 
+/* in-page table filter (tennis settled tips) */
+.tfilter { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-bottom: 12px; }
+.tfilter select, .tfilter button {
+  font: inherit; font-size: 13px; padding: 5px 8px; border: 1px solid var(--line);
+  border-radius: 6px; background: var(--panel); color: var(--ink); max-width: 100%;
+}
+.tfilter button { cursor: pointer; color: var(--muted); }
+.tfilter .tsum { flex-basis: 100%; font-size: 13.5px; color: var(--muted); margin-top: 2px; }
+.tfilter .tsum strong { color: var(--ink); }
+
 .note {
   border-left: 3px solid var(--accent); padding: 10px 14px;
   background: var(--chip); border-radius: 0 6px 6px 0;

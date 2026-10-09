@@ -89,8 +89,41 @@
 <div class="panel">
   <h2>{{ _("Settled") }} <span class="sub">&mdash; {{ _("advice frozen at the start") }}</span></h2>
   {% if settled %}
+  <div class="tfilter" id="settled-filter">
+    <select data-f="book" aria-label="{{ _('Bookmaker') }}">
+      <option value="">{{ _("All bookmakers") }}</option>
+      {% for b in books if settled|selectattr("book", "equalto", b)|list %}<option value="{{ b }}">{{ books[b] }}</option>{% endfor %}
+    </select>
+    <select data-f="tour" aria-label="{{ _('Tour') }}">
+      <option value="">{{ _("WTA and ATP") }}</option><option value="WTA">WTA</option><option value="ATP">ATP</option>
+    </select>
+    <select data-f="mkt" aria-label="{{ _('Market') }}">
+      <option value="">{{ _("All markets") }}</option>
+      <option value="total">{{ _("Aces (match)") }}</option><option value="player">{{ _("Aces (player)") }}</option>
+    </select>
+    <select data-f="side" aria-label="{{ _('Side') }}">
+      <option value="">{{ _("Over and under") }}</option>
+      <option value="over">{{ _("OVER")|capitalize }}</option><option value="under">{{ _("UNDER")|capitalize }}</option>
+    </select>
+    <select data-f="hit" aria-label="{{ _('Result') }}">
+      <option value="">{{ _("Won and lost") }}</option>
+      <option value="1">{{ _("won")|capitalize }}</option><option value="0">{{ _("lost")|capitalize }}</option>
+    </select>
+    {% if user %}
+    <select data-f="placed" aria-label="{{ _('Placed') }}">
+      <option value="">{{ _("All tips") }}</option>
+      <option value="1">{{ _("Only placed") }}</option><option value="0">{{ _("Not placed") }}</option>
+    </select>
+    {% endif %}
+    <select data-f="days" aria-label="{{ _('Period') }}">
+      <option value="">{{ _("All time") }}</option>
+      <option value="7">{{ _("Last 7 days") }}</option><option value="30">{{ _("Last 30 days") }}</option>
+    </select>
+    <button type="button" data-reset>{{ _("Reset") }}</button>
+    <div class="tsum" aria-live="polite"></div>
+  </div>
   <div class="tablewrap">
-    <table class="sortable">
+    <table class="sortable" id="settled-table">
       <thead>
         <tr>{% if user %}<th class="l">{{ _("Placed") }}</th>{% endif %}<th class="l">{{ _("Result") }}</th><th class="l">{{ _("Match") }}</th>
             <th class="l">{{ _("Market") }}</th><th>{{ _("Line") }}</th><th>{{ _("Actual") }}</th><th>{{ _("Odds") }}</th><th>{{ _("P/L") }}</th><th>{{ _("Stake") }}</th>
@@ -98,7 +131,10 @@
       </thead>
       <tbody>
         {% for r in settled %}
-        <tr class="{{ 'placed' if r.placed }}">
+        <tr class="{{ 'placed' if r.placed }}" data-book="{{ r.book }}" data-tour="{{ r.tour or '' }}"
+            data-mkt="{{ 'total' if r.market == 'aces' else 'player' }}" data-side="{{ r.side }}"
+            data-hit="{{ 1 if r.hit else 0 }}" data-placed="{{ 1 if r.placed else 0 }}"
+            data-t="{{ r.kickoff.timestamp()|int }}" data-o="{{ r.o }}" data-r="{{ r.rating or 0 }}">
           {% if user %}{{ tick(r) }}{% endif %}
           <td class="l">{% if r.hit %}<span class="chip ok">&#10003; {{ _("won") }}</span>{% else %}<span class="chip no">&#10007; {{ _("lost") }}</span>{% endif %}</td>
           <td class="l">{{ r.player_1 }} v {{ r.player_2 }}</td>
@@ -153,6 +189,50 @@
   bookmaker's, lower for long odds, and tips on the same match share one stake. Tips given before
   5 Oct 2026 have none.{% endtrans %}
 </div>
+
+{% if settled %}
+<script>
+// Filter the settled table in the page, with the tally of what is shown:
+// tips, won, P/L and ROI at one unit each, and P/L at the advised stake.
+// The choice is remembered in this browser only.
+(function () {
+  const bar = document.getElementById('settled-filter');
+  const rows = Array.from(document.querySelectorAll('#settled-table tbody tr'));
+  const sels = Array.from(bar.querySelectorAll('select[data-f]'));
+  const sum = bar.querySelector('.tsum');
+  const KEY = 'tennis-settled-filter';
+  const fmt = (x, d) => (x > 0 ? '+' : '') + x.toFixed(d);
+  try {
+    const saved = JSON.parse(localStorage.getItem(KEY) || '{}');
+    sels.forEach(s => { if (saved[s.dataset.f] !== undefined) s.value = saved[s.dataset.f]; });
+  } catch (e) {}
+  function apply() {
+    const want = {};
+    sels.forEach(s => { if (s.value !== '') want[s.dataset.f] = s.value; });
+    const since = want.days ? Date.now() / 1000 - want.days * 86400 : null;
+    let n = 0, won = 0, pl = 0, plr = 0, stk = 0;
+    rows.forEach(tr => {
+      const d = tr.dataset;
+      const show = Object.keys(want).every(k => k === 'days' ? +d.t >= since : d[k] === want[k]);
+      tr.hidden = !show;
+      if (!show) return;
+      const hit = d.hit === '1', o = +d.o, r = +d.r / 10;
+      n++; won += hit; pl += hit ? o - 1 : -1; plr += r * (hit ? o - 1 : -1); stk += r;
+    });
+    sum.innerHTML = n === 0 ? '{{ _("No tip matches.") }}'
+      : '<strong>' + n + '</strong> {{ _("tips") }}, ' + '{{ _("{n} won") }}'.replace('{n}', won) + ' &middot; '
+        + '<span class="' + (pl >= 0 ? 'good' : 'bad') + '">' + fmt(pl, 2) + '</span> {{ _("units") }}, '
+        + 'ROI ' + fmt(100 * pl / n, 1) + '%'
+        + (stk ? ' &middot; {{ _("at the advised stake") }} <span class="' + (plr >= 0 ? 'good' : 'bad') + '">'
+                 + fmt(plr, 2) + '</span>' : '');
+    try { localStorage.setItem(KEY, JSON.stringify(Object.fromEntries(sels.map(s => [s.dataset.f, s.value])))); } catch (e) {}
+  }
+  sels.forEach(s => s.addEventListener('change', apply));
+  bar.querySelector('[data-reset]').addEventListener('click', () => { sels.forEach(s => s.value = ''); apply(); });
+  apply();
+})();
+</script>
+{% endif %}
 
 {% if user %}
 <script>
