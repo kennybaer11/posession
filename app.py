@@ -1411,6 +1411,13 @@ def admin_advice():
 
 # Bookmakers whose lines the aces project collects, as they are labelled here.
 TENNIS_BOOKS = {"betano": "Betano", "chance": "Chance", "manual": "Manual"}
+TENNIS_BOOK_SITES = {"betano": "https://www.betano.cz", "chance": "https://www.chance.cz"}
+
+
+def _match_href(source, path):
+    """The match's page at its bookmaker, from the path the collector saved."""
+    site = TENNIS_BOOK_SITES.get(source)
+    return site + path if site and path and path.startswith("/") else None
 
 
 @app.route("/tennis/lines")
@@ -1433,13 +1440,15 @@ def tennis_lines():
         rows = query("""
             SELECT l.*, (l.p_over::float) AS p, (l.line::float) AS ln,
                    (l.over_odds::float) AS oo, (l.under_odds::float) AS uo,
-                   (l.model_mean::float) AS mean
+                   (l.model_mean::float) AS mean, e.url AS event_url
               FROM aces.line l
+              LEFT JOIN aces.event e ON e.source = l.source AND e.event_id = l.event_id
              ORDER BY l.date DESC, l.player_1, l.market, l.line""")
     settled, pending, void = [], [], []
     for r in rows:
         r = dict(r)
         r["book"] = r.get("source") if r.get("source") in TENNIS_BOOKS else "manual"
+        r["href"] = _match_href(r.get("source"), r.get("event_url"))
         if book and r["book"] != book:
             continue
         stat, _sep, who = r["market"].partition(":")
@@ -1500,8 +1509,10 @@ def tennis():
     else:
         rows = query("""
             SELECT a.*, a.line::float AS ln, a.odds::float AS o, a.p_model::float AS p,
-                   a.edge::float AS e, a.model_mean::float AS mean
-              FROM aces.advice a ORDER BY a.kickoff DESC, a.player_1, a.market""")
+                   a.edge::float AS e, a.model_mean::float AS mean, ev.url AS event_url
+              FROM aces.advice a
+              LEFT JOIN aces.event ev ON ev.source = a.source AND ev.event_id = a.event_id
+             ORDER BY a.kickoff DESC, a.player_1, a.market""")
     now = datetime.now(timezone.utc)
     upcoming, settled, void, withdrawn = [], [], [], []
     for r in rows:
@@ -1510,6 +1521,7 @@ def tennis():
         r["stat"] = stat
         r["about"] = {"1": r["player_1"], "2": r["player_2"]}.get(who)
         r["book"] = r["source"] if r["source"] in TENNIS_BOOKS else "manual"
+        r["href"] = _match_href(r["source"], r["event_url"])
         r["key"] = "|".join([r["source"], r["event_id"], r["market"]])
         r["line_label"] = (f"{r['ln'] + 0.5:.0f}+" if r["source"] == "betano" and r["side"] == "over"
                            else f"{r['ln']:.1f}")

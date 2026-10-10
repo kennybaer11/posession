@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% block title %}{{ _("Tennis") }} &middot; {{ site_name }}{% endblock %}
 {% block heading %}{{ _("Tennis tips") }}{% endblock %}
-{% from "_tennis.html" import market, book with context %}
+{% from "_tennis.html" import market, book, matchname with context %}
 
 {% macro tick(r) -%}
   <td class="l tick"><input type="checkbox" data-key="{{ r.key }}" {{ 'checked' if r.placed }}
@@ -66,7 +66,7 @@
         <tr class="advised {{ 'placed' if r.placed }}">
           {% if user %}{{ tick(r) }}{% endif %}
           <td class="l">{{ side(r) }}</td>
-          <td class="l">{{ r.player_1 }} v {{ r.player_2 }}</td>
+          <td class="l">{{ matchname(r) }}</td>
           <td class="l">{{ market(r) }}</td>
           <td class="num"><strong>{{ r.line_label }}</strong></td>
           <td class="num"><strong>{{ '%.2f'|format(r.o) }}</strong></td>
@@ -137,7 +137,7 @@
             data-t="{{ r.kickoff.timestamp()|int }}" data-o="{{ r.o }}" data-r="{{ r.rating or 0 }}">
           {% if user %}{{ tick(r) }}{% endif %}
           <td class="l">{% if r.hit %}<span class="chip ok">&#10003; {{ _("won") }}</span>{% else %}<span class="chip no">&#10007; {{ _("lost") }}</span>{% endif %}</td>
-          <td class="l">{{ r.player_1 }} v {{ r.player_2 }}</td>
+          <td class="l">{{ matchname(r) }}</td>
           <td class="l">{{ market(r) }} <span class="muted">{{ _(r.side|upper)|lower }}</span></td>
           <td class="num">{{ r.line_label }}</td>
           <td class="num"><strong>{{ r.actual }}</strong></td>

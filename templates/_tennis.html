@@ -23,3 +23,9 @@
          alt="{{ books[key] }}" title="{{ books[key] }}" width="18" height="18">
   {%- else -%}<span class="chip">{{ _(books.get(key, key)) }}</span>{%- endif -%}
 {%- endmacro %}
+
+{# The two players, linked to the match at its bookmaker when the page is known. #}
+{% macro matchname(r) -%}
+  {%- if r.href -%}<a href="{{ r.href }}" target="_blank" rel="noopener" title="{{ _('Open the match at the bookmaker') }}">{{ r.player_1 }} v {{ r.player_2 }}</a>
+  {%- else -%}{{ r.player_1 }} v {{ r.player_2 }}{%- endif -%}
+{%- endmacro %}

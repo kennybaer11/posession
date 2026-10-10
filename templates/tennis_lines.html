@@ -2,7 +2,7 @@
 {% block title %}{{ _("All lines") }} &middot; {{ site_name }}{% endblock %}
 {% block heading %}{{ _("All lines") }}{% endblock %}
 
-{% from "_tennis.html" import market, book with context %}
+{% from "_tennis.html" import market, book, matchname with context %}
 
 {% block content %}
 
@@ -52,7 +52,7 @@
         {% for r in pending %}
         <tr class="{{ 'advised' if r.bet }} ">
           <td class="l">{% if r.bet %}<span class="chip ok">{{ _(r.bet|upper) }}</span>{% else %}<span class="chip">{{ _("no bet") }}</span>{% endif %}</td>
-          <td class="l">{{ r.player_1 }} v {{ r.player_2 }}</td>
+          <td class="l">{{ matchname(r) }}</td>
           <td class="l">{{ market(r) }}</td>
           <td class="num"><strong>{{ r.line_label }}</strong></td>
           <td class="num"><strong>{{ '%.2f'|format(r.odds) if r.odds else '-' }}</strong></td>
@@ -90,7 +90,7 @@
             {% else %}<span class="chip no">&#10007; {{ _("lost") }}</span>{% endif %}
           </td>
           <td class="l muted" data-v="{{ r.date.isoformat() }}">{{ r.date.strftime('%d %b') }}</td>
-          <td class="l">{{ r.player_1 }} v {{ r.player_2 }}</td>
+          <td class="l">{{ matchname(r) }}</td>
           <td class="l">{{ market(r) }}</td>
           <td class="num">{{ r.line_label }}</td>
           <td class="num">{{ r.actual }}</td>
