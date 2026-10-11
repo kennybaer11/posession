@@ -1425,9 +1425,12 @@ TENNIS_BOOK_SITES = {"betano": "https://www.betano.cz", "chance": "https://www.c
 
 
 def _match_href(source, path):
-    """The match's page at its bookmaker, from the path the collector saved."""
+    """The match's page at its bookmaker, from the path the collector saved.
+    Betano's opens on tab 1, which is the aces tab on its tennis matches."""
     site = TENNIS_BOOK_SITES.get(source)
-    return site + path if site and path and path.startswith("/") else None
+    if not (site and path and path.startswith("/")):
+        return None
+    return site + path + ("?bt=1" if source == "betano" and "?" not in path else "")
 
 
 @app.route("/tennis/lines")
