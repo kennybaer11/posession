@@ -550,6 +550,13 @@ class Database:
                         "ADD COLUMN IF NOT EXISTS reused_jobs BOOLEAN NOT NULL DEFAULT FALSE")
             cur.execute("ALTER TABLE pl_scrape_run "
                         "ADD COLUMN IF NOT EXISTS alerted_at TIMESTAMPTZ")
+            # The admin's "placed" ticks on the advice record (/), the twin of
+            # aces.advice.placed on the tennis page. Never written by
+            # freeze_advice, so a tick survives every later run.
+            cur.execute("ALTER TABLE pl_advice "
+                        "ADD COLUMN IF NOT EXISTS placed BOOLEAN NOT NULL DEFAULT FALSE")
+            cur.execute("ALTER TABLE pl_advice "
+                        "ADD COLUMN IF NOT EXISTS placed_at TIMESTAMPTZ")
             # A run that timed out or died, whose paid scrape was later
             # imported by a following run. See odds_pipeline.recover_unfinished.
             cur.execute("ALTER TABLE pl_scrape_run "

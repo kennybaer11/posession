@@ -242,4 +242,7 @@ CS = {
     "Now kicks off": "Nyní se hraje",
     "These count nowhere: the market they were priced for no longer exists. When the bookmaker prices the new date, the match gets a new line and new advice.":
         "Nikam se nepočítají: trh, na který byly vypsané, už neexistuje. Až kancelář vypíše nový termín, zápas dostane novou hranici i nové doporučení.",
+    "No bet matches.": "Žádná sázka neodpovídá.",
+    "bets": "sázek",
+    "Football tips": "Fotbalové tipy",
 }

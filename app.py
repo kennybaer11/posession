@@ -1372,6 +1372,7 @@ def admin_advice():
             # Not settled, not pending - just history, and only for the admin.
             postponed.append(r)
             continue
+        r["key"] = f"{r['match_id']}|{r['bookmaker']}"
         if r["actual"] is None:
             pending.append(r)
             continue
@@ -1381,6 +1382,8 @@ def admin_advice():
         settled.append(r)
 
     bets = [r for r in settled if r["backed"] and r["odds"]]
+    for r in bets:
+        r["pl"] = (r["odds"] - 1) if r["hit"] else -1.0
     won = sum(1 for r in bets if r["hit"])
     returned = sum(r["odds"] for r in bets if r["hit"])
     # Also at the advised stake: rating N is N tenths of the 10/10 stake, so a
@@ -1397,6 +1400,13 @@ def admin_advice():
         "no_bet": sum(1 for r in settled if not r["backed"]),
     }
     call = m.verdict([(bool(r["hit"]), r["odds"]) for r in bets])
+    # What the admin actually staked, beside what the site advised.
+    mine = None
+    if session.get("admin"):
+        done = [r for r in bets if r["placed"]]
+        mine = {"settled": len(done), "won": sum(1 for r in done if r["hit"]),
+                "pnl": sum(r["pl"] for r in done),
+                "open": sum(1 for r in pending if r["placed"])}
     # Visitors see the bets only; "no bet" lines stay visible to the admin.
     # The totals already count advised bets alone, so they do not change.
     if not session.get("admin"):
@@ -1404,7 +1414,7 @@ def admin_advice():
         pending = [r for r in pending if r["backed"]]
         postponed = []
     return render_template("admin_advice.html", settled=settled,
-                           pending=pending, postponed=postponed,
+                           pending=pending, postponed=postponed, mine=mine,
                            totals=totals, verdict=call,
                            league_names=LEAGUE_NAMES, user=session.get("admin"))
 
@@ -1588,6 +1598,37 @@ def tennis_placed():
         cur.execute("""UPDATE aces.advice SET placed = %s, placed_at = CASE WHEN %s THEN now() END
                         WHERE source = %s AND event_id = %s AND market = %s""",
                     (placed, placed, source, event_id, market))
+        n = cur.rowcount
+    conn.commit()
+    if n != 1:
+        abort(404)
+    return {"placed": placed}
+
+
+@app.route("/advice/placed", methods=["POST"])
+@login_required
+def advice_placed():
+    """Tick or untick an advised bet on the football record as one the admin
+    placed. The twin of tennis_placed: JSON only, and refused when the Origin
+    is another site. freeze_advice never writes this column, so a tick stays
+    through every later run and through the kickoff lock."""
+    origin = request.headers.get("Origin")
+    if origin and origin.split("://", 1)[-1] != request.host:
+        abort(403)
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict) or "key" not in data:
+        abort(400)
+    try:
+        match_id, bookmaker = str(data["key"]).split("|")
+    except ValueError:
+        abort(400)
+    placed = bool(data.get("placed"))
+    conn = db()
+    with conn.cursor() as cur:
+        cur.execute("""UPDATE pl_advice SET placed = %s,
+                              placed_at = CASE WHEN %s THEN now() END
+                        WHERE match_id = %s AND bookmaker = %s""",
+                    (placed, placed, match_id, bookmaker))
         n = cur.rowcount
     conn.commit()
     if n != 1:

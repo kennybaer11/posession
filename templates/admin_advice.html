@@ -1,6 +1,14 @@
 {% extends "base.html" %}
 {% block title %}{{ _("Advice record") }} &middot; {{ site_name }}{% endblock %}
-{% block heading %}{{ _("Advice record") }}{% endblock %}
+{% block heading %}{{ _("Football tips") }}{% endblock %}
+
+{# Laid out like the tennis record: the figures first, then what is open, then
+   the settled table with its filters, and the explanation at the bottom. #}
+
+{% macro tick(r) -%}
+  <td class="l tick"><input type="checkbox" data-key="{{ r.key }}" {{ 'checked' if r.placed }}
+       title="{{ _('I placed this bet (the side and price shown)') }}" aria-label="{{ _('Placed') }}"></td>
+{%- endmacro %}
 
 {% block content %}
 
@@ -11,19 +19,6 @@
   <a href="{{ url_for('admin_logout') }}">{{ _("sign out") }}</a>
 </p>
 {% endif %}
-
-<div class="note">
-  <strong>{{ _("What the site advised, exactly as it stood at kickoff.") }}</strong>
-  {% trans %}Each line's advice
-  is saved on every run while its match is still to be played, and locked the moment the
-  match kicks off &mdash; the database refuses any later change. Nothing on this page is
-  recalculated: a new model, a new &sigma; or a code fix changes the Learning page and never
-  this one. Only the actual possession is looked up, because that is a fact about the match.{% endtrans %}
-  <br><br>
-  {% trans %}The record starts on 14 Sep 2026. Bets settled before then have no saved advice, and
-  rebuilding it would be exactly the recalculation this page exists to avoid, so they are
-  not here.{% endtrans %}
-</div>
 
 <div class="tiles" style="margin-bottom:22px">
   <div class="tile"><div class="v num">{{ totals.bets }}</div><div class="k">{{ _("Bets advised, settled") }}</div></div>
@@ -46,6 +41,14 @@
   </div>
 </div>
 
+{% if mine %}
+<div class="tiles mine" style="margin-bottom:22px">
+  <div class="tile"><div class="v num">{{ mine.settled }}{% if mine.settled %} <span class="muted" style="font-size:14px">({{ mine.won }} {{ _("won") }})</span>{% endif %}</div><div class="k">{{ _("My bets, settled") }}</div></div>
+  <div class="tile"><div class="v num {{ 'good' if mine.pnl > 0 else ('bad' if mine.pnl < 0 else '') }}">{{ '%+.2f'|format(mine.pnl) }}</div><div class="k">{{ _("My P/L, 1 unit each") }}</div></div>
+  <div class="tile"><div class="v num">{{ mine.open }}</div><div class="k">{{ _("My bets, open") }}</div></div>
+</div>
+{% endif %}
+
 {% if totals.bets %}
 <div class="note" style="border-left-color: {{ 'var(--good)' if verdict.ready else 'var(--warn)' }}">
   <strong>{{ _('Beating the market by more than luck explains.') if verdict.ready else _('Not yet distinguishable from luck.') }}</strong>
@@ -57,37 +60,111 @@
 {% endif %}
 
 <div class="panel">
+  <h2>{{ _("Upcoming") }} <span class="sub">&mdash; {{ _("still updating until kickoff") }}</span></h2>
+  {% if pending %}
+  <div class="tablewrap">
+    <table>
+      <thead>
+        <tr>{% if user %}<th class="l">{{ _("Placed") }}</th>{% endif %}<th class="l">{{ _("Advised") }}</th>
+            <th class="l">{{ _("Match") }}</th><th class="l">{{ _("League") }}</th>
+            <th class="l">{{ _("Line is about") }}</th><th>{{ _("Line") }}</th><th>{{ _("Odds") }}</th>
+            <th>{{ _("Edge") }}</th><th title="{{ _('Tenths of a unit: 10/10 is a full unit') }}">{{ _("Stake") }}</th>
+            <th class="l">{{ _("Kickoff") }}</th><th>{{ _("Model") }}</th>
+            <th class="l" title="{{ _('Last time the advice was saved before kickoff') }}">{{ _("Advice as of") }}</th></tr>
+      </thead>
+      <tbody>
+        {% for r in pending %}
+        <tr class="advised {{ 'placed' if r.placed }}">
+          {% if user %}{{ tick(r) }}{% endif %}
+          <td class="l">{% if r.backed %}<span class="chip ok">{{ _(r.side) }}</span>{% else %}<span class="chip">{{ _("no bet") }}</span>{% endif %}</td>
+          <td class="l">{{ r.home_abbr }} v {{ r.away_abbr }}</td>
+          <td class="l muted">{{ league_names.get(r.competition, r.competition) }}</td>
+          <td class="l">{{ r.team }}</td>
+          <td class="num"><strong>{{ '%.1f'|format(r.line) }}</strong></td>
+          <td class="num"><strong>{{ '%.2f'|format(r.odds) if r.odds else '-' }}</strong></td>
+          <td class="num {{ 'good' if r.backed }}">{{ '%+.1f%%'|format(r.edge * 100) if r.edge is not none else '-' }}</td>
+          <td class="num"><strong>{{ r.rating }}/10</strong></td>
+          <td class="l muted">{{ r.kickoff|dt('%d %b %H:%M') }}</td>
+          <td class="num muted">{{ '%.1f'|format(r.pred) if r.pred is not none else '-' }}{% if r.fallback %}<sup class="warn">*</sup>{% endif %}</td>
+          <td class="l muted" style="font-size:12px">{{ r.advised_at|dt('%d %b %H:%M') }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <p class="muted" style="font-size:12.5px;margin-bottom:0">
+    {% trans %}Runs happen every few hours, so what gets locked is whatever the last run before kickoff
+    saved &mdash; the same advice the site was showing at that moment.{% endtrans %}
+  </p>
+  {% else %}
+  <div class="empty">{{ _("No upcoming line has advice recorded yet.") }}</div>
+  {% endif %}
+</div>
+
+<div class="panel">
   <h2>{{ _("Settled") }} <span class="sub">&mdash; {{ _("advice frozen at kickoff") }}</span></h2>
   {% if settled %}
+  <div class="tfilter" id="settled-filter">
+    <select data-f="lg" aria-label="{{ _('League') }}">
+      <option value="">{{ _("All leagues") }}</option>
+      {% for code, name in leagues if settled|selectattr("competition", "equalto", code)|list %}<option value="{{ code }}">{{ name }}</option>{% endfor %}
+    </select>
+    <select data-f="side" aria-label="{{ _('Side') }}">
+      <option value="">{{ _("Over and under") }}</option>
+      <option value="OVER">{{ _("OVER")|capitalize }}</option><option value="UNDER">{{ _("UNDER")|capitalize }}</option>
+    </select>
+    <select data-f="hit" aria-label="{{ _('Result') }}">
+      <option value="">{{ _("Won and lost") }}</option>
+      <option value="1">{{ _("won")|capitalize }}</option><option value="0">{{ _("lost")|capitalize }}</option>
+    </select>
+    {% if user %}
+    <select data-f="placed" aria-label="{{ _('Placed') }}">
+      <option value="">{{ _("All tips") }}</option>
+      <option value="1">{{ _("Only placed") }}</option><option value="0">{{ _("Not placed") }}</option>
+    </select>
+    {% endif %}
+    <select data-f="days" aria-label="{{ _('Period') }}">
+      <option value="">{{ _("All time") }}</option>
+      <option value="7">{{ _("Last 7 days") }}</option><option value="30">{{ _("Last 30 days") }}</option>
+    </select>
+    <button type="button" data-reset>{{ _("Reset") }}</button>
+    <div class="tsum" aria-live="polite"></div>
+  </div>
   <div class="tablewrap">
-    <table class="sortable">
+    <table class="sortable" id="settled-table">
       <thead>
-        <tr>
-          <th class="l">{{ _("Kickoff") }}</th><th class="l">{{ _("League") }}</th><th class="l">{{ _("Match") }}</th>
-          <th class="l">{{ _("Line is about") }}</th><th>{{ _("Line") }}</th><th>{{ _("Advised") }}</th><th>{{ _("Odds") }}</th>
-          <th>{{ _("Model") }}</th><th>{{ _("Edge") }}</th><th>{{ _("Stake") }}</th><th>{{ _("Actual") }}</th><th>{{ _("Result") }}</th>
+        <tr>{% if user %}<th class="l">{{ _("Placed") }}</th>{% endif %}<th class="l">{{ _("Result") }}</th>
+          <th class="l">{{ _("Match") }}</th><th class="l">{{ _("League") }}</th>
+          <th class="l">{{ _("Line is about") }}</th><th>{{ _("Line") }}</th><th>{{ _("Advised") }}</th>
+          <th>{{ _("Actual") }}</th><th>{{ _("Odds") }}</th><th>{{ _("P/L") }}</th><th>{{ _("Stake") }}</th>
+          <th class="l">{{ _("Kickoff") }}</th><th>{{ _("Model") }}</th><th>{{ _("Edge") }}</th>
           <th class="l" title="{{ _('Last time the advice was saved before kickoff') }}">{{ _("Advice as of") }}</th>
         </tr>
       </thead>
       <tbody>
         {% for r in settled %}
-        <tr>
-          <td class="l muted" data-v="{{ r.kickoff.timestamp() }}">{{ r.kickoff|dt('%d %b %H:%M') }}</td>
-          <td class="l muted">{{ league_names.get(r.competition, r.competition) }}</td>
+        <tr class="{{ 'placed' if r.placed }}" data-lg="{{ r.competition }}" data-side="{{ r.side or '' }}"
+            data-hit="{{ 1 if r.hit else 0 }}" data-placed="{{ 1 if r.placed else 0 }}"
+            data-bet="{{ 1 if r.backed and r.odds else 0 }}"
+            data-t="{{ r.kickoff.timestamp()|int }}" data-o="{{ r.odds or 0 }}" data-r="{{ r.rating or 0 }}">
+          {% if user %}{{ tick(r) }}{% endif %}
+          <td class="l">
+            {% if not r.backed %}<span class="chip">{{ _("no bet") }}</span>
+            {% elif r.hit %}<span class="chip ok">&#10003; {{ _("won") }}</span>
+            {% else %}<span class="chip no">&#10007; {{ _("lost") }}</span>{% endif %}
+          </td>
           <td class="l">{{ r.home_abbr }} v {{ r.away_abbr }}</td>
+          <td class="l muted">{{ league_names.get(r.competition, r.competition) }}</td>
           <td class="l">{{ r.team }}</td>
           <td class="num">{{ '%.1f'|format(r.line) }}</td>
-          <td>{% if r.backed %}<span class="chip ok">{{ _(r.side) }}</span>{% else %}<span class="chip">{{ _("no bet") }}</span>{% endif %}</td>
+          <td>{% if r.backed %}<span class="chip ok">{{ _(r.side) }}</span>{% else %}<span class="muted">&ndash;</span>{% endif %}</td>
+          <td class="num"><strong>{{ '%.1f'|format(r.actual) }}</strong></td>
           <td class="num">{{ '%.2f'|format(r.odds) if r.odds else '-' }}</td>
+          <td class="num {{ ('good' if r.pl > 0 else 'bad') if r.pl is defined else 'muted' }}">{{ '%+.2f'|format(r.pl) if r.pl is defined else '-' }}</td>
+          <td class="num muted">{{ r.rating }}/10</td>
+          <td class="l muted" data-v="{{ r.kickoff.timestamp() }}">{{ r.kickoff|dt('%d %b %H:%M') }}</td>
           <td class="num muted">{{ '%.1f'|format(r.pred) if r.pred is not none else '-' }}{% if r.fallback %}<sup class="warn">*</sup>{% endif %}</td>
-          <td class="num {{ 'good' if r.backed else 'muted' }}">{{ '%+.1f%%'|format(r.edge * 100) if r.edge is not none else '-' }}</td>
-          <td class="num">{{ r.rating }}/10</td>
-          <td class="num">{{ '%.1f'|format(r.actual) }}</td>
-          <td>
-            {% if not r.backed %}<span class="muted">&ndash;</span>
-            {% elif r.hit %}<span class="chip ok">{{ _("won") }}</span>
-            {% else %}<span class="chip no">{{ _("lost") }}</span>{% endif %}
-          </td>
+          <td class="num muted">{{ '%+.1f%%'|format(r.edge * 100) if r.edge is not none else '-' }}</td>
           <td class="l muted" style="font-size:12px">{{ r.advised_at|dt('%d %b %H:%M') }}</td>
         </tr>
         {% endfor %}
@@ -106,43 +183,6 @@
   {% else %}
   <div class="empty">{% trans %}No advised line has settled yet. The first ones settle after the
     next matches with a recorded line kick off.{% endtrans %}</div>
-  {% endif %}
-</div>
-
-<div class="panel">
-  <h2>{{ _("Upcoming") }} <span class="sub">&mdash; {{ _("still updating until kickoff") }}</span></h2>
-  {% if pending %}
-  <div class="tablewrap">
-    <table>
-      <thead>
-        <tr><th class="l">{{ _("Kickoff") }}</th><th class="l">{{ _("League") }}</th><th class="l">{{ _("Match") }}</th>
-            <th class="l">{{ _("Line is about") }}</th><th>{{ _("Line") }}</th><th>{{ _("Advised") }}</th><th>{{ _("Odds") }}</th>
-            <th>{{ _("Edge") }}</th><th>{{ _("Stake") }}</th><th class="l">{{ _("As of") }}</th></tr>
-      </thead>
-      <tbody>
-        {% for r in pending %}
-        <tr>
-          <td class="l muted">{{ r.kickoff|dt('%d %b %H:%M') }}</td>
-          <td class="l muted">{{ league_names.get(r.competition, r.competition) }}</td>
-          <td class="l">{{ r.home_abbr }} v {{ r.away_abbr }}</td>
-          <td class="l">{{ r.team }}</td>
-          <td class="num">{{ '%.1f'|format(r.line) }}</td>
-          <td>{% if r.backed %}<span class="chip ok">{{ _(r.side) }}</span>{% else %}<span class="chip">{{ _("no bet") }}</span>{% endif %}</td>
-          <td class="num">{{ '%.2f'|format(r.odds) if r.odds else '-' }}</td>
-          <td class="num">{{ '%+.1f%%'|format(r.edge * 100) if r.edge is not none else '-' }}</td>
-          <td class="num">{{ r.rating }}/10</td>
-          <td class="l muted" style="font-size:12px">{{ r.advised_at|dt('%d %b %H:%M') }}</td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
-  </div>
-  <p class="muted" style="font-size:12.5px;margin-bottom:0">
-    {% trans %}Runs happen every few hours, so what gets locked is whatever the last run before kickoff
-    saved &mdash; the same advice the site was showing at that moment.{% endtrans %}
-  </p>
-  {% else %}
-  <div class="empty">{{ _("No upcoming line has advice recorded yet.") }}</div>
   {% endif %}
 </div>
 
@@ -178,6 +218,88 @@
     bookmaker prices the new date, the match gets a new line and new advice.{% endtrans %}
   </p>
 </div>
+{% endif %}
+
+<div class="note">
+  <strong>{{ _("What the site advised, exactly as it stood at kickoff.") }}</strong>
+  {% trans %}Each line's advice
+  is saved on every run while its match is still to be played, and locked the moment the
+  match kicks off &mdash; the database refuses any later change. Nothing on this page is
+  recalculated: a new model, a new &sigma; or a code fix changes the Learning page and never
+  this one. Only the actual possession is looked up, because that is a fact about the match.{% endtrans %}
+  <br><br>
+  {% trans %}The record starts on 14 Sep 2026. Bets settled before then have no saved advice, and
+  rebuilding it would be exactly the recalculation this page exists to avoid, so they are
+  not here.{% endtrans %}
+</div>
+
+{% if settled %}
+<script>
+// Filter the settled table in the page, with the tally of what is shown:
+// bets, won, P/L and ROI at one unit each, and P/L at the advised stake.
+// Lines with no advised bet never count towards the tally. The choice is
+// remembered in this browser only.
+(function () {
+  const bar = document.getElementById('settled-filter');
+  const rows = Array.from(document.querySelectorAll('#settled-table tbody tr'));
+  const sels = Array.from(bar.querySelectorAll('select[data-f]'));
+  const sum = bar.querySelector('.tsum');
+  const KEY = 'advice-settled-filter';
+  const fmt = (x, d) => (x > 0 ? '+' : '') + x.toFixed(d);
+  try {
+    const saved = JSON.parse(localStorage.getItem(KEY) || '{}');
+    sels.forEach(s => { if (saved[s.dataset.f] !== undefined) s.value = saved[s.dataset.f]; });
+  } catch (e) {}
+  function apply() {
+    const want = {};
+    sels.forEach(s => { if (s.value !== '') want[s.dataset.f] = s.value; });
+    const since = want.days ? Date.now() / 1000 - want.days * 86400 : null;
+    let n = 0, won = 0, pl = 0, plr = 0, stk = 0;
+    rows.forEach(tr => {
+      const d = tr.dataset;
+      const show = Object.keys(want).every(k => k === 'days' ? +d.t >= since : d[k] === want[k]);
+      tr.hidden = !show;
+      if (!show || d.bet !== '1') return;
+      const hit = d.hit === '1', o = +d.o, r = +d.r / 10;
+      n++; won += hit; pl += hit ? o - 1 : -1; plr += r * (hit ? o - 1 : -1); stk += r;
+    });
+    sum.innerHTML = n === 0 ? '{{ _("No bet matches.") }}'
+      : '<strong>' + n + '</strong> {{ _("bets") }}, ' + '{{ _("{n} won") }}'.replace('{n}', won) + ' &middot; '
+        + '<span class="' + (pl >= 0 ? 'good' : 'bad') + '">' + fmt(pl, 2) + '</span> {{ _("units") }}, '
+        + 'ROI ' + fmt(100 * pl / n, 1) + '%'
+        + (stk ? ' &middot; {{ _("at the advised stake") }} <span class="' + (plr >= 0 ? 'good' : 'bad') + '">'
+                 + fmt(plr, 2) + '</span>' : '');
+    try { localStorage.setItem(KEY, JSON.stringify(Object.fromEntries(sels.map(s => [s.dataset.f, s.value])))); } catch (e) {}
+  }
+  sels.forEach(s => s.addEventListener('change', apply));
+  bar.querySelector('[data-reset]').addEventListener('click', () => { sels.forEach(s => s.value = ''); apply(); });
+  apply();
+})();
+</script>
+{% endif %}
+
+{% if user %}
+<script>
+// Tick a bet as placed: saved at once, so it is the same on every device.
+// On failure the tick is put back and the reason shown.
+document.querySelectorAll('td.tick input[data-key]').forEach(function (box) {
+  box.addEventListener('change', function () {
+    const want = box.checked, row = box.closest('tr');
+    box.disabled = true;
+    fetch('{{ url_for("advice_placed") }}', {
+      method: 'POST', credentials: 'same-origin',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({key: box.dataset.key, placed: want})
+    }).then(function (r) {
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      row.classList.toggle('placed', want);
+    }).catch(function (e) {
+      box.checked = !want;
+      alert('{{ _("Could not save") }}: ' + e.message);
+    }).finally(function () { box.disabled = false; });
+  });
+});
+</script>
 {% endif %}
 
 {% endblock %}
