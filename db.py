@@ -668,7 +668,13 @@ class Database:
                f"WHERE %s::timestamp > (now() AT TIME ZONE 'UTC') "
                f"ON CONFLICT (match_id, bookmaker) DO UPDATE SET {sets}, "
                f"advised_at = NOW() "
-               f"WHERE pl_advice.kickoff > (now() AT TIME ZONE 'UTC')")
+               f"WHERE pl_advice.kickoff > (now() AT TIME ZONE 'UTC') "
+               # ...or the stored advice belongs to a kickoff that no longer
+               # exists. A postponed match keeps its old advice row, whose
+               # kickoff is in the past, and the lock would otherwise refuse
+               # the new date's advice for ever - the line would be announced
+               # with "no advice recorded yet" and never reach the record.
+               f"   OR pl_advice.kickoff <> EXCLUDED.kickoff")
         written = refused = 0
         with self.conn.cursor() as cur:
             for r in rows:

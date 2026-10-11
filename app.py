@@ -816,9 +816,12 @@ def _line_rows(want=None):
               -- an upcoming tip. pl_advice keeps the kickoff the advice was
               -- given for, so a mismatch with the fixture's kickoff is the
               -- postponement. The new date gets a new market, and a new line.
+              -- Only the line priced for the old date: one captured after
+              -- the match was moved belongs to the new market and counts.
               AND NOT EXISTS (SELECT 1 FROM pl_advice a
                               WHERE a.match_id = l.match_id
-                                AND a.kickoff <> m.kickoff)
+                                AND a.kickoff <> m.kickoff
+                                AND l.captured_at <= a.kickoff)
             ORDER BY l.match_id, l.bookmaker, l.captured_at ASC NULLS LAST, l.line
         ) first_lines
         ORDER BY kickoff DESC
@@ -1407,12 +1410,15 @@ def admin_advice():
         mine = {"settled": len(done), "won": sum(1 for r in done if r["hit"]),
                 "pnl": sum(r["pl"] for r in done),
                 "open": sum(1 for r in pending if r["placed"])}
-    # Visitors see the bets only; "no bet" lines stay visible to the admin.
-    # The totals already count advised bets alone, so they do not change.
+    # Only advised bets are listed. A "no bet" line is still counted in the
+    # note under the table, but showing the rows told nobody anything.
+    # The totals have always counted advised bets alone, so they do not change.
+    settled = [r for r in settled if r["backed"]]
+    pending = [r for r in pending if r["backed"]]
     if not session.get("admin"):
-        settled = [r for r in settled if r["backed"]]
-        pending = [r for r in pending if r["backed"]]
         postponed = []
+    else:
+        postponed = [r for r in postponed if r["backed"]]
     return render_template("admin_advice.html", settled=settled,
                            pending=pending, postponed=postponed, mine=mine,
                            totals=totals, verdict=call,

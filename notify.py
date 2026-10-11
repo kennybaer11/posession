@@ -67,6 +67,8 @@ def new_lines(db):
                                  AND a.bookmaker = l.bookmaker
             WHERE l.notified_at IS NULL
               AND m.kickoff > (now() AT TIME ZONE 'UTC')
+              AND (a.match_id IS NOT NULL
+                   OR l.captured_at < (now() AT TIME ZONE 'UTC') - INTERVAL '2 hours')
             ORDER BY m.kickoff, m.match_id, l.captured_at
         """)
         return cur.fetchall()

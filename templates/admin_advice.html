@@ -76,7 +76,7 @@
         {% for r in pending %}
         <tr class="advised {{ 'placed' if r.placed }}">
           {% if user %}{{ tick(r) }}{% endif %}
-          <td class="l">{% if r.backed %}<span class="chip ok">{{ _(r.side) }}</span>{% else %}<span class="chip">{{ _("no bet") }}</span>{% endif %}</td>
+          <td class="l"><span class="chip ok">{{ _(r.side) }}</span></td>
           <td class="l">{{ r.home_abbr }} v {{ r.away_abbr }}</td>
           <td class="l muted">{{ league_names.get(r.competition, r.competition) }}</td>
           <td class="l">{{ r.team }}</td>
@@ -145,22 +145,20 @@
         {% for r in settled %}
         <tr class="{{ 'placed' if r.placed }}" data-lg="{{ r.competition }}" data-side="{{ r.side or '' }}"
             data-hit="{{ 1 if r.hit else 0 }}" data-placed="{{ 1 if r.placed else 0 }}"
-            data-bet="{{ 1 if r.backed and r.odds else 0 }}"
             data-t="{{ r.kickoff.timestamp()|int }}" data-o="{{ r.odds or 0 }}" data-r="{{ r.rating or 0 }}">
           {% if user %}{{ tick(r) }}{% endif %}
           <td class="l">
-            {% if not r.backed %}<span class="chip">{{ _("no bet") }}</span>
-            {% elif r.hit %}<span class="chip ok">&#10003; {{ _("won") }}</span>
+            {% if r.hit %}<span class="chip ok">&#10003; {{ _("won") }}</span>
             {% else %}<span class="chip no">&#10007; {{ _("lost") }}</span>{% endif %}
           </td>
           <td class="l">{{ r.home_abbr }} v {{ r.away_abbr }}</td>
           <td class="l muted">{{ league_names.get(r.competition, r.competition) }}</td>
           <td class="l">{{ r.team }}</td>
           <td class="num">{{ '%.1f'|format(r.line) }}</td>
-          <td>{% if r.backed %}<span class="chip ok">{{ _(r.side) }}</span>{% else %}<span class="muted">&ndash;</span>{% endif %}</td>
+          <td><span class="chip ok">{{ _(r.side) }}</span></td>
           <td class="num"><strong>{{ '%.1f'|format(r.actual) }}</strong></td>
           <td class="num">{{ '%.2f'|format(r.odds) if r.odds else '-' }}</td>
-          <td class="num {{ ('good' if r.pl > 0 else 'bad') if r.pl is defined else 'muted' }}">{{ '%+.2f'|format(r.pl) if r.pl is defined else '-' }}</td>
+          <td class="num {{ 'good' if r.pl > 0 else 'bad' }}">{{ '%+.2f'|format(r.pl) }}</td>
           <td class="num muted">{{ r.rating }}/10</td>
           <td class="l muted" data-v="{{ r.kickoff.timestamp() }}">{{ r.kickoff|dt('%d %b %H:%M') }}</td>
           <td class="num muted">{{ '%.1f'|format(r.pred) if r.pred is not none else '-' }}{% if r.fallback %}<sup class="warn">*</sup>{% endif %}</td>
@@ -206,7 +204,7 @@
           <td class="l">{{ r.home_abbr }} v {{ r.away_abbr }}</td>
           <td class="l">{{ r.team }}</td>
           <td class="num">{{ '%.1f'|format(r.line) }}</td>
-          <td>{% if r.backed %}<span class="chip">{{ _(r.side) }}</span>{% else %}<span class="chip">{{ _("no bet") }}</span>{% endif %}</td>
+          <td><span class="chip">{{ _(r.side) }}</span></td>
           <td class="num muted">{{ r.rating }}/10</td>
         </tr>
         {% endfor %}
@@ -259,7 +257,7 @@
       const d = tr.dataset;
       const show = Object.keys(want).every(k => k === 'days' ? +d.t >= since : d[k] === want[k]);
       tr.hidden = !show;
-      if (!show || d.bet !== '1') return;
+      if (!show) return;
       const hit = d.hit === '1', o = +d.o, r = +d.r / 10;
       n++; won += hit; pl += hit ? o - 1 : -1; plr += r * (hit ? o - 1 : -1); stk += r;
     });
