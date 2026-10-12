@@ -111,4 +111,6 @@ CS = {
     "units": "jednotek",
     "at the advised stake": "při doporučeném vkladu",
     "Open the match at the bookmaker": "Otevřít zápas u sázkové kanceláře",
+    "Results": "Výsledky",
+    "Tennis results": "Výsledky tenisových tipů",
 }

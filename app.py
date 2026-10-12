@@ -1515,6 +1515,17 @@ def tennis_lines():
 
 @app.route("/tennis")
 def tennis():
+    """The tennis advice record: its totals and the tips still open."""
+    return _tennis_page("tips")
+
+
+@app.route("/tennis/results")
+def tennis_results():
+    """The settled tennis tips, with a filter and the tally of what it shows."""
+    return _tennis_page("results")
+
+
+def _tennis_page(view):
     """The tennis advice record: what the site advised, as it stood when each
     match started - aces.advice, the twin of the possession record.
 
@@ -1577,7 +1588,7 @@ def tennis():
                 "void": sum(1 for r in void if r["placed"])}
     else:
         withdrawn, void = [], []
-    return render_template("tennis.html", upcoming=upcoming, settled=settled, void=void,
+    return render_template("tennis.html", view=view, upcoming=upcoming, settled=settled, void=void,
                            withdrawn=withdrawn, totals=totals, verdict=call, mine=mine,
                            user=session.get("admin"), books=TENNIS_BOOKS)
 

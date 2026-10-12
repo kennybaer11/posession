@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% block title %}{{ _("Tennis") }} &middot; {{ site_name }}{% endblock %}
-{% block heading %}{{ _("Tennis tips") }}{% endblock %}
+{% block heading %}{{ _("Tennis results") if view == 'results' else _("Tennis tips") }}{% endblock %}
 {% from "_tennis.html" import market, book, matchname with context %}
 
 {% macro tick(r) -%}
@@ -14,6 +14,9 @@
 
 {% block content %}
 
+{# Two tabs from one template: "tips" (the record's totals and what is open)
+   and "results" (what has settled, with its filter). #}
+{% if view == 'tips' %}
 <div class="tiles" style="margin-bottom:22px">
   <div class="tile"><div class="v num">{{ totals.bets }}</div><div class="k">{{ _("Tips, settled") }}</div></div>
   <div class="tile"><div class="v num">{{ totals.won }}{% if totals.bets %} <span class="muted" style="font-size:14px">({{ '%.0f%%'|format(100 * totals.won / totals.bets) }})</span>{% endif %}</div><div class="k">{{ _("Won") }}</div></div>
@@ -86,6 +89,9 @@
   {% endif %}
 </div>
 
+{% endif %}
+
+{% if view == 'results' %}
 <div class="panel">
   <h2>{{ _("Settled") }} <span class="sub">&mdash; {{ _("advice frozen at the start") }}</span></h2>
   {% if settled %}
@@ -167,7 +173,9 @@
 </div>
 {% endif %}
 
-{% if withdrawn %}
+{% endif %}
+
+{% if view == 'tips' and withdrawn %}
 <div class="panel">
   <h2>{{ _("Withdrawn before the start") }} <span class="sub">&mdash; {{ _("advised, then the odds moved; not counted; admin only") }}</span></h2>
   <ul>
@@ -190,7 +198,7 @@
   5 Oct 2026 have none.{% endtrans %}
 </div>
 
-{% if settled %}
+{% if settled and view == 'results' %}
 <script>
 // Filter the settled table in the page, with the tally of what is shown:
 // tips, won, P/L and ROI at one unit each, and P/L at the advised stake.
