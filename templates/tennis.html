@@ -14,9 +14,8 @@
 
 {% block content %}
 
-{# Two tabs from one template: "tips" (the record's totals and what is open)
-   and "results" (what has settled, with its filter). #}
-{% if view == 'tips' %}
+{# Two tabs from one template: "tips" (what is open) and "results" (what has
+   settled, with its filter); the record's totals head both. #}
 <div class="tiles" style="margin-bottom:22px">
   <div class="tile"><div class="v num">{{ totals.bets }}</div><div class="k">{{ _("Tips, settled") }}</div></div>
   <div class="tile"><div class="v num">{{ totals.won }}{% if totals.bets %} <span class="muted" style="font-size:14px">({{ '%.0f%%'|format(100 * totals.won / totals.bets) }})</span>{% endif %}</div><div class="k">{{ _("Won") }}</div></div>
@@ -53,6 +52,7 @@
 </div>
 {% endif %}
 
+{% if view == 'tips' %}
 <div class="panel">
   <h2>{{ _("Upcoming") }} <span class="sub">&mdash; {{ _("still updating until the match starts") }}</span></h2>
   {% if upcoming %}
