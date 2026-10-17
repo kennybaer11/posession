@@ -557,6 +557,16 @@ class Database:
                         "ADD COLUMN IF NOT EXISTS placed BOOLEAN NOT NULL DEFAULT FALSE")
             cur.execute("ALTER TABLE pl_advice "
                         "ADD COLUMN IF NOT EXISTS placed_at TIMESTAMPTZ")
+            # What Telegram was last told about this tip. The advice keeps
+            # updating until kickoff - Forest v Arsenal went from "no bet" to
+            # OVER once the 1X2 odds arrived, a day after the announcement -
+            # and notify.py reports the change against these.
+            cur.execute("ALTER TABLE pl_advice "
+                        "ADD COLUMN IF NOT EXISTS told_side TEXT")
+            cur.execute("ALTER TABLE pl_advice "
+                        "ADD COLUMN IF NOT EXISTS told_rating SMALLINT")
+            cur.execute("ALTER TABLE pl_advice "
+                        "ADD COLUMN IF NOT EXISTS told_at TIMESTAMPTZ")
             # A run that timed out or died, whose paid scrape was later
             # imported by a following run. See odds_pipeline.recover_unfinished.
             cur.execute("ALTER TABLE pl_scrape_run "

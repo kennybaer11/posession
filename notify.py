@@ -108,6 +108,92 @@ def describe(r):
     return "\n".join(out)
 
 
+# A stake change this size is worth a message on its own; anything smaller is
+# the model breathing, and saying so every few hours would be noise.
+RATING_STEP = 2
+
+
+def changed_advice(db):
+    """Tips whose advice has moved since Telegram was told about them.
+
+    The advice is recomputed on every run until kickoff, so the announcement
+    is only a snapshot: Forest v Arsenal was announced as "no bet" and became
+    OVER a day later, when the 1X2 odds for the match were published. Reported
+    when the bet appears or disappears, when the side flips, or when the stake
+    moves by RATING_STEP or more.
+    """
+    with db.conn.cursor() as cur:
+        cur.execute(f"""
+            SELECT a.match_id, a.bookmaker, a.kickoff, a.competition, a.line,
+                   a.side, a.odds, a.edge, a.rating, a.pred, a.backed,
+                   a.told_side, a.told_rating,
+                   t.name AS team, ht.name AS home, at_.name AS away
+            FROM pl_advice a
+            JOIN pl_matches m ON m.match_id = a.match_id
+            JOIN pl_teams t   ON t.team_id = a.team_id
+            JOIN pl_teams ht  ON ht.team_id = m.home_team_id
+            JOIN pl_teams at_ ON at_.team_id = m.away_team_id
+            WHERE a.told_at IS NOT NULL
+              AND a.kickoff > (now() AT TIME ZONE 'UTC')
+              AND m.kickoff = a.kickoff          -- not a postponed fixture
+              AND (a.side IS DISTINCT FROM a.told_side
+                   OR abs(COALESCE(a.rating, 0) - COALESCE(a.told_rating, 0)) >= {RATING_STEP})
+            ORDER BY a.kickoff, a.match_id
+        """)
+        return cur.fetchall()
+
+
+def describe_change(r):
+    ko = r["kickoff"].replace(tzinfo=ZoneInfo("UTC")).astimezone(PRAGUE)
+    e = html.escape
+
+    def advice(side, rating):
+        if not side:
+            return "no bet"
+        out = f"<b>{side}</b> {float(r['line']):.1f}"
+        if r["odds"]:
+            out += f" @ {float(r['odds']):.2f}"
+        if rating:
+            out += f" · stake {rating}/10"
+        return out
+
+    return "\n".join([
+        f"<b>{e(r['home'])} v {e(r['away'])}</b>",
+        f"{LEAGUE_NAMES.get(r['competition'], e(r['competition']))} · "
+        f"{ko:%a %d %b %H:%M} · {e(r['team'])}",
+        f"{advice(r['told_side'], r['told_rating'])} → "
+        f"{advice(r['side'], r['rating'])}"
+        + (f" · edge {float(r['edge']):+.1%}" if r["backed"] and r["edge"] is not None else ""),
+    ])
+
+
+def build_change_messages(rows):
+    header = (f"🔄 <b>Advice changed</b> - {len(rows)} tip"
+              f"{'' if len(rows) == 1 else 's'}")
+    footer = ("\n\n<i>The advice is recomputed until kickoff; what the record keeps "
+              "is the last version before it.</i>")
+    messages, current = [], header
+    for r in rows:
+        block = "\n\n" + describe_change(r)
+        if len(current) + len(block) + len(footer) > TELEGRAM_LIMIT:
+            messages.append(current + footer)
+            current = header + " (cont.)"
+        current += block
+    messages.append(current + footer)
+    return messages
+
+
+def mark_told(db, rows):
+    """Remember the advice just reported, so it is reported once."""
+    with db.conn.cursor() as cur:
+        for r in rows:
+            cur.execute("""UPDATE pl_advice
+                              SET told_side = side, told_rating = rating, told_at = NOW()
+                            WHERE match_id = %s AND bookmaker = %s""",
+                        (r["match_id"], r["bookmaker"]))
+    db.conn.commit()
+
+
 def build_messages(rows):
     header = (f"🟢 <b>New possession odds</b> - {len(rows)} line"
               f"{'' if len(rows) == 1 else 's'}")
@@ -165,16 +251,19 @@ def main():
     db = Database()
     db.ensure_schema(with_views=False)
     rows = new_lines(db)
-    if not rows:
-        log.info("No new lines to announce.")
+    changed = changed_advice(db)
+    if not rows and not changed:
+        log.info("No new lines to announce, no advice changed.")
         db.close()
         return 0
 
-    messages = build_messages(rows)
+    messages = build_messages(rows) if rows else []
+    messages += build_change_messages(changed) if changed else []
     if args.dry_run or not (token and chat):
         if not args.dry_run:
             log.info("TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID not set - "
-                     "%d line(s) left unannounced.", len(rows))
+                     "%d line(s) and %d change(s) left unannounced.",
+                     len(rows), len(changed))
         for msg in messages:
             print(msg, end="\n\n")
         db.close()
@@ -191,7 +280,10 @@ def main():
                              AND bookmaker=%s""",
                         (r["match_id"], r["team_id"], r["line"], r["bookmaker"]))
     db.conn.commit()
-    log.info("Announced %d line(s) in %d message(s).", len(rows), len(messages))
+    # Both kinds of message leave the same mark: what Telegram now knows.
+    mark_told(db, rows + changed)
+    log.info("Announced %d line(s) and %d change(s) in %d message(s).",
+             len(rows), len(changed), len(messages))
     db.close()
     return 0
 
