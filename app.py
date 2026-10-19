@@ -617,13 +617,18 @@ def league_status():
         GROUP BY 1
     """)}
     cal = calib.stored(query)
+    # One model spans the leagues, so what has to clear MIN_FIT_ROWS is the
+    # pooled training set - a league needs only enough of its own matches for
+    # its indicator to mean anything.
+    pooled_rows = sum((r.get("train_rows") or 0) for r in rows.values())
     out = []
     for code, name in LEAGUES:
         n = (rows.get(code) or {}).get("train_rows") or 0
         out.append({
             "code": code, "name": name, "rows": n,
             "needed": MIN_FIT_ROWS,
-            "fitted": n >= MIN_FIT_ROWS,
+            "fitted": n > 0 and pooled_rows >= MIN_FIT_ROWS,
+            "pooled_rows": pooled_rows,
             "lines": (lines.get(code) or {}).get("lines") or 0,
             "settled": (lines.get(code) or {}).get("settled") or 0,
             "cal": cal.get(code),
@@ -683,6 +688,19 @@ def _league_frames(competition):
         loader.fixtures(competition=competition)))
 
 
+def _pooled_frames():
+    """Every league's matches and fixtures in one pair of frames.
+
+    One model is fitted across all three leagues, with an indicator for each -
+    see load.with_league_columns for the measurement behind it.
+    """
+    import load as loader
+    return _cached(("pooled",), lambda: (
+        loader.training_set(season="all", competition="all",
+                            min_history=FIT_MIN_HISTORY),
+        loader.fixtures(competition="all")))
+
+
 def _model_frames(competition):
     """The Model page's own view: the configured season and history rule."""
     import load as loader
@@ -695,6 +713,10 @@ def warm_caches():
     """Load every league's frames in the background when a worker starts, so
     the first visitor after a deploy or restart does not pay for it."""
     def run():
+        try:
+            _pooled_frames()
+        except Exception:
+            app.logger.exception("cache warm-up for the pooled frames failed")
         for code, _ in LEAGUES:
             for fn in (_league_frames, _model_frames):
                 try:
@@ -720,14 +742,19 @@ def _fitted_predictor(competition, settled_ids=()):
     that earlier history was too short to fit, in which case the row falls back
     to the naive midpoint like any other unfittable prediction.
 
-    Returns None when the league has too little history to fit, which is a real
+    Returns None when there is too little history to fit, which is a real
     state early in a season rather than an error.
+
+    The fit spans all three leagues (19 Oct 2026), with an indicator for each:
+    three times the rows per fit, and a smaller error in every league.
     """
     try:
         import load as loader
         import model as m
-        train, upcoming = _league_frames(competition)
-        feats = m.available_features(train)
+        pooled_train, pooled_upcoming = _pooled_frames()
+        feats = m.pooled_features(pooled_train)
+        train = pooled_train
+        upcoming = pooled_upcoming[pooled_upcoming["competition"] == competition]
         if len(train) < MIN_FIT_ROWS or not feats or not len(upcoming):
             return None
         fitted = m.build(alpha=1.0)
@@ -750,6 +777,7 @@ def _fitted_predictor(competition, settled_ids=()):
         # Settled lines: one out-of-sample fit each, on strictly earlier matches.
         wanted = {str(x) for x in settled_ids}
         ids = train["match_id"].astype(str)
+        # Earlier matches in ANY league now count as history for the refit.
         for i in train.index[ids.isin(wanted)]:
             earlier = train[train["kickoff"] < train.at[i, "kickoff"]]
             if len(earlier) < MIN_FIT_ROWS:

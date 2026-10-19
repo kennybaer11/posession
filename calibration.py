@@ -46,18 +46,37 @@ NAIVE_SIGMA = 8.40
 MIN_CALIBRATION_N = 100
 
 
-def measure(competition):
-    """Walk-forward residuals for one league, or None if too few to trust."""
-    import numpy as np
+def backtest():
+    """One walk-forward pass over every league at once - the model the site
+    actually fits since 19 Oct 2026. Returns the out-of-sample predictions
+    with their league, for measure() to split."""
     import load
     import model
 
-    train = load.training_set(season="all", competition=competition,
+    train = load.training_set(season="all", competition="all",
                               min_history=FIT_MIN_HISTORY)
-    feats = model.available_features(train)
+    feats = model.pooled_features(train)
     if len(train) <= MIN_FIT_ROWS or not feats:
         return None
     bt = model.walk_forward(train, feats, min_train=MIN_FIT_ROWS)
+    bt["competition"] = train["competition"].iloc[MIN_FIT_ROWS:].to_numpy()
+    return bt
+
+
+def measure(competition, bt=None):
+    """Walk-forward residuals for one league, or None if too few to trust.
+
+    The fit spans the leagues; the spread of its errors is still measured per
+    league, because that is what the probabilities on each page are built on
+    and LaLiga's errors are wider than the Bundesliga's.
+    """
+    import numpy as np
+    import model
+
+    bt = backtest() if bt is None else bt
+    if bt is None:
+        return None
+    bt = bt[bt["competition"] == competition]
     if len(bt) < MIN_CALIBRATION_N:
         return None
 
@@ -104,8 +123,9 @@ def main():
         cur.execute("SELECT DISTINCT competition FROM pl_matches ORDER BY 1")
         leagues = [r["competition"] for r in cur.fetchall()]
 
+    bt = backtest()
     for comp in leagues:
-        row = measure(comp)
+        row = measure(comp, bt)
         if row is None:
             log.info("%-7s too little history to measure - keeping the default "
                      "%.2f", comp, DEFAULT_SIGMA)

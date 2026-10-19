@@ -44,6 +44,12 @@ CORE_FEATURES = [
     "p_diff",
 ]
 
+def pooled_features(df):
+    """CORE_FEATURES plus the league indicators, for a fit spanning leagues."""
+    import load
+    return available_features(df) + [c for c in load.LEAGUE_FEATURES if c in df.columns]
+
+
 # Features that come from the betting market rather than match history. An
 # upcoming fixture without them yet is predicted by a model fitted without
 # them, rather than on an imputed median that would pretend to know the odds.

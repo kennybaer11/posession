@@ -75,6 +75,22 @@ LEFT JOIN pl_teams o ON o.team_id = s.opponent_id;
 --    Whole days make "played in the previous 14 days" mean what it says.
 -- ---------------------------------------------------------------------------
 CREATE VIEW v_team_rest AS
+WITH played AS (
+    -- Premier League teams have an appearance row for every competition they
+    -- play, cups and Europe included, which is the honest rest figure.
+    SELECT match_id, team_id, kickoff, competition_id, competition
+      FROM pl_team_appearance
+    UNION ALL
+    -- The other leagues have no appearance rows, so rest came out empty for
+    -- them and the feature was useless. Their own fixtures give the same
+    -- figure within the league; midweek cup and European games are missing,
+    -- so a Bundesliga or LaLiga side's rest can read longer than it was.
+    SELECT m.match_id, t.team_id, m.kickoff, NULL::text, m.competition
+      FROM pl_matches m
+      CROSS JOIN LATERAL (VALUES (m.home_team_id), (m.away_team_id)) AS t(team_id)
+     WHERE NOT EXISTS (SELECT 1 FROM pl_team_appearance a
+                        WHERE a.match_id = m.match_id AND a.team_id = t.team_id)
+)
 SELECT a.match_id, a.team_id, a.kickoff,
        a.competition_id, a.competition,
        (a.kickoff::date - (LAG(a.kickoff) OVER w_ord)::date) AS days_rest,
@@ -85,7 +101,7 @@ SELECT a.match_id, a.team_id, a.kickoff,
        ((a.kickoff::date - (LAG(a.kickoff) OVER w_ord)::date) > 45) AS after_long_break,
        COUNT(*) OVER w7  AS matches_last_7d,
        COUNT(*) OVER w14 AS matches_last_14d
-FROM pl_team_appearance a
+FROM played a
 WINDOW
     w_ord AS (PARTITION BY a.team_id ORDER BY a.kickoff),
     w7    AS (PARTITION BY a.team_id ORDER BY (a.kickoff::date - DATE '2000-01-01')
