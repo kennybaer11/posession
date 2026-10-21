@@ -182,7 +182,17 @@ def unpark_round(db, found_match_ids):
               AND a.attempts > 0
               AND m.kickoff > (now() AT TIME ZONE 'UTC')
               AND NOT EXISTS (SELECT 1 FROM pl_possession_line l
-                              WHERE l.match_id = m.match_id)
+                              WHERE l.match_id = m.match_id
+                                -- A line priced for a date the match no longer
+                                -- kicks off at is void: Levante v Athletic was
+                                -- suspended on 16 Sep 2026 and replayed on
+                                -- 21 Oct, and its September line made the
+                                -- fixture look priced, so the scraper never
+                                -- read the new market at all.
+                                AND NOT EXISTS (SELECT 1 FROM pl_advice a
+                                                WHERE a.match_id = m.match_id
+                                                  AND a.kickoff <> m.kickoff
+                                                  AND l.captured_at <= a.kickoff))
               AND (m.competition, m.season, m.match_week) IN (
                     SELECT competition, season, match_week FROM pl_matches
                     WHERE match_id = ANY(%s) AND match_week IS NOT NULL)
@@ -219,7 +229,17 @@ def upcoming_fixtures(db, hours, skip_priced=False, retry_all=False):
             JOIN pl_teams at_ ON at_.team_id = m.away_team_id
             WHERE m.kickoff BETWEEN now() AND now() + (%s * INTERVAL '1 hour')
               AND (NOT %s OR NOT EXISTS (SELECT 1 FROM pl_possession_line l
-                                         WHERE l.match_id = m.match_id))
+                              WHERE l.match_id = m.match_id
+                                -- A line priced for a date the match no longer
+                                -- kicks off at is void: Levante v Athletic was
+                                -- suspended on 16 Sep 2026 and replayed on
+                                -- 21 Oct, and its September line made the
+                                -- fixture look priced, so the scraper never
+                                -- read the new market at all.
+                                AND NOT EXISTS (SELECT 1 FROM pl_advice a
+                                                WHERE a.match_id = m.match_id
+                                                  AND a.kickoff <> m.kickoff
+                                                  AND l.captured_at <= a.kickoff)))
               AND (%s
                    OR m.kickoff <= now() + (%s * INTERVAL '1 hour')
                    OR COALESCE((SELECT a.attempts FROM pl_odds_attempt a

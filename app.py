@@ -1138,7 +1138,17 @@ def status():
         LEFT JOIN pl_odds_attempt a ON a.match_id = m.match_id
         WHERE m.kickoff BETWEEN now() AND now() + INTERVAL '72 hours'
           AND NOT EXISTS (SELECT 1 FROM pl_possession_line l
-                          WHERE l.match_id = m.match_id)
+                              WHERE l.match_id = m.match_id
+                                -- A line priced for a date the match no longer
+                                -- kicks off at is void: Levante v Athletic was
+                                -- suspended on 16 Sep 2026 and replayed on
+                                -- 21 Oct, and its September line made the
+                                -- fixture look priced, so the scraper never
+                                -- read the new market at all.
+                                AND NOT EXISTS (SELECT 1 FROM pl_advice a
+                                                WHERE a.match_id = m.match_id
+                                                  AND a.kickoff <> m.kickoff
+                                                  AND l.captured_at <= a.kickoff))
         ORDER BY m.kickoff
     """, {"max": op.MAX_EMPTY_ATTEMPTS, "near": op.ALWAYS_RETRY_WITHIN_HOURS,
           "recheck": op.PARKED_RECHECK_HOURS})
