@@ -41,6 +41,16 @@ timeout 5m .venv/bin/python price.py --settle || echo "!! price.py --settle exit
 # ADVISE_MARKETS, EDGE, MIN_P).
 timeout 20m .venv/bin/python odds.py --advise || echo "!! odds.py exited $?"
 
+# Chance.cz's two-sided ATP ace lines, through webscraper.io's browser - the
+# site refuses plain requests, and this replaces the collection that had to be
+# run in an open tab. It reads the listing (one page) and only the matches
+# starting soon whose players we have enough history for, and skips those
+# whose lines it already holds: about ten pages a run, a credit each, out of
+# the 5,000 a month the possession scraper does not use.
+WEBSCRAPER_TOKEN="$(.venv/bin/python -c 'from dotenv import dotenv_values; print(dotenv_values("/home/app/scraper/.env").get("WEBSCRAPER_TOKEN") or "")')"
+export WEBSCRAPER_TOKEN
+timeout 40m .venv/bin/python chance_scrape.py || echo "!! chance_scrape.py exited $?"
+
 # Telegram, same bot and chat as the possession tips: new tennis tips, and the
 # ones whose advice moved before the match started. Credentials come from the
 # web app's .env, like DATABASE_URL above.
