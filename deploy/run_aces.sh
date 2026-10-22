@@ -40,4 +40,12 @@ timeout 5m .venv/bin/python price.py --settle || echo "!! price.py --settle exit
 # --advise: aces only, WTA (since 1 Oct) and ATP (since 2 Oct), at +10% EV or more (odds.py VALIDATED_TOURS,
 # ADVISE_MARKETS, EDGE, MIN_P).
 timeout 20m .venv/bin/python odds.py --advise || echo "!! odds.py exited $?"
+
+# Telegram, same bot and chat as the possession tips: new tennis tips, and the
+# ones whose advice moved before the match started. Credentials come from the
+# web app's .env, like DATABASE_URL above.
+TELEGRAM_BOT_TOKEN="$(.venv/bin/python -c 'from dotenv import dotenv_values; print(dotenv_values("/home/app/scraper/.env").get("TELEGRAM_BOT_TOKEN") or "")')"
+TELEGRAM_CHAT_ID="$(.venv/bin/python -c 'from dotenv import dotenv_values; print(dotenv_values("/home/app/scraper/.env").get("TELEGRAM_CHAT_ID") or "")')"
+export TELEGRAM_BOT_TOKEN TELEGRAM_CHAT_ID
+timeout 5m .venv/bin/python notify.py || echo "!! notify.py exited $?"
 echo "== $(date '+%F %T') done"
