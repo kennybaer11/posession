@@ -726,6 +726,10 @@ class Database:
             return 0
         with self.conn.cursor() as cur:
             for match_id, url in rows:
+                # The scraper reads the English league from tipsport.cz, but
+                # the bet is placed at chance.cz: same operator, same match
+                # ids, same pages. The link is for betting, so it points there.
+                url = url.replace("//www.tipsport.cz/", "//www.chance.cz/")
                 cur.execute("""
                     INSERT INTO pl_match_link (match_id, bookmaker, url)
                     VALUES (%s, %s, %s)
