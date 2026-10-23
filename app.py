@@ -1130,12 +1130,14 @@ def status():
                (COALESCE(a.attempts, 0) >= %(max)s
                 AND m.kickoff > now() + (%(near)s * INTERVAL '1 hour')
                 AND a.last_attempt >= now() - """ + op.recheck_sql() + """) AS parked,
+               ml.url AS href,
                LEAST(a.last_attempt + """ + op.recheck_sql() + """,
                      m.kickoff - (%(near)s * INTERVAL '1 hour')) AS next_read
         FROM pl_matches m
         JOIN pl_teams ht  ON ht.team_id = m.home_team_id
         JOIN pl_teams at_ ON at_.team_id = m.away_team_id
         LEFT JOIN pl_odds_attempt a ON a.match_id = m.match_id
+        LEFT JOIN pl_match_link ml ON ml.match_id = m.match_id
         WHERE m.kickoff BETWEEN now() AND now() + INTERVAL '72 hours'
           AND NOT EXISTS (SELECT 1 FROM pl_possession_line l
                               WHERE l.match_id = m.match_id
@@ -1393,7 +1395,7 @@ def admin_advice():
     rows = query("""
         SELECT a.*, t.name AS team, ht.abbr AS home_abbr, at_.abbr AS away_abbr,
                tm.possession AS actual, m.kickoff AS fixture_kickoff,
-               (m.kickoff <> a.kickoff) AS postponed
+               (m.kickoff <> a.kickoff) AS postponed, ml.url AS href
         FROM pl_advice a
         JOIN pl_matches m ON m.match_id = a.match_id
         JOIN pl_teams t   ON t.team_id = a.team_id
@@ -1401,6 +1403,8 @@ def admin_advice():
         JOIN pl_teams at_ ON at_.team_id = m.away_team_id
         LEFT JOIN pl_team_match tm ON tm.match_id = a.match_id
                                   AND tm.team_id = a.team_id
+        LEFT JOIN pl_match_link ml ON ml.match_id = a.match_id
+                                  AND ml.bookmaker = a.bookmaker
         ORDER BY a.kickoff DESC
     """)
     settled, pending, postponed = [], [], []

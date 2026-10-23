@@ -693,6 +693,11 @@ def _run_stages(args, db, run_id, deadline):
                     url[-40:], label, score, winner)
     for url, f in chosen:
         log.info("   %s v %s  ->  %s", f["home"][:20], f["away"][:20], url[-46:])
+    # Where the market lives, so a tip on the site can link to it. Saved even
+    # when the page turns out to carry no market yet: the address is right
+    # either way, and the next scrape reads the same one.
+    if args.write:
+        db.upsert_match_links([(f["match_id"], url) for url, f in chosen])
     for u in unmatched[:5]:
         log.info("   (skipped) %s", u[-56:])
 

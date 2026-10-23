@@ -306,6 +306,21 @@ MANAGER_COLS = ["match_id", "team_id", "manager_id", "manager_name"]
 # de-vigged to probabilities. A model feature, not a market we bet: how strong
 # a favourite is explains possession beyond the teams' own history - measured
 # 19 Sep 2026 at -0.12 points of walk-forward error over 1,014 matches, t=-2.1.
+# The match's own page at the bookmaker, as the odds scraper found it. Kept so
+# the site can link a tip straight to the market it was read from - the tennis
+# pages have done that since aces.event.url, and a football tip is no different.
+MATCH_LINK_DDL = """
+CREATE TABLE IF NOT EXISTS pl_match_link (
+  match_id   TEXT NOT NULL,
+  bookmaker  TEXT NOT NULL,
+  url        TEXT NOT NULL,
+  first_seen TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  last_seen  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (match_id, bookmaker)
+);
+"""
+
+
 MATCH_ODDS_DDL = """
 CREATE TABLE IF NOT EXISTS pl_match_odds (
   match_id    TEXT PRIMARY KEY,
@@ -462,6 +477,7 @@ class Database:
             cur.execute(MANAGER_DDL)
             cur.execute(ADVICE_DDL)
             cur.execute(MATCH_ODDS_DDL)
+            cur.execute(MATCH_LINK_DDL)
             for stmt in INDEXES:
                 cur.execute(stmt)
         self.conn.commit()
@@ -699,6 +715,24 @@ class Database:
     def upsert_managers(self, rows):
         return self._upsert("pl_match_manager", MANAGER_COLS, rows,
                             ("match_id", "team_id"))
+
+    def upsert_match_links(self, rows, bookmaker="chance.cz"):
+        """Remember where each match lives at the bookmaker.
+
+        rows: (match_id, url) pairs. The first URL seen wins: a match keeps the
+        page the line was read from, and the scraper visits the same one again.
+        """
+        if not rows:
+            return 0
+        with self.conn.cursor() as cur:
+            for match_id, url in rows:
+                cur.execute("""
+                    INSERT INTO pl_match_link (match_id, bookmaker, url)
+                    VALUES (%s, %s, %s)
+                    ON CONFLICT (match_id, bookmaker) DO UPDATE
+                      SET last_seen = NOW()""", (match_id, bookmaker, url))
+        self.conn.commit()
+        return len(rows)
 
     def upsert_match_odds(self, rows):
         """Latest odds win: a fixture's odds are refreshed until it is played,
