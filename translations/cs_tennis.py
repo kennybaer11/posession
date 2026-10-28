@@ -113,4 +113,6 @@ CS = {
     "Open the match at the bookmaker": "Otevřít zápas u sázkové kanceláře",
     "Results": "Výsledky",
     "Tennis results": "Výsledky tenisových tipů",
+    "no result in the data": "výsledek v datech chybí",
+    "retired, walked over, or no result in the data; not counted": "skreč, kontumace nebo výsledek v datech chybí; nezapočítává se",
 }

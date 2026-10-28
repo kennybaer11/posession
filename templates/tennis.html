@@ -166,9 +166,9 @@
 
 {% if void %}
 <div class="panel">
-  <h2>{{ _("Void") }} <span class="sub">&mdash; {{ _("retired or walked over; stake returned") }}</span></h2>
+  <h2>{{ _("Void") }} <span class="sub">&mdash; {{ _("retired, walked over, or no result in the data; not counted") }}</span></h2>
   <ul>
-    {% for r in void %}<li>{{ r.kickoff|dt('%d %b') }} &middot; {{ r.player_1 }} v {{ r.player_2 }} &middot; {{ market(r) }} {{ _(r.side|upper)|lower }} {{ r.line_label }} @ {{ '%.2f'|format(r.o) }} &middot; {{ book(r.book) }}{% if r.placed %} &middot; <strong>{{ _("placed") }}</strong>{% endif %}</li>{% endfor %}
+    {% for r in void %}<li>{{ r.kickoff|dt('%d %b') }} &middot; {{ r.player_1 }} v {{ r.player_2 }} &middot; {{ market(r) }} {{ _(r.side|upper)|lower }} {{ r.line_label }} @ {{ '%.2f'|format(r.o) }} &middot; {{ book(r.book) }}{% if r.void_reason == 'no result' %} &middot; <span class="muted">{{ _("no result in the data") }}</span>{% endif %}{% if r.placed %} &middot; <strong>{{ _("placed") }}</strong>{% endif %}</li>{% endfor %}
   </ul>
 </div>
 {% endif %}
