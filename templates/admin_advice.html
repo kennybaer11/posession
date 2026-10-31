@@ -26,26 +26,29 @@
 </p>
 {% endif %}
 
+{# The tiles follow the settled-table filter: pick "last 7 days" and they
+   describe those seven days. The ids are what the filter script writes to. #}
 <div class="tiles" style="margin-bottom:22px">
-  <div class="tile"><div class="v num">{{ totals.bets }}</div><div class="k">{{ _("Bets advised, settled") }}</div></div>
-  <div class="tile"><div class="v num">{{ totals.won }}{% if totals.bets %} <span class="muted" style="font-size:14px">({{ '%.0f%%'|format(100 * totals.won / totals.bets) }})</span>{% endif %}</div><div class="k">{{ _("Won") }}</div></div>
+  <div class="tile"><div class="v num" id="t-bets">{{ totals.bets }}</div><div class="k">{{ _("Bets advised, settled") }}</div></div>
+  <div class="tile"><div class="v num" id="t-won">{{ totals.won }}{% if totals.bets %} <span class="muted" style="font-size:14px">({{ '%.0f%%'|format(100 * totals.won / totals.bets) }})</span>{% endif %}</div><div class="k">{{ _("Won") }}</div></div>
   <div class="tile">
-    <div class="v num {{ 'good' if totals.pnl > 0 else ('bad' if totals.pnl < 0 else '') }}">{{ '%+.2f'|format(totals.pnl) }}</div>
+    <div class="v num {{ 'good' if totals.pnl > 0 else ('bad' if totals.pnl < 0 else '') }}" id="t-pl">{{ '%+.2f'|format(totals.pnl) }}</div>
     <div class="k">{{ _("P/L, 1 unit each") }}</div>
   </div>
   <div class="tile">
-    <div class="v num {{ 'good' if totals.pnl_r > 0 else ('bad' if totals.pnl_r < 0 else '') }}">{{ '%+.2f'|format(totals.pnl_r) }}</div>
+    <div class="v num {{ 'good' if totals.pnl_r > 0 else ('bad' if totals.pnl_r < 0 else '') }}" id="t-plr">{{ '%+.2f'|format(totals.pnl_r) }}</div>
     <div class="k">{{ _("P/L at the advised stake") }}</div>
   </div>
   {# Return on investment: profit divided by what was staked. The big figure
      treats every advised bet as 1 unit; the one under it weights each by its
      stake rating, as following the advice to the letter would. #}
   <div class="tile">
-    <div class="v num {{ 'good' if (totals.roi or 0) > 0 else ('bad' if (totals.roi or 0) < 0 else '') }}">{{ '%+.1f%%'|format(100 * totals.roi) if totals.roi is not none else '-' }}</div>
+    <div class="v num {{ 'good' if (totals.roi or 0) > 0 else ('bad' if (totals.roi or 0) < 0 else '') }}" id="t-roi">{{ '%+.1f%%'|format(100 * totals.roi) if totals.roi is not none else '-' }}</div>
     <div class="k">{{ _("ROI, 1 unit each") }}<br>
-      {{ _("at the advised stake") }}: <span class="num {{ 'good' if (totals.roi_r or 0) > 0 else ('bad' if (totals.roi_r or 0) < 0 else '') }}">{{ '%+.1f%%'|format(100 * totals.roi_r) if totals.roi_r is not none else '-' }}</span></div>
+      {{ _("at the advised stake") }}: <span class="num {{ 'good' if (totals.roi_r or 0) > 0 else ('bad' if (totals.roi_r or 0) < 0 else '') }}" id="t-roir">{{ '%+.1f%%'|format(100 * totals.roi_r) if totals.roi_r is not none else '-' }}</span></div>
   </div>
 </div>
+<p class="muted" id="t-scope" hidden style="margin:-14px 0 20px;font-size:12.5px"></p>
 
 {% if mine %}
 <div class="tiles mine" style="margin-bottom:22px">
@@ -267,6 +270,7 @@
       const hit = d.hit === '1', o = +d.o, r = +d.r / 10;
       n++; won += hit; pl += hit ? o - 1 : -1; plr += r * (hit ? o - 1 : -1); stk += r;
     });
+    paint(n, won, pl, plr, stk, Object.keys(want).length > 0);
     sum.innerHTML = n === 0 ? '{{ _("No bet matches.") }}'
       : '<strong>' + n + '</strong> {{ _("bets") }}, ' + '{{ _("{n} won") }}'.replace('{n}', won) + ' &middot; '
         + '<span class="' + (pl >= 0 ? 'good' : 'bad') + '">' + fmt(pl, 2) + '</span> {{ _("units") }}, '
@@ -275,6 +279,29 @@
                  + fmt(plr, 2) + '</span>' : '');
     try { localStorage.setItem(KEY, JSON.stringify(Object.fromEntries(sels.map(s => [s.dataset.f, s.value])))); } catch (e) {}
   }
+  // The tiles above describe whatever the table is showing. With no filter
+  // they are the whole record again, which is what the page renders without
+  // JavaScript. The verdict note stays on the whole record either way - it is
+  // a statement about the record, not about a slice of it.
+  const tile = id => document.getElementById(id);
+  const sign = (el, v) => { if (el) { el.classList.toggle('good', v > 0); el.classList.toggle('bad', v < 0); } };
+  function paint(n, won, pl, plr, stk, filtered) {
+    const f = (x, d) => (x > 0 ? '+' : '') + x.toFixed(d);
+    if (tile('t-bets')) tile('t-bets').textContent = n;
+    if (tile('t-won')) tile('t-won').innerHTML = n
+      ? won + ' <span class="muted" style="font-size:14px">(' + Math.round(100 * won / n) + '%)</span>'
+      : '0';
+    if (tile('t-pl')) { tile('t-pl').textContent = f(pl, 2); sign(tile('t-pl'), pl); }
+    if (tile('t-plr')) { tile('t-plr').textContent = f(plr, 2); sign(tile('t-plr'), plr); }
+    if (tile('t-roi')) { tile('t-roi').textContent = n ? f(100 * pl / n, 1) + '%' : '-'; sign(tile('t-roi'), pl); }
+    if (tile('t-roir')) { tile('t-roir').textContent = stk ? f(100 * plr / stk, 1) + '%' : '-'; sign(tile('t-roir'), plr); }
+    const scope = tile('t-scope');
+    if (scope) {
+      scope.hidden = !filtered;
+      scope.textContent = '{{ _("The figures above describe the filtered bets; the verdict below always covers the whole record.") }}';
+    }
+  }
+
   sels.forEach(s => s.addEventListener('change', apply));
   bar.querySelector('[data-reset]').addEventListener('click', () => { sels.forEach(s => s.value = ''); apply(); });
   apply();

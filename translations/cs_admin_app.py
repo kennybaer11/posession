@@ -245,4 +245,8 @@ CS = {
     "No bet matches.": "Žádná sázka neodpovídá.",
     "bets": "sázek",
     "Football tips": "Fotbalové tipy",
+    "The figures above describe the filtered bets; the verdict below always covers the whole record.":
+        "Čísla nahoře platí pro vyfiltrované sázky; hodnocení níže je vždy za celý záznam.",
+    "The figures above describe the filtered tips; the verdict below always covers the whole record.":
+        "Čísla nahoře platí pro vyfiltrované tipy; hodnocení níže je vždy za celý záznam.",
 }
