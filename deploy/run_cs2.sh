@@ -37,9 +37,10 @@ timeout 60m .venv/bin/python collect.py || echo "!! collect.py exited $?"
 timeout 15m .venv/bin/python teams.py || echo "!! teams.py exited $?"
 timeout 5m .venv/bin/python settle.py || echo "!! settle.py exited $?"
 
-# Betano's round lines for matches still to start, and the model's price on
-# each. A match's last price before kick-off is the one it settles with.
-timeout 20m .venv/bin/python odds.py || echo "!! odds.py exited $?"
+# Betano's round lines are NOT fetched here: Betano refuses this server (HTTP
+# 403 on every request since at least 6 Nov 2026), so they are collected from
+# the owner's PC (cs2's betano_local.ps1), like the tennis Betano lines. This
+# re-prices what is stored, so newly matched teams and fresh results count.
 timeout 10m .venv/bin/python price.py --store --top 0 || echo "!! price.py exited $?"
 # The tips (cs2.advice): rewritten until each match starts, locked from then on.
 timeout 5m .venv/bin/python advice.py || echo "!! advice.py exited $?"
