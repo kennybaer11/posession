@@ -14,6 +14,7 @@
   <nav id="mainnav">
     <a href="{{ url_for('admin_advice') }}" class="{{ 'on' if section == 'football' }}">{{ _("Football") }}</a>
     <a href="{{ url_for('tennis') }}" class="{{ 'on' if section == 'tennis' }}">{{ _("Tennis") }}</a>
+    <a href="{{ url_for('esport') }}" class="{{ 'on' if section == 'esport' }}">{{ _("E-sport") }}</a>
   </nav>
   {% if not config.STATIC_EXPORT %}
   {# The static GitHub Pages copy has no server to set the cookie, so it
@@ -30,8 +31,11 @@
   {% endif %}
 </header>
 {% if members %}
-<nav class="subnav" aria-label="{{ _('Football') if section == 'football' else _('Tennis') }}">
-  {% if section == 'tennis' %}
+<nav class="subnav" aria-label="{{ {'football': _('Football'), 'tennis': _('Tennis'), 'esport': _('E-sport')}[section] }}">
+  {% if section == 'esport' %}
+    <a href="{{ url_for('esport') }}"       class="{{ 'on' if request.endpoint == 'esport' }}">{{ _("Tips") }}</a>
+    <a href="{{ url_for('esport_lines') }}" class="{{ 'on' if request.endpoint == 'esport_lines' }}">{{ _("All lines") }}</a>
+  {% elif section == 'tennis' %}
     <a href="{{ url_for('tennis') }}"         class="{{ 'on' if request.endpoint == 'tennis' }}">{{ _("Tips") }}</a>
     <a href="{{ url_for('tennis_results') }}" class="{{ 'on' if request.endpoint == 'tennis_results' }}">{{ _("Results") }}</a>
     <a href="{{ url_for('tennis_lines') }}"   class="{{ 'on' if request.endpoint == 'tennis_lines' }}">{{ _("All lines") }}</a>

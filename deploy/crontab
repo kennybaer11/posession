@@ -5,3 +5,5 @@
 * * * * * /home/app/scraper/deploy/deploy.sh >> /home/app/logs/deploy.log 2>&1
 # aces project: WTA results, settlement, Betano odds - every three hours, see run_aces.sh.
 40 */3 * * * flock -n /home/app/locks/aces.lock /home/app/scraper/deploy/run_aces.sh >> /home/app/logs/aces.log 2>&1
+# cs2 project: Liquipedia results, settlement, Betano round lines, prices - every three hours, see run_cs2.sh.
+10 1-23/3 * * * flock -n /home/app/locks/cs2.lock /home/app/scraper/deploy/run_cs2.sh >> /home/app/logs/cs2.log 2>&1

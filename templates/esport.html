@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% block title %}{{ _("E-sport") }} &middot; {{ site_name }}{% endblock %}
+{% block heading %}{{ _("E-sport: CS2 rounds") }}{% endblock %}
+
+{% from "_tennis.html" import book with context %}
+
+{% block content %}
+
+<div class="note" style="border-left-color: var(--warn)">
+  <strong>{{ _("No tips yet.") }}</strong>
+  {% trans %}The CS2 model is being tested against Betano's round lines first: total rounds
+  on a map, round handicaps and each team's rounds. Tips start here only once it beats those
+  lines on matches that have been played, as with football and tennis.{% endtrans %}
+</div>
+
+<div class="panel">
+  <h2>{{ _("Upcoming matches") }}</h2>
+  {% if matches %}
+  <div class="tablewrap">
+    <table>
+      <thead>
+        <tr><th class="l">{{ _("Date") }}</th><th class="l">{{ _("Match") }}</th><th class="l">{{ _("Tournament") }}</th>
+            <th title="{{ _('The share of rounds the model expects the first team to win') }}">{{ _("Rounds share") }}</th>
+            <th class="l">{{ _("Bookmaker") }}</th></tr>
+      </thead>
+      <tbody>
+        {% for m in matches %}
+        <tr>
+          <td class="l muted">{{ m.kickoff|dt('%d.%m. %H:%M') }}</td>
+          <td class="l">{% if m.href %}<a href="{{ m.href }}" target="_blank" rel="noopener">{{ m.match }}</a>{% else %}{{ m.match }}{% endif %}</td>
+          <td class="l muted">{{ m.league }}</td>
+          <td class="num">{% if m.m is not none %}{{ '%.0f : %.0f'|format(100 * m.m, 100 - 100 * m.m) }}{% else %}<span class="muted" title="{{ _('Too few maps behind one of the teams') }}">&ndash;</span>{% endif %}</td>
+          <td class="l">{{ book(m.bookmaker) }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="empty">{{ _("No CS2 match on offer right now.") }}</div>
+  {% endif %}
+</div>
+
+<div class="note">
+  <strong>{{ _("How the model works.") }}</strong>
+  {% trans %}Each team has a rating from the rounds it won in every S-, A- and B-tier CS2
+  match since 2024. From the two ratings the model gets the chance of winning a round, and from
+  the CS2 rules (first to 13, overtime in blocks of six) the chance of every final score of a
+  map - and so of any line on rounds. Results: <a href="https://liquipedia.net/counterstrike/" target="_blank" rel="noopener">Liquipedia</a>, CC-BY-SA.{% endtrans %}
+</div>
+
+{% endblock %}

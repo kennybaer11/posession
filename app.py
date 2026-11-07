@@ -322,7 +322,8 @@ def _members():
     local = not DEPLOYED and not app.config.get("STATIC_EXPORT")
     return {"members": local or bool(session.get("admin")),
             # Which sport's categories the second menu row shows.
-            "section": "tennis" if (request.endpoint or "").startswith("tennis") else "football"}
+            "section": next((s for s in ("tennis", "esport")
+                             if (request.endpoint or "").startswith(s)), "football")}
 
 
 @app.context_processor
@@ -1824,6 +1825,126 @@ def _tennis_compare():
                     "match": f"{m['names'].get('A')} v {m['names'].get('B')}",
                     "books": sorted(m["books"]), "lines": lines, "best": best,
                     "priced": any(l["p"] is not None for l in lines)})
+    return out
+
+
+# -- e-sport: CS2 round lines (the cs2 project, github.com/kennybaer11/cs2) ---
+
+ESPORT_MARKETS = ("rounds", "handicap", "team_rounds", "overtime")
+
+
+@app.route("/esport")
+def esport():
+    """The e-sport tips. None are given yet: the CS2 model is still being
+    measured against Betano's lines, and the page says so rather than hiding."""
+    return render_template("esport.html", books=TENNIS_BOOKS, matches=_esport_matches())
+
+
+@app.route("/esport/lines")
+@members_only
+def esport_lines():
+    """Every CS2 round line on offer with the model's price on it (admin).
+
+    The rows are cs2.priced, written by the cs2 project's price.py from the
+    lines its odds.py stores (cs2.odds). Nothing is recomputed here. The top
+    table is each match's largest edges; below, every match in full."""
+    matches = _esport_matches(with_lines=True)
+    best = sorted((l for m in matches for l in m["lines"] if l["edge"] > 0),
+                  key=lambda l: -l["edge"])[:25]
+    settled, board = _esport_settled()
+    return render_template("esport_lines.html", books=TENNIS_BOOKS, matches=matches, best=best,
+                           settled=settled, board=board)
+
+
+ESPORT_EDGE = 0.10          # the edge a would-be tip needs on the scoreboard
+
+
+def _esport_settled():
+    """Settled CS2 lines and the scoreboard that decides whether tips start.
+
+    Two tests, as for possession (see the Model page's model-vs-bookmaker panel):
+    the model's log-loss against Betano's own probability with its margin taken
+    out, on every two-sided line; and a flat unit on each line the model rated
+    +10% or better - one per map, market, team and side, the best-priced."""
+    import math
+    import model as m
+    if not one("SELECT to_regclass('cs2.priced') AS t")["t"]:
+        return [], None
+    rows = query("""
+        SELECT p.*, p.line::float AS ln, p.price::float AS o, p.other_price::float AS o2,
+               p.p_model::float AS p, p.edge::float AS e, e.kickoff, e.team1, e.team2
+          FROM cs2.priced p JOIN cs2.bk_event e USING (bookmaker, event_id)
+         WHERE p.result IN ('won', 'lost') AND p.market = ANY(%s)
+         ORDER BY e.kickoff DESC""", (list(ESPORT_MARKETS),))
+    board = {mk: {"n": 0, "model": 0.0, "book": 0.0} for mk in ESPORT_MARKETS}
+    tips = {}
+    for r in rows:
+        won = r["result"] == "won"
+        # Each two-sided line once: from its over/yes/team-1 side.
+        first = r["side"] in ("over", "yes") or (r["market"] == "handicap" and r["team"] == 1)
+        if r["o2"] and first:
+            q_book = (1 / r["o"]) / (1 / r["o"] + 1 / r["o2"])
+            b = board[r["market"]]
+            b["n"] += 1
+            b["model"] -= math.log(max(r["p"] if won else 1 - r["p"], 1e-9))
+            b["book"] -= math.log(max(q_book if won else 1 - q_book, 1e-9))
+        k = (r["bookmaker"], r["event_id"], r["map_num"], r["market"], r["team"], r["side"])
+        if r["e"] >= ESPORT_EDGE and (k not in tips or r["e"] > tips[k]["e"]):
+            tips[k] = dict(r, hit=won)
+    for b in board.values():
+        b["model"] = b["model"] / b["n"] if b["n"] else None
+        b["book"] = b["book"] / b["n"] if b["n"] else None
+    bets = sorted(tips.values(), key=lambda r: r["kickoff"], reverse=True)
+    pnl = sum(r["o"] - 1 if r["hit"] else -1 for r in bets)
+    totals = {"bets": len(bets), "won": sum(r["hit"] for r in bets), "pnl": pnl,
+              "roi": pnl / len(bets) if bets else None,
+              "verdict": m.verdict([(r["hit"], r["o"]) for r in bets]) if bets else None}
+    for r in bets:
+        r["who"] = {1: r["team1"], 2: r["team2"]}.get(r["team"])
+        r["match"] = f"{r['team1']} v {r['team2']}"
+    return bets, {"markets": board, "totals": totals}
+
+
+def _esport_matches(with_lines=False):
+    """Bookmaker CS2 matches still to start, with the model's view of each."""
+    if not one("SELECT to_regclass('cs2.priced') AS t")["t"]:
+        return []
+    events = query("""
+        SELECT e.*, (SELECT max(p.m)::float FROM cs2.priced p
+                      WHERE p.bookmaker = e.bookmaker AND p.event_id = e.event_id) AS m
+          FROM cs2.bk_event e
+         WHERE e.kickoff > now()
+         ORDER BY e.kickoff, e.team1""")
+    lines = {}
+    if with_lines:
+        for r in query("""
+                SELECT p.*, p.line::float AS ln, p.price::float AS o, p.p_model::float AS p,
+                       p.edge::float AS e
+                  FROM cs2.priced p JOIN cs2.bk_event e USING (bookmaker, event_id)
+                 WHERE e.kickoff > now() AND p.market = ANY(%s)
+                 ORDER BY p.map_num, p.market, p.team, p.line""", (list(ESPORT_MARKETS),)):
+            lines.setdefault((r["bookmaker"], r["event_id"]), []).append(r)
+    out = []
+    for e in events:
+        e = dict(e)
+        e["href"] = (TENNIS_BOOK_SITES.get(e["bookmaker"], "") + e["url"]) if e.get("url") else None
+        e["match"] = f"{e['team1']} v {e['team2']}"
+        e["lines"] = []
+        # One row per map, market, team and side: the line the model likes best.
+        best = {}
+        for r in lines.get((e["bookmaker"], e["event_id"]), []):
+            k = (r["map_num"], r["market"], r["team"], r["side"])
+            if k not in best or r["e"] > best[k]["e"]:
+                best[k] = r
+        for r in best.values():
+            e["lines"].append({"kickoff": e["kickoff"], "match": e["match"], "href": e["href"],
+                               "book": e["bookmaker"], "map": r["map_num"],
+                               "market": r["market"], "side": r["side"], "line": r["ln"],
+                               "who": {1: e["team1"], 2: e["team2"]}.get(r["team"]),
+                               "price": r["o"], "p": r["p"], "edge": r["e"]})
+        e["lines"].sort(key=lambda l: (l["map"], ESPORT_MARKETS.index(l["market"]),
+                                       l["who"] or "", l["side"], l["line"]))
+        out.append(e)
     return out
 
 

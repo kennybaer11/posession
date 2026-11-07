@@ -1,0 +1,133 @@
+{% extends "base.html" %}
+{% block title %}{{ _("All lines") }} &middot; {{ _("E-sport") }} &middot; {{ site_name }}{% endblock %}
+{% block heading %}{{ _("CS2: all lines") }}{% endblock %}
+
+{% from "_tennis.html" import book with context %}
+
+{% macro market(l) -%}
+  {{ {'rounds': _('Total rounds'), 'handicap': _('Round handicap'),
+      'team_rounds': _('Team rounds'), 'overtime': _('Overtime')}[l.market] }}
+{%- endmacro %}
+
+{% macro betlabel(mk, who, side, line) -%}
+  {% if who %}{{ who }} {% endif %}{% if mk == 'handicap' %}{{ '%+.1f'|format(line) }}{% else %}{{ {'over': _('over'), 'under': _('under'), 'yes': _('yes'), 'no': _('no')}[side] }}{% if mk != 'overtime' %} {{ '%.1f'|format(line) }}{% endif %}{% endif %}
+{%- endmacro %}
+
+{% macro row(l, show_match) %}
+<tr class="{{ 'advised' if l.edge >= 0.10 }}">
+  {% if show_match %}
+  <td class="l muted">{{ l.kickoff|dt('%d.%m. %H:%M') }}</td>
+  <td class="l">{% if l.href %}<a href="{{ l.href }}" target="_blank" rel="noopener">{{ l.match }}</a>{% else %}{{ l.match }}{% endif %}</td>
+  {% endif %}
+  <td class="num">{{ l.map }}</td>
+  <td class="l">{{ market(l) }}</td>
+  <td class="l"><strong>{{ betlabel(l.market, l.who, l.side, l.line) }}</strong></td>
+  <td class="num"><strong>{{ '%.2f'|format(l.price) }}</strong></td>
+  <td class="num muted">{{ '%.0f%%'|format(100 * l.p) }}</td>
+  <td class="num muted">{{ '%.2f'|format(1 / l.p) if l.p > 0.001 else '-' }}</td>
+  <td class="num {{ 'good' if l.edge > 0 else 'bad' }}">{{ '%+.1f%%'|format(100 * l.edge) }}</td>
+</tr>
+{% endmacro %}
+
+{% block content %}
+
+<div class="note" style="border-left-color: var(--warn)">
+  <strong>{{ _("Not tested against the bookmaker yet.") }}</strong>
+  {% trans %}These are the model's prices, not tips. An edge here means only that the model
+  disagrees with Betano; whether that disagreement is worth anything is what the settled lines
+  will show.{% endtrans %}
+</div>
+
+<div class="panel">
+  <h2>{{ _("Largest edges") }}</h2>
+  {% if best %}
+  <div class="tablewrap">
+    <table>
+      <thead><tr><th class="l">{{ _("Date") }}</th><th class="l">{{ _("Match") }}</th><th>{{ _("Map") }}</th>
+        <th class="l">{{ _("Market") }}</th><th class="l">{{ _("Bet") }}</th><th>{{ _("Odds") }}</th>
+        <th>{{ _("Model") }}</th><th>{{ _("Fair odds") }}</th><th>{{ _("Edge") }}</th></tr></thead>
+      <tbody>{% for l in best %}{{ row(l, true) }}{% endfor %}</tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="empty">{{ _("No priced CS2 line right now.") }}</div>
+  {% endif %}
+</div>
+
+<div class="panel">
+  <h2>{{ _("Model against Betano") }} <span class="sub">&mdash; {{ _("settled lines, lower is better") }}</span></h2>
+  {% if board and board.markets.values()|selectattr('n')|list %}
+  <div class="tablewrap">
+    <table>
+      <thead><tr><th class="l">{{ _("Market") }}</th><th>{{ _("Lines") }}</th><th>{{ _("Model log-loss") }}</th>
+        <th>{{ _("Betano log-loss (no margin)") }}</th><th class="l">{{ _("Better") }}</th></tr></thead>
+      <tbody>
+      {% for mk, b in board.markets.items() if b.n %}
+        <tr><td class="l">{{ market({'market': mk}) }}</td><td class="num">{{ b.n }}</td>
+          <td class="num">{{ '%.4f'|format(b.model) }}</td><td class="num">{{ '%.4f'|format(b.book) }}</td>
+          <td class="l {{ 'good' if b.model < b.book else 'bad' }}">{{ _("model") if b.model < b.book else "Betano" }}</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% set t = board.totals %}
+  <p style="margin:12px 0 0">
+    {% trans n=t.bets, won=t.won, pnl='%+.2f'|format(t.pnl), roi=('%+.1f%%'|format(100 * t.roi) if t.roi is not none else '-') %}Lines the model rated +10% or better: {{ n }} settled, {{ won }} won, {{ pnl }} units at a flat unit ({{ roi }}).{% endtrans %}
+    {% if t.verdict %}<span class="muted">{{ _('Beating the market by more than luck explains.') if t.verdict.ready else _('Not yet distinguishable from luck.') }}</span>{% endif %}
+  </p>
+  {% else %}
+  <div class="empty">{{ _("No CS2 line has settled yet.") }}</div>
+  {% endif %}
+</div>
+
+{% if settled %}
+<div class="panel">
+  <h2>{{ _("Settled +10% lines") }}</h2>
+  <div class="tablewrap">
+    <table class="sortable">
+      <thead><tr><th class="l">{{ _("Result") }}</th><th class="l">{{ _("Date") }}</th><th class="l">{{ _("Match") }}</th>
+        <th>{{ _("Map") }}</th><th class="l">{{ _("Market") }}</th><th class="l">{{ _("Bet") }}</th>
+        <th>{{ _("Actual") }}</th><th>{{ _("Odds") }}</th><th>{{ _("Edge") }}</th></tr></thead>
+      <tbody>
+      {% for r in settled %}
+        <tr>
+          <td class="l">{% if r.hit %}<span class="chip ok">&#10003; {{ _("won") }}</span>{% else %}<span class="chip no">&#10007; {{ _("lost") }}</span>{% endif %}</td>
+          <td class="l muted" data-v="{{ r.kickoff.isoformat() }}">{{ r.kickoff|dt('%d.%m.') }}</td>
+          <td class="l">{{ r.match }}</td>
+          <td class="num">{{ r.map_num }}</td>
+          <td class="l">{{ market(r) }}</td>
+          <td class="l">{{ betlabel(r.market, r.who, r.side, r.ln) }}</td>
+          <td class="num">{{ r.actual }}</td>
+          <td class="num">{{ '%.2f'|format(r.o) }}</td>
+          <td class="num good">{{ '%+.1f%%'|format(100 * r.e) }}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+
+{% for m in matches %}
+<div class="panel">
+  <h2>{% if m.href %}<a href="{{ m.href }}" target="_blank" rel="noopener">{{ m.match }}</a>{% else %}{{ m.match }}{% endif %}
+    <span class="sub">&mdash; {{ m.kickoff|dt('%d.%m. %H:%M') }} &middot; {{ m.league }} &middot; {{ book(m.bookmaker) }}
+    {% if m.m is not none %}&middot; {{ _("rounds share") }} {{ '%.0f : %.0f'|format(100 * m.m, 100 - 100 * m.m) }}{% endif %}</span></h2>
+  {% if m.lines %}
+  <details>
+    <summary>{% trans n=m.lines|length %}{{ n }} lines, the best-priced on each side{% endtrans %}</summary>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>{{ _("Map") }}</th><th class="l">{{ _("Market") }}</th><th class="l">{{ _("Bet") }}</th>
+          <th>{{ _("Odds") }}</th><th>{{ _("Model") }}</th><th>{{ _("Fair odds") }}</th><th>{{ _("Edge") }}</th></tr></thead>
+        <tbody>{% for l in m.lines %}{{ row(l, false) }}{% endfor %}</tbody>
+      </table>
+    </div>
+  </details>
+  {% else %}
+  <div class="empty">{% if not m.team1_page or not m.team2_page %}{{ _("A team is not matched to Liquipedia yet.") }}{% else %}{{ _("Too few maps behind one of the teams.") }}{% endif %}</div>
+  {% endif %}
+</div>
+{% endfor %}
+
+{% endblock %}
