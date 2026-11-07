@@ -43,4 +43,12 @@ timeout 20m .venv/bin/python odds.py || echo "!! odds.py exited $?"
 timeout 10m .venv/bin/python price.py --store --top 0 || echo "!! price.py exited $?"
 # The tips (cs2.advice): rewritten until each match starts, locked from then on.
 timeout 5m .venv/bin/python advice.py || echo "!! advice.py exited $?"
+
+# Telegram, same bot and chat as the football and tennis tips: new CS2 tips,
+# and the ones whose advice moved before the start. Credentials come from the
+# web app's .env, like DATABASE_URL above.
+TELEGRAM_BOT_TOKEN="$(.venv/bin/python -c 'from dotenv import dotenv_values; print(dotenv_values("/home/app/scraper/.env").get("TELEGRAM_BOT_TOKEN") or "")')"
+TELEGRAM_CHAT_ID="$(.venv/bin/python -c 'from dotenv import dotenv_values; print(dotenv_values("/home/app/scraper/.env").get("TELEGRAM_CHAT_ID") or "")')"
+export TELEGRAM_BOT_TOKEN TELEGRAM_CHAT_ID
+timeout 5m .venv/bin/python notify.py || echo "!! notify.py exited $?"
 echo "== $(date '+%F %T') done"
