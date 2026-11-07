@@ -41,4 +41,6 @@ timeout 5m .venv/bin/python settle.py || echo "!! settle.py exited $?"
 # each. A match's last price before kick-off is the one it settles with.
 timeout 20m .venv/bin/python odds.py || echo "!! odds.py exited $?"
 timeout 10m .venv/bin/python price.py --store --top 0 || echo "!! price.py exited $?"
+# The tips (cs2.advice): rewritten until each match starts, locked from then on.
+timeout 5m .venv/bin/python advice.py || echo "!! advice.py exited $?"
 echo "== $(date '+%F %T') done"

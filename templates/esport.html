@@ -1,52 +1,287 @@
 {% extends "base.html" %}
 {% block title %}{{ _("E-sport") }} &middot; {{ site_name }}{% endblock %}
-{% block heading %}{{ _("E-sport: CS2 rounds") }}{% endblock %}
-
+{% block heading %}{{ _("CS2 results") if view == 'results' else _("CS2 tips") }}{% endblock %}
 {% from "_tennis.html" import book with context %}
+
+{# The CS2 twin of tennis.html: same record, same tiles, same filter. #}
+
+{% macro market(r) -%}
+  {{ {'rounds': _('Total rounds'), 'handicap': _('Round handicap'),
+      'team_rounds': _('Team rounds'), 'overtime': _('Overtime')}[r.market] }}, {{ _("map") }} {{ r.map_num }}
+{%- endmacro %}
+
+{% macro bet(r) -%}
+  {%- if r.who %}{{ r.who }} {% endif -%}
+  {%- if r.market == 'handicap' %}{{ '%+.1f'|format(r.ln) }}
+  {%- else %}{{ {'over': _('over'), 'under': _('under'), 'yes': _('yes'), 'no': _('no')}[r.side] }}{% if r.market != 'overtime' %} {{ '%.1f'|format(r.ln) }}{% endif %}{% endif -%}
+{%- endmacro %}
+
+{% macro matchname(r) -%}
+  {%- if r.href -%}<a href="{{ r.href }}" target="_blank" rel="noopener" title="{{ _('Open the match at the bookmaker') }}">{{ r.match }}</a>
+  {%- else -%}{{ r.match }}{%- endif -%}
+{%- endmacro %}
+
+{% macro tick(r) -%}
+  <td class="l tick"><input type="checkbox" data-key="{{ r.key }}" {{ 'checked' if r.placed }}
+       title="{{ _('I placed this bet (the side and price shown)') }}" aria-label="{{ _('Placed') }}"></td>
+{%- endmacro %}
 
 {% block content %}
 
-<div class="note" style="border-left-color: var(--warn)">
-  <strong>{{ _("No tips yet.") }}</strong>
-  {% trans %}The CS2 model is being tested against Betano's round lines first: total rounds
-  on a map, round handicaps and each team's rounds. Tips start here only once it beats those
-  lines on matches that have been played, as with football and tennis.{% endtrans %}
+<div class="tiles" style="margin-bottom:22px">
+  <div class="tile"><div class="v num" id="t-bets">{{ totals.bets }}</div><div class="k">{{ _("Tips, settled") }}</div></div>
+  <div class="tile"><div class="v num" id="t-won">{{ totals.won }}{% if totals.bets %} <span class="muted" style="font-size:14px">({{ '%.0f%%'|format(100 * totals.won / totals.bets) }})</span>{% endif %}</div><div class="k">{{ _("Won") }}</div></div>
+  <div class="tile">
+    <div class="v num {{ 'good' if totals.pnl > 0 else ('bad' if totals.pnl < 0 else '') }}" id="t-pl">{{ '%+.2f'|format(totals.pnl) }}</div>
+    <div class="k">{{ _("P/L, 1 unit each") }}</div>
+  </div>
+  <div class="tile">
+    <div class="v num {{ 'good' if totals.pnl_r > 0 else ('bad' if totals.pnl_r < 0 else '') }}" id="t-plr">{{ '%+.2f'|format(totals.pnl_r) }}</div>
+    <div class="k">{{ _("P/L at the advised stake") }}</div>
+  </div>
+  <div class="tile">
+    <div class="v num {{ 'good' if (totals.roi or 0) > 0 else ('bad' if (totals.roi or 0) < 0 else '') }}" id="t-roi">{{ '%+.1f%%'|format(100 * totals.roi) if totals.roi is not none else '-' }}</div>
+    <div class="k">{{ _("ROI, 1 unit each") }}<br>
+      {{ _("at the advised stake") }}: <span class="num {{ 'good' if (totals.roi_r or 0) > 0 else ('bad' if (totals.roi_r or 0) < 0 else '') }}" id="t-roir">{{ '%+.1f%%'|format(100 * totals.roi_r) if totals.roi_r is not none else '-' }}</span></div>
+  </div>
 </div>
 
+<p class="muted" id="t-scope" hidden style="margin:-14px 0 20px;font-size:12.5px"></p>
+
+{% if mine %}
+<div class="tiles mine" style="margin-bottom:22px">
+  <div class="tile"><div class="v num">{{ mine.settled }}{% if mine.settled %} <span class="muted" style="font-size:14px">({{ mine.won }} {{ _("won") }})</span>{% endif %}</div><div class="k">{{ _("My bets, settled") }}</div></div>
+  <div class="tile"><div class="v num {{ 'good' if mine.pnl > 0 else ('bad' if mine.pnl < 0 else '') }}">{{ '%+.2f'|format(mine.pnl) }}</div><div class="k">{{ _("My P/L, 1 unit each") }}</div></div>
+  <div class="tile"><div class="v num">{{ mine.open }}</div><div class="k">{{ _("My bets, open") }}{% if mine.void %} &middot; {{ mine.void }} {{ _("void") }}{% endif %}</div></div>
+</div>
+{% endif %}
+
+{% if totals.bets %}
+<div class="note" style="border-left-color: {{ 'var(--good)' if verdict.ready else 'var(--warn)' }}">
+  <strong>{{ _('Beating the market by more than luck explains.') if verdict.ready else _('Not yet distinguishable from luck.') }}</strong>
+  {% trans wins=verdict.wins, n=verdict.n, be='%.0f%%'|format(verdict.breakeven * 100), z='%.1f'|format(verdict.z) %}{{ wins }} of {{ n }} won against a breakeven of
+  {{ be }}, {{ z }} standard errors
+  from it. Two is the usual bar, and at these prices it takes roughly 100&ndash;200 settled
+  bets to reach honestly.{% endtrans %}
+</div>
+{% else %}
+<div class="note" style="border-left-color: var(--warn)">
+  <strong>{{ _("A new model, not yet proven.") }}</strong>
+  {% trans %}The CS2 tips started on 7 Nov 2026. The model beats a no-information baseline on
+  past maps, but it has not yet been shown to beat Betano's own prices; its tips lean one way -
+  on maps more lopsided than the bookmaker expects. Small stakes until the record says more.{% endtrans %}
+</div>
+{% endif %}
+
+{% if view == 'tips' %}
 <div class="panel">
-  <h2>{{ _("Upcoming matches") }}</h2>
-  {% if matches %}
+  <h2>{{ _("Upcoming") }} <span class="sub">&mdash; {{ _("still updating until the match starts") }}</span></h2>
+  {% if upcoming %}
   <div class="tablewrap">
     <table>
       <thead>
-        <tr><th class="l">{{ _("Date") }}</th><th class="l">{{ _("Match") }}</th><th class="l">{{ _("Tournament") }}</th>
-            <th title="{{ _('The share of rounds the model expects the first team to win') }}">{{ _("Rounds share") }}</th>
-            <th class="l">{{ _("Bookmaker") }}</th></tr>
+        <tr>{% if user %}<th class="l">{{ _("Placed") }}</th>{% endif %}<th class="l">{{ _("Bet") }}</th><th class="l">{{ _("Match") }}</th>
+            <th class="l">{{ _("Market") }}</th><th>{{ _("Odds") }}</th><th>{{ _("Edge") }}</th><th title="{{ _('Tenths of a unit: 10/10 is a full unit') }}">{{ _("Stake") }}</th>
+            <th class="l">{{ _("Start") }}</th><th>{{ _("Model") }}</th><th class="l">{{ _("Bookmaker") }}</th>
+            <th class="l" title="{{ _('Last time the tip was saved before the start') }}">{{ _("Advice as of") }}</th></tr>
       </thead>
       <tbody>
-        {% for m in matches %}
-        <tr>
-          <td class="l muted">{{ m.kickoff|dt('%d.%m. %H:%M') }}</td>
-          <td class="l">{% if m.href %}<a href="{{ m.href }}" target="_blank" rel="noopener">{{ m.match }}</a>{% else %}{{ m.match }}{% endif %}</td>
-          <td class="l muted">{{ m.league }}</td>
-          <td class="num">{% if m.m is not none %}{{ '%.0f : %.0f'|format(100 * m.m, 100 - 100 * m.m) }}{% else %}<span class="muted" title="{{ _('Too few maps behind one of the teams') }}">&ndash;</span>{% endif %}</td>
-          <td class="l">{{ book(m.bookmaker) }}</td>
+        {% for r in upcoming %}
+        <tr class="advised {{ 'placed' if r.placed }}">
+          {% if user %}{{ tick(r) }}{% endif %}
+          <td class="l"><span class="chip ok">{{ bet(r) }}</span></td>
+          <td class="l">{{ matchname(r) }}</td>
+          <td class="l">{{ market(r) }}</td>
+          <td class="num"><strong>{{ '%.2f'|format(r.o) }}</strong></td>
+          <td class="num good">{{ '%+.1f%%'|format(r.e * 100) }}</td>
+          <td class="num"><strong>{{ '%d/10'|format(r.rating) if r.rating else '-' }}</strong></td>
+          <td class="l muted">{{ r.kickoff|dt('%d %b %H:%M') }}{% if r.started %} <span class="chip">{{ _("started") }}</span>{% endif %}</td>
+          <td class="num muted">{{ '%.0f%%'|format(100 * r.p) }}</td>
+          <td class="l">{{ book(r.book) }}</td>
+          <td class="l muted" style="font-size:12px">{{ r.advised_at|dt('%d %b %H:%M') }}</td>
         </tr>
         {% endfor %}
       </tbody>
     </table>
   </div>
   {% else %}
-  <div class="empty">{{ _("No CS2 match on offer right now.") }}</div>
+  <div class="empty">{{ _("No open tip. New ones appear when the bookmakers' lines are collected and priced.") }}</div>
+  {% endif %}
+</div>
+{% endif %}
+
+{% if view == 'results' %}
+<div class="panel">
+  <h2>{{ _("Settled") }} <span class="sub">&mdash; {{ _("advice frozen at the start") }}</span></h2>
+  {% if settled %}
+  <div class="tfilter" id="settled-filter">
+    <select data-f="mkt" aria-label="{{ _('Market') }}">
+      <option value="">{{ _("All markets") }}</option>
+      <option value="rounds">{{ _("Total rounds") }}</option><option value="handicap">{{ _("Round handicap") }}</option>
+      <option value="team_rounds">{{ _("Team rounds") }}</option>
+    </select>
+    <select data-f="map" aria-label="{{ _('Map') }}">
+      <option value="">{{ _("All maps") }}</option>
+      <option value="1">{{ _("map") }} 1</option><option value="2">{{ _("map") }} 2</option><option value="3">{{ _("map") }} 3</option>
+    </select>
+    <select data-f="hit" aria-label="{{ _('Result') }}">
+      <option value="">{{ _("Won and lost") }}</option>
+      <option value="1">{{ _("won")|capitalize }}</option><option value="0">{{ _("lost")|capitalize }}</option>
+    </select>
+    {% if user %}
+    <select data-f="placed" aria-label="{{ _('Placed') }}">
+      <option value="">{{ _("All tips") }}</option>
+      <option value="1">{{ _("Only placed") }}</option><option value="0">{{ _("Not placed") }}</option>
+    </select>
+    {% endif %}
+    <select data-f="days" aria-label="{{ _('Period') }}">
+      <option value="">{{ _("All time") }}</option>
+      <option value="7">{{ _("Last 7 days") }}</option><option value="30">{{ _("Last 30 days") }}</option>
+    </select>
+    <button type="button" data-reset>{{ _("Reset") }}</button>
+    <div class="tsum" aria-live="polite"></div>
+  </div>
+  <div class="tablewrap">
+    <table class="sortable" id="settled-table">
+      <thead>
+        <tr>{% if user %}<th class="l">{{ _("Placed") }}</th>{% endif %}<th class="l">{{ _("Result") }}</th><th class="l">{{ _("Match") }}</th>
+            <th class="l">{{ _("Market") }}</th><th class="l">{{ _("Bet") }}</th><th>{{ _("Actual") }}</th><th>{{ _("Odds") }}</th><th>{{ _("P/L") }}</th><th>{{ _("Stake") }}</th>
+            <th class="l">{{ _("Start") }}</th><th>{{ _("Model") }}</th><th>{{ _("Edge") }}</th><th class="l">{{ _("Bookmaker") }}</th></tr>
+      </thead>
+      <tbody>
+        {% for r in settled %}
+        <tr class="{{ 'placed' if r.placed }}" data-mkt="{{ r.market }}" data-map="{{ r.map_num }}"
+            data-hit="{{ 1 if r.hit else 0 }}" data-placed="{{ 1 if r.placed else 0 }}"
+            data-t="{{ r.kickoff.timestamp()|int }}" data-o="{{ r.o }}" data-r="{{ r.rating or 0 }}">
+          {% if user %}{{ tick(r) }}{% endif %}
+          <td class="l">{% if r.hit %}<span class="chip ok">&#10003; {{ _("won") }}</span>{% else %}<span class="chip no">&#10007; {{ _("lost") }}</span>{% endif %}</td>
+          <td class="l">{{ matchname(r) }}</td>
+          <td class="l">{{ market(r) }}</td>
+          <td class="l">{{ bet(r) }}</td>
+          <td class="num"><strong>{{ r.actual }}</strong></td>
+          <td class="num">{{ '%.2f'|format(r.o) }}</td>
+          <td class="num {{ 'good' if r.pl > 0 else 'bad' }}">{{ '%+.2f'|format(r.pl) }}</td>
+          <td class="num muted">{{ '%d/10'|format(r.rating) if r.rating else '-' }}</td>
+          <td class="l muted" data-v="{{ r.kickoff.timestamp() }}">{{ r.kickoff|dt('%d %b %H:%M') }}</td>
+          <td class="num muted">{{ '%.0f%%'|format(100 * r.p) }}</td>
+          <td class="num muted">{{ '%+.1f%%'|format(r.e * 100) }}</td>
+          <td class="l">{{ book(r.book) }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="empty">{{ _("No tip has settled yet.") }}</div>
   {% endif %}
 </div>
 
-<div class="note">
-  <strong>{{ _("How the model works.") }}</strong>
-  {% trans %}Each team has a rating from the rounds it won in every S-, A- and B-tier CS2
-  match since 2024. From the two ratings the model gets the chance of winning a round, and from
-  the CS2 rules (first to 13, overtime in blocks of six) the chance of every final score of a
-  map - and so of any line on rounds. Results: <a href="https://liquipedia.net/counterstrike/" target="_blank" rel="noopener">Liquipedia</a>, CC-BY-SA.{% endtrans %}
+{% if void %}
+<div class="panel">
+  <h2>{{ _("Void") }} <span class="sub">&mdash; {{ _("map not played, or no result in the data; not counted") }}</span></h2>
+  <ul>
+    {% for r in void %}<li>{{ r.kickoff|dt('%d %b') }} &middot; {{ r.match }} &middot; {{ market(r) }} &middot; {{ bet(r) }} @ {{ '%.2f'|format(r.o) }} &middot; {{ book(r.book) }}{% if r.placed %} &middot; <strong>{{ _("placed") }}</strong>{% endif %}</li>{% endfor %}
+  </ul>
 </div>
+{% endif %}
+{% endif %}
+
+{% if view == 'tips' and withdrawn %}
+<div class="panel">
+  <h2>{{ _("Withdrawn before the start") }} <span class="sub">&mdash; {{ _("advised, then the odds moved; not counted; admin only") }}</span></h2>
+  <ul>
+    {% for r in withdrawn %}<li class="muted">{{ r.kickoff|dt('%d %b %H:%M') }} &middot; {{ r.match }} &middot; {{ market(r) }} &middot; {{ bet(r) }} @ {{ '%.2f'|format(r.o) }} &middot; {{ book(r.book) }}</li>{% endfor %}
+  </ul>
+</div>
+{% endif %}
+
+<div class="note">
+  <strong>{{ _("What the site advised, as it stood when each match started.") }}</strong>
+  {% trans %}Each tip is saved every time Betano's lines are collected and priced, and locked
+  the moment its match starts &mdash; the database refuses any later change. Nothing here is
+  recalculated; only the map's score is looked up, because that is a fact about the match. Tips are
+  CS2 round lines at +10% value or more, on the model's chance blended 3:1 with Betano's own
+  (margin taken out), at most one per map. A line on a map that was not played is void.{% endtrans %}
+  <br><br>
+  {% trans %}<strong>Stake</strong> is in tenths of a unit: 10/10 is a full unit, whatever size you
+  choose for one. It is quarter Kelly on the model's chance blended half and half with the
+  bookmaker's, lower for long odds, and tips on the same match share one stake.{% endtrans %}
+  <br><br>
+  {% trans %}Results: <a href="https://liquipedia.net/counterstrike/" target="_blank" rel="noopener">Liquipedia</a>, CC-BY-SA.{% endtrans %}
+</div>
+
+{% if settled and view == 'results' %}
+<script>
+// Filter the settled table in the page, with the tally of what is shown -
+// the same as on the tennis results. The choice is remembered in this browser.
+(function () {
+  const bar = document.getElementById('settled-filter');
+  const rows = Array.from(document.querySelectorAll('#settled-table tbody tr'));
+  const sels = Array.from(bar.querySelectorAll('select[data-f]'));
+  const sum = bar.querySelector('.tsum');
+  const KEY = 'esport-settled-filter';
+  const fmt = (x, d) => (x > 0 ? '+' : '') + x.toFixed(d);
+  try {
+    const saved = JSON.parse(localStorage.getItem(KEY) || '{}');
+    sels.forEach(s => { if (saved[s.dataset.f] !== undefined) s.value = saved[s.dataset.f]; });
+  } catch (e) {}
+  const tile = id => document.getElementById(id);
+  const sign = (el, v) => { if (el) { el.classList.toggle('good', v > 0); el.classList.toggle('bad', v < 0); } };
+  function apply() {
+    const want = {};
+    sels.forEach(s => { if (s.value !== '') want[s.dataset.f] = s.value; });
+    const since = want.days ? Date.now() / 1000 - want.days * 86400 : null;
+    let n = 0, won = 0, pl = 0, plr = 0, stk = 0;
+    rows.forEach(tr => {
+      const d = tr.dataset;
+      const show = Object.keys(want).every(k => k === 'days' ? +d.t >= since : d[k] === want[k]);
+      tr.hidden = !show;
+      if (!show) return;
+      const hit = d.hit === '1', o = +d.o, r = +d.r / 10;
+      n++; won += hit; pl += hit ? o - 1 : -1; plr += r * (hit ? o - 1 : -1); stk += r;
+    });
+    tile('t-bets').textContent = n;
+    tile('t-won').innerHTML = n ? won + ' <span class="muted" style="font-size:14px">(' + Math.round(100 * won / n) + '%)</span>' : '0';
+    tile('t-pl').textContent = fmt(pl, 2); sign(tile('t-pl'), pl);
+    tile('t-plr').textContent = fmt(plr, 2); sign(tile('t-plr'), plr);
+    tile('t-roi').textContent = n ? fmt(100 * pl / n, 1) + '%' : '-'; sign(tile('t-roi'), pl);
+    tile('t-roir').textContent = stk ? fmt(100 * plr / stk, 1) + '%' : '-'; sign(tile('t-roir'), plr);
+    tile('t-scope').hidden = Object.keys(want).length === 0;
+    tile('t-scope').textContent = '{{ _("The figures above describe the filtered tips; the verdict below always covers the whole record.") }}';
+    sum.innerHTML = n === 0 ? '{{ _("No tip matches.") }}'
+      : '<strong>' + n + '</strong> {{ _("tips") }}, ' + '{{ _("{n} won") }}'.replace('{n}', won) + ' &middot; '
+        + '<span class="' + (pl >= 0 ? 'good' : 'bad') + '">' + fmt(pl, 2) + '</span> {{ _("units") }}, '
+        + 'ROI ' + fmt(100 * pl / n, 1) + '%';
+    try { localStorage.setItem(KEY, JSON.stringify(Object.fromEntries(sels.map(s => [s.dataset.f, s.value])))); } catch (e) {}
+  }
+  sels.forEach(s => s.addEventListener('change', apply));
+  bar.querySelector('[data-reset]').addEventListener('click', () => { sels.forEach(s => s.value = ''); apply(); });
+  apply();
+})();
+</script>
+{% endif %}
+
+{% if user %}
+<script>
+// Tick a tip as placed: saved at once, so it is the same on every device.
+document.querySelectorAll('td.tick input[data-key]').forEach(function (box) {
+  box.addEventListener('change', function () {
+    const want = box.checked, row = box.closest('tr');
+    box.disabled = true;
+    fetch('{{ url_for("esport_placed") }}', {
+      method: 'POST', credentials: 'same-origin',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({key: box.dataset.key, placed: want})
+    }).then(function (r) {
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      row.classList.toggle('placed', want);
+    }).catch(function (e) {
+      box.checked = !want;
+      alert('{{ _("Could not save") }}: ' + e.message);
+    }).finally(function () { box.disabled = false; });
+  });
+});
+</script>
+{% endif %}
 
 {% endblock %}

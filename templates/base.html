@@ -33,7 +33,8 @@
 {% if members %}
 <nav class="subnav" aria-label="{{ {'football': _('Football'), 'tennis': _('Tennis'), 'esport': _('E-sport')}[section] }}">
   {% if section == 'esport' %}
-    <a href="{{ url_for('esport') }}"       class="{{ 'on' if request.endpoint == 'esport' }}">{{ _("Tips") }}</a>
+    <a href="{{ url_for('esport') }}"         class="{{ 'on' if request.endpoint == 'esport' }}">{{ _("Tips") }}</a>
+    <a href="{{ url_for('esport_results') }}" class="{{ 'on' if request.endpoint == 'esport_results' }}">{{ _("Results") }}</a>
     <a href="{{ url_for('esport_lines') }}" class="{{ 'on' if request.endpoint == 'esport_lines' }}">{{ _("All lines") }}</a>
   {% elif section == 'tennis' %}
     <a href="{{ url_for('tennis') }}"         class="{{ 'on' if request.endpoint == 'tennis' }}">{{ _("Tips") }}</a>

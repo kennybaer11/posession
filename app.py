@@ -1835,9 +1835,101 @@ ESPORT_MARKETS = ("rounds", "handicap", "team_rounds", "overtime")
 
 @app.route("/esport")
 def esport():
-    """The e-sport tips. None are given yet: the CS2 model is still being
-    measured against Betano's lines, and the page says so rather than hiding."""
-    return render_template("esport.html", books=TENNIS_BOOKS, matches=_esport_matches())
+    """The CS2 tips still open, under the record's totals - as on /tennis."""
+    return _esport_page("tips")
+
+
+@app.route("/esport/results")
+def esport_results():
+    """The settled CS2 tips, with a filter and the tally of what it shows."""
+    return _esport_page("results")
+
+
+def _esport_page(view):
+    """The CS2 advice record, cs2.advice, the twin of the tennis one: written by
+    the cs2 project's advice.py until a match starts and locked by the database
+    from then on. Nothing is recomputed here; only the result is looked up."""
+    import model as m
+    if not one("SELECT to_regclass('cs2.advice') AS t")["t"]:
+        rows = []
+    else:
+        rows = query("""
+            SELECT a.*, a.line::float AS ln, a.odds::float AS o, a.p_model::float AS p,
+                   a.edge::float AS e, ev.url AS event_url
+              FROM cs2.advice a
+              JOIN cs2.bk_event ev USING (bookmaker, event_id)
+             ORDER BY a.kickoff DESC, a.team1, a.slot""")
+    now = datetime.now(timezone.utc)
+    upcoming, settled, void, withdrawn = [], [], [], []
+    for r in rows:
+        r = dict(r)
+        r["book"] = r["bookmaker"]
+        r["href"] = (TENNIS_BOOK_SITES.get(r["bookmaker"], "") + r["event_url"]) if r["event_url"] else None
+        r["key"] = "|".join([r["bookmaker"], r["event_id"], r["slot"]])
+        r["match"] = f"{r['team1']} v {r['team2']}"
+        r["who"] = {1: r["team1"], 2: r["team2"]}.get(r["team"])
+        if not r["backed"]:
+            withdrawn.append(r)
+        elif r["result"] == "void":
+            void.append(r)
+        elif r["result"] in ("won", "lost"):
+            r["hit"] = r["result"] == "won"
+            r["pl"] = r["o"] - 1 if r["hit"] else -1.0
+            settled.append(r)
+        else:
+            r["started"] = r["kickoff"] <= now
+            upcoming.append(r)
+    upcoming.sort(key=lambda r: (r["kickoff"], r["team1"], r["slot"]))
+    returned = sum(r["o"] for r in settled if r["hit"])
+    staked_r = sum((r["rating"] or 0) / 10 for r in settled)
+    pnl_r = sum((r["rating"] or 0) / 10 * r["pl"] for r in settled)
+    totals = {"bets": len(settled), "won": sum(1 for r in settled if r["hit"]),
+              "pnl": returned - len(settled),
+              "roi": (returned - len(settled)) / len(settled) if settled else None,
+              "rated": sum(1 for r in settled if r["rating"]),
+              "pnl_r": pnl_r, "roi_r": pnl_r / staked_r if staked_r else None}
+    call = m.verdict([(bool(r["hit"]), r["o"]) for r in settled])
+    mine = None
+    if session.get("admin"):
+        done = [r for r in settled if r["placed"]]
+        mine = {"settled": len(done), "won": sum(1 for r in done if r["hit"]),
+                "pnl": sum(r["pl"] for r in done),
+                "open": sum(1 for r in upcoming if r["placed"]),
+                "void": sum(1 for r in void if r["placed"])}
+    else:
+        withdrawn, void = [], []
+    return render_template("esport.html", view=view, upcoming=upcoming, settled=settled,
+                           void=void, withdrawn=withdrawn, totals=totals, verdict=call,
+                           mine=mine, user=session.get("admin"), books=TENNIS_BOOKS)
+
+
+@app.route("/esport/placed", methods=["POST"])
+@members_only
+def esport_placed():
+    """Tick or untick a CS2 tip as a bet the admin placed. The twin of
+    tennis_placed: JSON only, refused from another site's Origin. advice.py
+    leaves a placed tip alone from then on, so it keeps the price taken."""
+    origin = request.headers.get("Origin")
+    if origin and origin.split("://", 1)[-1] != request.host:
+        abort(403)
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict) or "key" not in data:
+        abort(400)
+    try:
+        bookmaker, event_id, slot = str(data["key"]).split("|")
+    except ValueError:
+        abort(400)
+    placed = bool(data.get("placed"))
+    conn = db()
+    with conn.cursor() as cur:
+        cur.execute("""UPDATE cs2.advice SET placed = %s, placed_at = CASE WHEN %s THEN now() END
+                        WHERE bookmaker = %s AND event_id = %s AND slot = %s""",
+                    (placed, placed, bookmaker, event_id, slot))
+        n = cur.rowcount
+    conn.commit()
+    if n != 1:
+        abort(404)
+    return {"placed": placed}
 
 
 @app.route("/esport/lines")
