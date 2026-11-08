@@ -813,6 +813,9 @@ def _line_rows(want=None):
     # Per league: the measured width of that league's own prediction errors,
     # or the default where a league has too little history to measure.
     sigmas = {c: float(r["sigma"]) for c, r in calib.stored(query).items()}
+    # Measured against the bookmaker's own lines; None until there are enough
+    # settled ones, and then the raw prediction is used as before.
+    line_cal = calib.stored_line_calibration(query)
     comps = ([c for c, _ in LEAGUES] if want == ALL else [want])
     # One line per match. When the market moves, a second line for the same
     # match gets recorded (Dortmund at 57.0, then 58.0 a day later), and grading
@@ -906,7 +909,13 @@ def _line_rows(want=None):
             else:
                 sigma = sigmas.get(r["competition"], DEFAULT_SIGMA)
             pred = home_pred if r["team_id"] == r["home_team_id"]                 else 100 - home_pred
-            p_over = float(1 - norm.cdf(line, pred, sigma))
+            # The probability comes from the model's view SHRUNK toward the
+            # line, because only about three quarters of its disagreement with
+            # a line comes true (calibration.line_calibration). The raw pred is
+            # what the pages show and what the Model page scores; this is what
+            # any edge or stake is built on.
+            p_mean, p_sigma = m.against_line(pred, line, line_cal)
+            p_over = float(1 - norm.cdf(line, p_mean, p_sigma or sigma))
             side, p_side, edge, rating, why = m.choose_side(
                 p_over, over_odds, under_odds, graded_here)
 

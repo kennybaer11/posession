@@ -163,6 +163,23 @@ def residual_sigma(backtest):
     return float((backtest["actual"] - backtest["predicted"]).std(ddof=1))
 
 
+def against_line(mean, line, cal):
+    """The model's view of a line, honest about how much of its disagreement
+    with that line usually comes true.
+
+    cal is (b, intercept, sigma) measured on settled lines; b near 0.74 means
+    three quarters of a disagreement survives contact with the match. Without
+    it the probabilities were badly overconfident - 75% claimed where 62%
+    happened - which inflated every edge and every stake built on them.
+
+    Returns (mean, sigma) to feed prob_over. No calibration: unchanged.
+    """
+    if not cal:
+        return mean, None
+    b, intercept, sigma = cal
+    return line + intercept + b * (mean - line), sigma
+
+
 def prob_over(mean, sigma, line):
     """P(possession > line), assuming errors are roughly normal.
 

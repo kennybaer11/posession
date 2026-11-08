@@ -60,7 +60,74 @@ def backtest():
         return None
     bt = model.walk_forward(train, feats, min_train=MIN_FIT_ROWS)
     bt["competition"] = train["competition"].iloc[MIN_FIT_ROWS:].to_numpy()
+    bt["match_id"] = train["match_id"].iloc[MIN_FIT_ROWS:].to_numpy()
+    bt["home_team_id"] = train["home_team_id"].iloc[MIN_FIT_ROWS:].to_numpy()
     return bt
+
+
+# Lines needed before the shrinkage is trusted at all; under this the site
+# keeps using the raw prediction and its per-league spread.
+MIN_LINE_CALIBRATION = 25
+
+
+def line_calibration(db, bt=None):
+    """How much of the model's disagreement with a bookmaker's line comes true.
+
+    Regresses what actually happened against what the model said, both measured
+    from the line: actual - line = intercept + b * (predicted - line). b near 1
+    would mean the model is right about the line as often as it claims; it came
+    out at 0.74 over the first 174 settled lines, and feeding the full
+    disagreement into a probability made the advice badly overconfident.
+
+    Walk-forward predictions only - the same ones the Model page is scored on -
+    so this measures the model the site runs, not a fit to its own results.
+    """
+    import numpy as np
+
+    bt = backtest() if bt is None else bt
+    if bt is None:
+        return None
+    preds = {str(r.match_id): (float(r.predicted), str(r.home_team_id))
+             for r in bt.itertuples()}
+    with db.conn.cursor() as cur:
+        cur.execute("""
+            SELECT DISTINCT ON (l.match_id) l.match_id, l.team_id, l.line::float AS line,
+                   tm.possession::float AS actual
+              FROM pl_possession_line l
+              JOIN pl_matches m ON m.match_id = l.match_id
+              JOIN pl_team_match tm ON tm.match_id = l.match_id AND tm.team_id = l.team_id
+             WHERE tm.possession IS NOT NULL
+             ORDER BY l.match_id, l.captured_at""")
+        rows = cur.fetchall()
+    x, y = [], []
+    for r in rows:
+        hit = preds.get(str(r["match_id"]))
+        if not hit:
+            continue
+        pred_home, home_team_id = hit
+        # a line on the away side is about 100 - home possession
+        flip = r["team_id"] != home_team_id
+        pred = 100 - pred_home if flip else pred_home
+        x.append(pred - r["line"])
+        y.append(r["actual"] - r["line"])
+    if len(x) < MIN_LINE_CALIBRATION:
+        return None
+    x, y = np.array(x), np.array(y)
+    X = np.column_stack([np.ones(len(x)), x])
+    beta, *_ = np.linalg.lstsq(X, y, rcond=None)
+    resid = y - X @ beta
+    return {"scope": "all", "b": round(float(np.clip(beta[1], 0.0, 1.0)), 4),
+            "intercept": round(float(beta[0]), 3),
+            "sigma": round(float(resid.std(ddof=2)), 3), "n": len(x)}
+
+
+def stored_line_calibration(db_query):
+    """(b, intercept, sigma) for the site, or None before it is measured."""
+    rows = db_query("SELECT * FROM pl_line_calibration WHERE scope = 'all'")
+    if not rows or rows[0]["n"] < MIN_LINE_CALIBRATION:
+        return None
+    r = rows[0]
+    return float(r["b"]), float(r["intercept"]), float(r["sigma"])
 
 
 def measure(competition, bt=None):
@@ -124,6 +191,17 @@ def main():
         leagues = [r["competition"] for r in cur.fetchall()]
 
     bt = backtest()
+    cal = line_calibration(db, bt)
+    if cal:
+        log.info("lines   keep %.0f%% of the model's disagreement with the line, "
+                 "offset %+.2f, spread %.2f, over %d settled line(s)",
+                 100 * cal["b"], cal["intercept"], cal["sigma"], cal["n"])
+        if not args.dry_run:
+            db.ensure_connection()
+            db.upsert_line_calibration(cal)
+    else:
+        log.info("lines   too few settled lines to measure the shrinkage yet")
+
     for comp in leagues:
         row = measure(comp, bt)
         if row is None:

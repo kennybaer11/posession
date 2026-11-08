@@ -257,6 +257,23 @@ CREATE TABLE IF NOT EXISTS pl_odds_attempt (
 # Each league's measured prediction spread - see calibration.py. One row per
 # league, replaced on every measurement; the history of past values is not
 # kept because nothing reads it, and measured_at says how fresh the one is.
+# How much of the model's disagreement with a bookmaker's line comes true, and
+# how wide the errors are around that. Measured on settled lines (calibration.py),
+# because turning the FULL disagreement into a probability made the model wildly
+# overconfident: on 174 lines it said 75% where the real rate was 62%, and
+# claimed a +10.6% edge while realising +0.4%.
+LINE_CALIBRATION_DDL = """
+CREATE TABLE IF NOT EXISTS pl_line_calibration (
+  scope       TEXT PRIMARY KEY,          -- 'all' for now; a league later
+  b           NUMERIC(6,4) NOT NULL,     -- share of the disagreement kept
+  intercept   NUMERIC(6,3) NOT NULL,     -- the line's own bias, in points
+  sigma       NUMERIC(6,3) NOT NULL,     -- spread of what is left
+  n           INTEGER NOT NULL,
+  measured_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+)
+"""
+
+
 CALIBRATION_DDL = """
 CREATE TABLE IF NOT EXISTS pl_model_calibration (
   competition  TEXT PRIMARY KEY,
@@ -474,6 +491,7 @@ class Database:
             cur.execute(SCRAPE_RUN_DDL)
             cur.execute(ODDS_ATTEMPT_DDL)
             cur.execute(CALIBRATION_DDL)
+            cur.execute(LINE_CALIBRATION_DDL)
             cur.execute(MANAGER_DDL)
             cur.execute(ADVICE_DDL)
             cur.execute(MATCH_ODDS_DDL)
@@ -790,6 +808,18 @@ class Database:
                 inserted += cur.rowcount
         self.conn.commit()
         return inserted
+
+    def upsert_line_calibration(self, row):
+        """Store the shrinkage measured against the bookmaker's lines."""
+        with self.conn.cursor() as cur:
+            cur.execute("""
+                INSERT INTO pl_line_calibration (scope, b, intercept, sigma, n, measured_at)
+                VALUES (%(scope)s, %(b)s, %(intercept)s, %(sigma)s, %(n)s, NOW())
+                ON CONFLICT (scope) DO UPDATE SET
+                  b = EXCLUDED.b, intercept = EXCLUDED.intercept,
+                  sigma = EXCLUDED.sigma, n = EXCLUDED.n, measured_at = NOW()""", row)
+        self.conn.commit()
+        return 1
 
     def upsert_calibration(self, row):
         cols = ["competition", "sigma", "mae", "naive_mae", "n",
