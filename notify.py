@@ -108,9 +108,11 @@ def describe(r):
     return "\n".join(out)
 
 
-# A stake change this size is worth a message on its own; anything smaller is
-# the model breathing, and saying so every few hours would be noise.
-RATING_STEP = 2
+# A stake change this size is worth a message on its own. 1 = every change:
+# the stakes are capped low (mostly 1-4/10) while the record is short, so a
+# one-point move is often the difference between a bet and half of one -
+# Man City v Fulham fell from 2/10 to 1/10 without a word at the old step of 2.
+RATING_STEP = 1
 
 
 def changed_advice(db):
