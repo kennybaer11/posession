@@ -9,12 +9,13 @@
 <body>
 <header class="topbar">
   <a class="brand" href="{{ url_for('admin_advice') }}">{{ site_name.rsplit(".", 1)[0] }}<span>.{{ site_name.rsplit(".", 1)[1] }}</span></a>
-  {# Two sports, each with its own categories. Visitors see each sport's tips
+  {# Four sports, each with its own categories. Visitors see each sport's tips
      only; signed in, the second row lists the current sport's pages. #}
   <nav id="mainnav">
     <a href="{{ url_for('admin_advice') }}" class="{{ 'on' if section == 'football' }}">{{ _("Football") }}</a>
     <a href="{{ url_for('tennis') }}" class="{{ 'on' if section == 'tennis' }}">{{ _("Tennis") }}</a>
     <a href="{{ url_for('esport') }}" class="{{ 'on' if section == 'esport' }}">{{ _("E-sport") }}</a>
+    <a href="{{ url_for('basketball') }}" class="{{ 'on' if section == 'basketball' }}">{{ _("Basketball") }}</a>
   </nav>
   {% if not config.STATIC_EXPORT %}
   {# The static GitHub Pages copy has no server to set the cookie, so it
@@ -31,8 +32,12 @@
   {% endif %}
 </header>
 {% if members %}
-<nav class="subnav" aria-label="{{ {'football': _('Football'), 'tennis': _('Tennis'), 'esport': _('E-sport')}[section] }}">
-  {% if section == 'esport' %}
+<nav class="subnav" aria-label="{{ {'football': _('Football'), 'tennis': _('Tennis'), 'esport': _('E-sport'), 'basketball': _('Basketball')}[section] }}">
+  {% if section == 'basketball' %}
+    <a href="{{ url_for('basketball') }}"         class="{{ 'on' if request.endpoint == 'basketball' }}">{{ _("Tips") }}</a>
+    <a href="{{ url_for('basketball_results') }}" class="{{ 'on' if request.endpoint == 'basketball_results' }}">{{ _("Results") }}</a>
+    <a href="{{ url_for('basketball_lines') }}"   class="{{ 'on' if request.endpoint == 'basketball_lines' }}">{{ _("All lines") }}</a>
+  {% elif section == 'esport' %}
     <a href="{{ url_for('esport') }}"         class="{{ 'on' if request.endpoint == 'esport' }}">{{ _("Tips") }}</a>
     <a href="{{ url_for('esport_results') }}" class="{{ 'on' if request.endpoint == 'esport_results' }}">{{ _("Results") }}</a>
     <a href="{{ url_for('esport_lines') }}" class="{{ 'on' if request.endpoint == 'esport_lines' }}">{{ _("All lines") }}</a>

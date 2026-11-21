@@ -322,7 +322,7 @@ def _members():
     local = not DEPLOYED and not app.config.get("STATIC_EXPORT")
     return {"members": local or bool(session.get("admin")),
             # Which sport's categories the second menu row shows.
-            "section": next((s for s in ("tennis", "esport")
+            "section": next((s for s in ("tennis", "esport", "basketball")
                              if (request.endpoint or "").startswith(s)), "football")}
 
 
@@ -2044,6 +2044,225 @@ def _esport_matches(with_lines=False):
                                "who": {1: e["team1"], 2: e["team2"]}.get(r["team"]),
                                "price": r["o"], "p": r["p"], "edge": r["e"]})
         e["lines"].sort(key=lambda l: (l["map"], ESPORT_MARKETS.index(l["market"]),
+                                       l["who"] or "", l["side"], l["line"]))
+        out.append(e)
+    return out
+
+
+# -- basketball: over/under points (the bpoints project, github.com/kennybaer11/bpoints)
+
+BASKETBALL_MARKETS = ("total", "team_total")
+BASKETBALL_LEAGUES = {"nba": "NBA", "wnba": "WNBA", "ncaam": "NCAA", "ncaaw": "NCAA (W)",
+                      "euroleague": "EuroLeague", "eurocup": "EuroCup"}
+
+
+@app.route("/basketball")
+def basketball():
+    """The basketball tips still open, under the record's totals - as on /esport."""
+    return _basketball_page("tips")
+
+
+@app.route("/basketball/results")
+def basketball_results():
+    """The settled basketball tips, with a filter and the tally of what it shows."""
+    return _basketball_page("results")
+
+
+def _basketball_page(view):
+    """The basketball advice record, bpoints.advice, the twin of the CS2 one:
+    written by the bpoints project's advice.py until a game starts and locked
+    by the database from then on. Nothing is recomputed here."""
+    import model as m
+    if not one("SELECT to_regclass('bpoints.advice') AS t")["t"]:
+        rows = []
+    else:
+        rows = query("""
+            SELECT a.*, a.line::float AS ln, a.odds::float AS o, a.p_model::float AS p,
+                   a.edge::float AS e, ev.url AS event_url, ev.our_league
+              FROM bpoints.advice a
+              JOIN bpoints.bk_event ev USING (bookmaker, event_id)
+             ORDER BY a.kickoff DESC, a.team1, a.slot""")
+    now = datetime.now(timezone.utc)
+    upcoming, settled, void, withdrawn = [], [], [], []
+    for r in rows:
+        r = dict(r)
+        r["book"] = r["bookmaker"]
+        r["href"] = (TENNIS_BOOK_SITES.get(r["bookmaker"], "") + r["event_url"]) if r["event_url"] else None
+        r["key"] = "|".join([r["bookmaker"], r["event_id"], r["slot"]])
+        r["match"] = f"{r['team1']} v {r['team2']}"
+        r["who"] = {1: r["team1"], 2: r["team2"]}.get(r["team"]) if r["market"] == "team_total" else None
+        r["lg"] = BASKETBALL_LEAGUES.get(r["our_league"], r["league"])
+        if not r["backed"]:
+            withdrawn.append(r)
+        elif r["result"] == "void":
+            void.append(r)
+        elif r["result"] in ("won", "lost"):
+            r["hit"] = r["result"] == "won"
+            r["pl"] = r["o"] - 1 if r["hit"] else -1.0
+            settled.append(r)
+        else:
+            r["started"] = r["kickoff"] <= now
+            upcoming.append(r)
+    upcoming.sort(key=lambda r: (r["kickoff"], r["team1"], r["slot"]))
+    returned = sum(r["o"] for r in settled if r["hit"])
+    staked_r = sum((r["rating"] or 0) / 10 for r in settled)
+    pnl_r = sum((r["rating"] or 0) / 10 * r["pl"] for r in settled)
+    totals = {"bets": len(settled), "won": sum(1 for r in settled if r["hit"]),
+              "pnl": returned - len(settled),
+              "roi": (returned - len(settled)) / len(settled) if settled else None,
+              "rated": sum(1 for r in settled if r["rating"]),
+              "pnl_r": pnl_r, "roi_r": pnl_r / staked_r if staked_r else None}
+    call = m.verdict([(bool(r["hit"]), r["o"]) for r in settled])
+    mine = None
+    if session.get("admin"):
+        done = [r for r in settled if r["placed"]]
+        mine = {"settled": len(done), "won": sum(1 for r in done if r["hit"]),
+                "pnl": sum(r["pl"] for r in done),
+                "open": sum(1 for r in upcoming if r["placed"]),
+                "void": sum(1 for r in void if r["placed"])}
+    else:
+        withdrawn, void = [], []
+    leagues = sorted({r["our_league"] for r in settled if r["our_league"]},
+                     key=lambda k: list(BASKETBALL_LEAGUES).index(k) if k in BASKETBALL_LEAGUES else 99)
+    return render_template("basketball.html", view=view, upcoming=upcoming, settled=settled,
+                           void=void, withdrawn=withdrawn, totals=totals, verdict=call,
+                           mine=mine, user=session.get("admin"), books=TENNIS_BOOKS,
+                           leagues=[(k, BASKETBALL_LEAGUES[k]) for k in leagues])
+
+
+@app.route("/basketball/placed", methods=["POST"])
+@members_only
+def basketball_placed():
+    """Tick or untick a basketball tip as a bet the admin placed. The twin of
+    esport_placed: JSON only, refused from another site's Origin."""
+    origin = request.headers.get("Origin")
+    if origin and origin.split("://", 1)[-1] != request.host:
+        abort(403)
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict) or "key" not in data:
+        abort(400)
+    try:
+        bookmaker, event_id, slot = str(data["key"]).split("|")
+    except ValueError:
+        abort(400)
+    placed = bool(data.get("placed"))
+    conn = db()
+    with conn.cursor() as cur:
+        cur.execute("""UPDATE bpoints.advice SET placed = %s, placed_at = CASE WHEN %s THEN now() END
+                        WHERE bookmaker = %s AND event_id = %s AND slot = %s""",
+                    (placed, placed, bookmaker, event_id, slot))
+        n = cur.rowcount
+    conn.commit()
+    if n != 1:
+        abort(404)
+    return {"placed": placed}
+
+
+@app.route("/basketball/lines")
+@members_only
+def basketball_lines():
+    """Every basketball points line on offer with the model's price on it (admin).
+
+    The rows are bpoints.priced, written by the bpoints project's price.py.
+    Nothing is recomputed here. The top table is the largest edges; below,
+    the scoreboard on settled lines, then every game in full."""
+    games = _basketball_games()
+    best = sorted((l for g in games for l in g["lines"] if l["edge"] > 0),
+                  key=lambda l: -l["edge"])[:30]
+    settled, board = _basketball_settled()
+    return render_template("basketball_lines.html", books=TENNIS_BOOKS, games=games, best=best,
+                           settled=settled, board=board, edge=BASKETBALL_EDGE)
+
+
+BASKETBALL_EDGE = 0.06       # the edge a would-be tip needs on the scoreboard
+
+
+def _basketball_settled():
+    """Settled basketball lines and the scoreboard: per league, centre and
+    period, the model's log-loss against Betano's own probability with its
+    margin taken out, on every two-sided line; and a flat unit on each line
+    the model rated +6% or better - one per game, market, period, team and
+    side, the best-priced."""
+    import math
+    import model as m
+    if not one("SELECT to_regclass('bpoints.priced') AS t")["t"]:
+        return [], None
+    rows = query("""
+        SELECT p.*, p.line::float AS ln, p.price::float AS o, p.other_price::float AS o2,
+               p.p_model::float AS p, p.edge::float AS e, e.kickoff, e.team1, e.team2, e.our_league
+          FROM bpoints.priced p JOIN bpoints.bk_event e USING (bookmaker, event_id)
+         WHERE p.result IN ('won', 'lost')
+         ORDER BY e.kickoff DESC""")
+    board, tips = {}, {}
+    for r in rows:
+        won = r["result"] == "won"
+        bk = (BASKETBALL_LEAGUES.get(r["our_league"], r["our_league"]),
+              "1st half" if r["period"] == "h1" else "full game", r["centre_from"] or "-")
+        b = board.setdefault(bk, {"n": 0, "model": 0.0, "book": 0.0})
+        if r["o2"] and r["side"] == "over":
+            q_book = (1 / r["o"]) / (1 / r["o"] + 1 / r["o2"])
+            b["n"] += 1
+            b["model"] -= math.log(max(r["p"] if won else 1 - r["p"], 1e-9))
+            b["book"] -= math.log(max(q_book if won else 1 - q_book, 1e-9))
+        k = (r["bookmaker"], r["event_id"], r["market"], r["period"], r["team"], r["side"])
+        if r["e"] >= BASKETBALL_EDGE and (k not in tips or r["e"] > tips[k]["e"]):
+            tips[k] = dict(r, hit=won)
+    for b in board.values():
+        b["model"] = b["model"] / b["n"] if b["n"] else None
+        b["book"] = b["book"] / b["n"] if b["n"] else None
+    bets = sorted(tips.values(), key=lambda r: r["kickoff"], reverse=True)
+    pnl = sum(r["o"] - 1 if r["hit"] else -1 for r in bets)
+    totals = {"bets": len(bets), "won": sum(r["hit"] for r in bets), "pnl": pnl,
+              "roi": pnl / len(bets) if bets else None,
+              "verdict": m.verdict([(r["hit"], r["o"]) for r in bets]) if bets else None}
+    for r in bets:
+        r["who"] = {1: r["team1"], 2: r["team2"]}.get(r["team"]) if r["market"] == "team_total" else None
+        r["match"] = f"{r['team1']} v {r['team2']}"
+    return bets, {"rows": sorted(board.items()), "totals": totals}
+
+
+def _basketball_games():
+    """Betano basketball games still to start, with the model's price on each line."""
+    if not one("SELECT to_regclass('bpoints.priced') AS t")["t"]:
+        return []
+    events = query("""
+        SELECT e.* FROM bpoints.bk_event e
+         WHERE e.kickoff > now() AND e.our_league IS NOT NULL
+         ORDER BY e.kickoff, e.team1""")
+    lines = {}
+    for r in query("""
+            SELECT p.*, p.line::float AS ln, p.price::float AS o, p.p_model::float AS p,
+                   p.edge::float AS e, p.mu::float AS mu_f, p.mu_book::float AS mu_b,
+                   p.mu_ref::float AS mu_r, p.sd::float AS sd_f
+              FROM bpoints.priced p JOIN bpoints.bk_event e USING (bookmaker, event_id)
+             WHERE e.kickoff > now()
+             ORDER BY p.period, p.market, p.team, p.line"""):
+        lines.setdefault((r["bookmaker"], r["event_id"]), []).append(r)
+    out = []
+    for e in events:
+        e = dict(e)
+        e["href"] = (TENNIS_BOOK_SITES.get(e["bookmaker"], "") + e["url"]) if e.get("url") else None
+        e["match"] = f"{e['team1']} v {e['team2']}"
+        e["lg"] = BASKETBALL_LEAGUES.get(e["our_league"], e["league"])
+        e["lines"], e["centres"] = [], []
+        best, centres = {}, {}
+        for r in lines.get((e["bookmaker"], e["event_id"]), []):
+            k = (r["period"], r["market"], r["team"], r["side"])
+            if k not in best or r["e"] > best[k]["e"]:
+                best[k] = r
+            centres[(r["period"], r["market"], r["team"])] = r
+        for (period, market, team), r in sorted(centres.items(), key=lambda x: (x[0][0] != "ft", x[0][1], x[0][2])):
+            e["centres"].append({"period": period, "market": market,
+                                 "who": {1: e["team1"], 2: e["team2"]}.get(team) if market == "team_total" else None,
+                                 "mu": r["mu_f"], "book": r["mu_b"], "ref": r["mu_r"], "sd": r["sd_f"],
+                                 "src": r["centre_from"]})
+        for r in best.values():
+            e["lines"].append({"kickoff": e["kickoff"], "match": e["match"], "href": e["href"],
+                               "book": e["bookmaker"], "lg": e["lg"], "period": r["period"],
+                               "market": r["market"], "side": r["side"], "line": r["ln"],
+                               "who": {1: e["team1"], 2: e["team2"]}.get(r["team"]) if r["market"] == "team_total" else None,
+                               "price": r["o"], "p": r["p"], "edge": r["e"], "src": r["centre_from"]})
+        e["lines"].sort(key=lambda l: (l["period"] != "ft", BASKETBALL_MARKETS.index(l["market"]),
                                        l["who"] or "", l["side"], l["line"]))
         out.append(e)
     return out
