@@ -7,5 +7,7 @@
 40 */3 * * * flock -n /home/app/locks/aces.lock /home/app/scraper/deploy/run_aces.sh >> /home/app/logs/aces.log 2>&1
 # cs2 project: Liquipedia results, settlement, Betano round lines, prices - every three hours, see run_cs2.sh.
 10 1-23/3 * * * flock -n /home/app/locks/cs2.lock /home/app/scraper/deploy/run_cs2.sh >> /home/app/logs/cs2.log 2>&1
-# bpoints project: basketball results, DraftKings lines, prices, tips - every two hours, see run_bpoints.sh.
+# bpoints project: basketball results, DraftKings lines, prices, tips - every two hours, see run_bpoints.sh;
+# and at 15:00 and 21:00 Chance's lines too (webscraper.io credits), waiting for a regular run to finish.
 50 */2 * * * flock -n /home/app/locks/bpoints.lock /home/app/scraper/deploy/run_bpoints.sh >> /home/app/logs/bpoints.log 2>&1
+0 15,21 * * * flock -w 3000 /home/app/locks/bpoints.lock /home/app/scraper/deploy/run_bpoints.sh chance >> /home/app/logs/bpoints.log 2>&1

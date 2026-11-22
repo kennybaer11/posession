@@ -1,15 +1,19 @@
 #!/bin/bash
 # The bpoints project (github.com/kennybaer11/bpoints): basketball results
-# and DraftKings' lines from ESPN and the EuroLeague's API, the model's price
-# on each Betano points line, the tips, and settlement. betken.cz's
-# Basketball pages read what it writes.
+# and DraftKings' lines from ESPN, the EuroLeague's API, ACB and Lega Basket,
+# the model's price on each stored points line, the tips, and settlement.
+# betken.cz's Basketball pages read what it writes.
+#
+#   run_bpoints.sh           results, settle, price, advice, notify
+#   run_bpoints.sh chance    the same, after Chance's lines through webscraper.io
 #
 # Self-contained like run_cs2.sh: the first run clones the repo and builds its
 # venv, later runs pull and reinstall only when requirements.txt changes. The
-# database is posession's own, so DATABASE_URL is read from this app's .env.
+# database is posession's own, so DATABASE_URL and the tokens are read from
+# this app's .env.
 set -u
 BP=/home/app/bpoints
-echo "== $(date '+%F %T') bpoints"
+echo "== $(date '+%F %T') bpoints ${1:-}"
 
 if [ ! -d "$BP/.git" ]; then
     git clone -q https://github.com/kennybaer11/bpoints.git "$BP" || exit 1
@@ -33,16 +37,30 @@ env_value() {
 DATABASE_URL="$(env_value DATABASE_URL)"
 [ -n "$DATABASE_URL" ] || { echo "!! no DATABASE_URL in /home/app/scraper/.env"; exit 1; }
 export DATABASE_URL
+export PYTHONUTF8=1
 
 # Results of the last five days and the games of the next seven, with
 # DraftKings' current line for each - the centre the lines are priced on.
-timeout 30m .venv/bin/python collect.py || echo "!! collect.py exited $?"
+# (The first run after ACB or Lega Basket is added reads their whole current
+# season, a few minutes at their pace; later runs only what is not cached.)
+timeout 45m .venv/bin/python collect.py || echo "!! collect.py exited $?"
 timeout 5m .venv/bin/python settle.py || echo "!! settle.py exited $?"
 
 # Betano's lines are NOT fetched here: Betano refuses this server (HTTP 403
 # since at least 6 Nov 2026), so they come from the owner's PC (bpoints'
-# betano_local.ps1), like the tennis and CS2 lines. This re-prices what is
-# stored against the fresh DraftKings lines and rewrites the tips.
+# betano_local.ps1), like the tennis and CS2 lines. Chance refuses scripts too,
+# but not webscraper.io's browser: twice a day (crontab: run_bpoints.sh chance)
+# its lines for the tipped leagues' games in the next 12 hours, a credit a page,
+# from the same account as the football and tennis odds (chance_pipeline.py
+# keeps 500 credits back for them).
+if [ "${1:-}" = "chance" ]; then
+    WEBSCRAPER_TOKEN="$(env_value WEBSCRAPER_TOKEN)"
+    export WEBSCRAPER_TOKEN
+    timeout 60m .venv/bin/python chance_pipeline.py || echo "!! chance_pipeline.py exited $?"
+fi
+
+# This re-prices what is stored against the fresh DraftKings lines (and any
+# new Chance lines) and rewrites the tips.
 timeout 10m .venv/bin/python price.py --store --top 0 || echo "!! price.py exited $?"
 timeout 5m .venv/bin/python advice.py || echo "!! advice.py exited $?"
 
