@@ -310,7 +310,17 @@ def verdict(results):
             "reason": reason}
 
 
-def choose_side(p_over, over_odds, under_odds, n_settled=0):
+# The share of full Kelly each league is staked at. A quarter is the cautious
+# default. Raised to a third on 22 Nov 2026 (user's call) for the two leagues
+# where the model has shown it knows more than the line: on 216 settled lines
+# the information slope b was LaLiga 1.05 (95% 0.48-1.62) and Bundesliga 0.62
+# (0.08-1.15). The Premier League stays at a quarter - its b was 0.55 with a
+# range still including 0 (-0.11-1.21). Re-check at ~300 lines.
+KELLY_FRACTION = {"PL": 0.25, "LaLiga": 1 / 3, "BL1": 1 / 3}
+DEFAULT_KELLY_FRACTION = 0.25
+
+
+def choose_side(p_over, over_odds, under_odds, n_settled=0, competition=None):
     """With both prices quoted, work out which side (if either) to back.
 
     Each side is judged against its own price, and the better one wins. Usually
@@ -339,7 +349,8 @@ def choose_side(p_over, over_odds, under_odds, n_settled=0):
         return (None, p, edge, 0,
                 f"best side is {side} at {odds:.2f}, still {abs(edge):.1%} "
                 f"short of its {implied(odds):.1%} breakeven")
-    rating, why = stake_rating(p, odds, n_settled)
+    rating, why = stake_rating(p, odds, n_settled,
+                               KELLY_FRACTION.get(competition, DEFAULT_KELLY_FRACTION))
     return side, p, edge, rating, why
 
 
@@ -362,7 +373,9 @@ def stake_rating(p, odds, n_settled=0, kelly_fraction=0.25):
         return 0, "no edge - the price is against you"
 
     # Quarter Kelly is the practical ceiling for a model of uncertain quality,
-    # so map 0 -> 0.25 of bankroll onto 0 -> 10.
+    # so map 0 -> 0.25 of bankroll onto 0 -> 10. A larger fraction (a league
+    # with a proven edge, KELLY_FRACTION) gives proportionally larger ratings
+    # on the same scale: a third of Kelly is a third more than a quarter.
     f = kelly(p, odds) * kelly_fraction
     edge_score = max(1, min(10, round(f / 0.025)))
 

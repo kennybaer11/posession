@@ -917,7 +917,7 @@ def _line_rows(want=None):
             p_mean, p_sigma = m.against_line(pred, line, line_cal)
             p_over = float(1 - norm.cdf(line, p_mean, p_sigma or sigma))
             side, p_side, edge, rating, why = m.choose_side(
-                p_over, over_odds, under_odds, graded_here)
+                p_over, over_odds, under_odds, graded_here, r["competition"])
 
         # With both prices we can strip the margin out and see what the
         # bookmaker actually thinks, rather than what the price alone implies.
