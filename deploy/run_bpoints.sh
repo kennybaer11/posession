@@ -59,6 +59,10 @@ if [ "${1:-}" = "chance" ]; then
     timeout 60m .venv/bin/python chance_pipeline.py || echo "!! chance_pipeline.py exited $?"
 fi
 
+# SazkaBet (allwyn.cz): every game's total-points ladder in one call. Tried on
+# every run; if Allwyn refuses this server too, its lines come only from the PC.
+timeout 5m .venv/bin/python sazka_odds.py || echo "!! sazka_odds.py exited $?"
+
 # This re-prices what is stored against the fresh DraftKings lines (and any
 # new Chance lines) and rewrites the tips.
 timeout 10m .venv/bin/python price.py --store --top 0 || echo "!! price.py exited $?"

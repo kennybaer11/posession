@@ -1479,7 +1479,8 @@ def admin_advice():
 
 # Bookmakers whose lines the aces project collects, as they are labelled here.
 TENNIS_BOOKS = {"betano": "Betano", "chance": "Chance", "manual": "Manual"}
-TENNIS_BOOK_SITES = {"betano": "https://www.betano.cz", "chance": "https://www.chance.cz"}
+TENNIS_BOOK_SITES = {"betano": "https://www.betano.cz", "chance": "https://www.chance.cz",
+                     "sazka": "https://www.allwyn.cz"}   # SazkaBet (bpoints)
 
 
 def _match_href(source, path):
