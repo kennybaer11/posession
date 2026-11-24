@@ -5,7 +5,7 @@
 # betken.cz's Basketball pages read what it writes.
 #
 #   run_bpoints.sh           results, settle, price, advice, notify
-#   run_bpoints.sh chance    the same, after Chance's lines through webscraper.io
+#   run_bpoints.sh chance    the same, after Chance's and Fortuna's lines through webscraper.io
 #
 # Self-contained like run_cs2.sh: the first run clones the repo and builds its
 # venv, later runs pull and reinstall only when requirements.txt changes. The
@@ -57,6 +57,14 @@ if [ "${1:-}" = "chance" ]; then
     WEBSCRAPER_TOKEN="$(env_value WEBSCRAPER_TOKEN)"
     export WEBSCRAPER_TOKEN
     timeout 60m .venv/bin/python chance_pipeline.py || echo "!! chance_pipeline.py exited $?"
+    # Fortuna the same way (fortuna_pipeline.py). Credits are shared, so the
+    # 15:00 run reads only the EuroLeague's evening games; 21:00 reads the night's
+    # NBA and NCAA games too.
+    if [ "$(date +%H)" -lt 18 ]; then
+        timeout 60m .venv/bin/python fortuna_pipeline.py --leagues euroleague || echo "!! fortuna_pipeline.py exited $?"
+    else
+        timeout 60m .venv/bin/python fortuna_pipeline.py || echo "!! fortuna_pipeline.py exited $?"
+    fi
 fi
 
 # SazkaBet (allwyn.cz): every game's total-points ladder in one call. Tried on
