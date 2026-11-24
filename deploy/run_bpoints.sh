@@ -63,6 +63,14 @@ fi
 # every run; if Allwyn refuses this server too, its lines come only from the PC.
 timeout 5m .venv/bin/python sazka_odds.py || echo "!! sazka_odds.py exited $?"
 
+# The EuroLeague's centre: Pinnacle's line (else the European books' median)
+# from The Odds API - its free plan's 500 credits a month, so oddsapi_lines.py
+# calls at most every 4 hours and only with a game in the next 36. Without the
+# key in .env it says so and the EuroLeague stays centred on Betano (untipped).
+ODDS_API_KEY="$(env_value ODDS_API_KEY)"
+export ODDS_API_KEY
+timeout 5m .venv/bin/python oddsapi_lines.py || echo "!! oddsapi_lines.py exited $?"
+
 # This re-prices what is stored against the fresh DraftKings lines (and any
 # new Chance lines) and rewrites the tips.
 timeout 10m .venv/bin/python price.py --store --top 0 || echo "!! price.py exited $?"
