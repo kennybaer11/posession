@@ -115,6 +115,9 @@ def describe(r):
 RATING_STEP = 1
 
 
+# The bookmaker a tip is priced at, as Telegram names it.
+BOOKS = {"chance.cz": "Chance", "chance": "Chance", "betano": "Betano", "tipsport": "Tipsport"}
+
 def changed_advice(db):
     """Tips whose advice has moved since Telegram was told about them.
 
@@ -165,7 +168,8 @@ def describe_change(r):
         f"{ko:%a %d %b %H:%M} · {e(r['team'])}",
         f"{advice(r['told_side'], r['told_rating'])} → "
         f"{advice(r['side'], r['rating'])}"
-        + (f" · edge {float(r['edge']):+.1%}" if r["backed"] and r["edge"] is not None else ""),
+        + (f" · edge {float(r['edge']):+.1%}" if r["backed"] and r["edge"] is not None else "")
+        + f" · {BOOKS.get(r['bookmaker'], r['bookmaker'])}",
     ])
 
 
