@@ -39,6 +39,7 @@ CS = {
     "advice frozen at the start": "tip zmrazený při začátku zápasu",
     "P/L": "Zisk",
     "No tip has settled yet.": "Zatím žádný vyhodnocený tip.",
+    "The record counts each tip as it was first sent, with the odds and stake of that message, even if the tip moved or was withdrawn afterwards.": "Záznam počítá každý tip tak, jak byl poprvé odeslán, s kurzem a vkladem z té zprávy, i když se tip později změnil nebo byl stažen.",
     "retired or walked over; stake returned": "skreč nebo kontumace; vklad se vrací",
     "placed": "vsazeno",
     "Withdrawn before the start": "Staženo před začátkem",

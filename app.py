@@ -2089,6 +2089,21 @@ def _basketball_page(view):
     upcoming, settled, void, withdrawn = [], [], [], []
     for r in rows:
         r = dict(r)
+        # The record counts the tip as Telegram first sent it (what is usually
+        # bet), settled on its own line, even when the tip moved or was withdrawn
+        # afterwards. Open tips, and any from before the first_* columns, are as now.
+        if r.get("first_odds") is not None and r.get("first_result") in ("won", "lost", "void"):
+            same = (r["first_market"], r["first_period"], r["first_team"], r["first_side"],
+                    float(r["first_line"])) == (r["market"], r["period"], r["team"], r["side"],
+                                                float(r["line"]))
+            r.update(market=r["first_market"], period=r["first_period"], team=r["first_team"],
+                     side=r["first_side"], ln=float(r["first_line"]), o=float(r["first_odds"]),
+                     rating=r["first_rating"], result=r["first_result"], backed=True,
+                     actual=r["first_actual"])
+            # The model's chance and edge belong to the final tip: kept only when
+            # it is the same bet, the edge at the odds first sent.
+            r["e"] = r["p"] * r["o"] - 1 if same else None
+            r["p"] = r["p"] if same else None
         r["book"] = r["bookmaker"]
         r["href"] = (TENNIS_BOOK_SITES.get(r["bookmaker"], "") + r["event_url"]) if r["event_url"] else None
         r["key"] = "|".join([r["bookmaker"], r["event_id"], r["slot"]])

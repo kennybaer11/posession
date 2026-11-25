@@ -176,14 +176,15 @@
           <td class="num muted">{{ '%d/10'|format(r.rating) if r.rating else '-' }}</td>
           <td class="l muted" data-v="{{ r.kickoff.timestamp() }}">{{ r.kickoff|dt('%d %b %H:%M') }}</td>
           <td class="l muted">{{ r.lg }}</td>
-          <td class="num muted">{{ '%.0f%%'|format(100 * r.p) }}</td>
-          <td class="num muted">{{ '%+.1f%%'|format(r.e * 100) }}</td>
+          <td class="num muted">{{ '%.0f%%'|format(100 * r.p) if r.p is not none else '-' }}</td>
+          <td class="num muted">{{ '%+.1f%%'|format(r.e * 100) if r.e is not none else '-' }}</td>
           <td class="l">{{ book(r.book) }}</td>
         </tr>
         {% endfor %}
       </tbody>
     </table>
   </div>
+  <p class="muted" style="font-size:13px">{{ _("The record counts each tip as it was first sent, with the odds and stake of that message, even if the tip moved or was withdrawn afterwards.") }}</p>
   {% else %}
   <div class="empty">{{ _("No tip has settled yet.") }}</div>
   {% endif %}
