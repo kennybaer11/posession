@@ -122,6 +122,12 @@
       <option value="">{{ _("All leagues") }}</option>
       {% for k, name in leagues %}<option value="{{ k }}">{{ name }}</option>{% endfor %}
     </select>
+    {% if bookmakers|length > 1 %}
+    <select data-f="bk" aria-label="{{ _('Bookmaker') }}">
+      <option value="">{{ _("All bookmakers") }}</option>
+      {% for k, name in bookmakers %}<option value="{{ k }}">{{ name }}</option>{% endfor %}
+    </select>
+    {% endif %}
     <select data-f="mkt" aria-label="{{ _('Market') }}">
       <option value="">{{ _("All markets") }}</option>
       <option value="total">{{ _("Total points") }}</option><option value="team_total">{{ _("Team points") }}</option>
@@ -156,7 +162,7 @@
       </thead>
       <tbody>
         {% for r in settled %}
-        <tr class="{{ 'placed' if r.placed }}" data-lg="{{ r.our_league }}" data-mkt="{{ r.market }}" data-per="{{ r.period }}"
+        <tr class="{{ 'placed' if r.placed }}" data-lg="{{ r.our_league }}" data-bk="{{ r.bookmaker }}" data-mkt="{{ r.market }}" data-per="{{ r.period }}"
             data-hit="{{ 1 if r.hit else 0 }}" data-placed="{{ 1 if r.placed else 0 }}"
             data-t="{{ r.kickoff.timestamp()|int }}" data-o="{{ r.o }}" data-r="{{ r.rating or 0 }}">
           {% if user %}{{ tick(r) }}{% endif %}

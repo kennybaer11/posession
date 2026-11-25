@@ -2054,6 +2054,7 @@ def _esport_matches(with_lines=False):
 # -- basketball: over/under points (the bpoints project, github.com/kennybaer11/bpoints)
 
 BASKETBALL_MARKETS = ("total", "team_total")
+BASKETBALL_BOOKS = {"betano": "Betano", "chance": "Chance", "sazka": "SazkaBet", "fortuna": "Fortuna"}
 BASKETBALL_LEAGUES = {"nba": "NBA", "wnba": "WNBA", "ncaam": "NCAA", "ncaaw": "NCAA (W)",
                       "euroleague": "EuroLeague", "eurocup": "EuroCup"}
 
@@ -2126,10 +2127,14 @@ def _basketball_page(view):
         withdrawn, void = [], []
     leagues = sorted({r["our_league"] for r in settled if r["our_league"]},
                      key=lambda k: list(BASKETBALL_LEAGUES).index(k) if k in BASKETBALL_LEAGUES else 99)
+    bks = sorted({r["bookmaker"] for r in settled},
+                 key=lambda k: list(BASKETBALL_BOOKS).index(k) if k in BASKETBALL_BOOKS else 99)
     return render_template("basketball.html", view=view, upcoming=upcoming, settled=settled,
                            void=void, withdrawn=withdrawn, totals=totals, verdict=call,
-                           mine=mine, user=session.get("admin"), books=TENNIS_BOOKS,
-                           leagues=[(k, BASKETBALL_LEAGUES[k]) for k in leagues])
+                           mine=mine, user=session.get("admin"),
+                           books={**TENNIS_BOOKS, **BASKETBALL_BOOKS},
+                           leagues=[(k, BASKETBALL_LEAGUES[k]) for k in leagues],
+                           bookmakers=[(k, BASKETBALL_BOOKS.get(k, k)) for k in bks])
 
 
 @app.route("/basketball/placed", methods=["POST"])
