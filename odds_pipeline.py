@@ -344,11 +344,18 @@ def score_fixture(fixture, slug_words):
     built as fotbal-{home}-{away}, so order distinguishes a fixture from its
     reverse later in the season.
     """
-    hs, hi = club_score(fixture["home"], slug_words)
-    as_, ai = club_score(fixture["away"], slug_words)
-    if not hs or not as_ or hi >= ai:
-        return None
-    return hs + as_
+    # The slug is split in two, home words then away words, and each club is
+    # scored on its own part only - so one word cannot serve both clubs. On
+    # "real madrid alaves" (28 Nov 2026) Real Madrid v Atletico de Madrid
+    # scored like the real Real Madrid v Alaves by reading "madrid" twice,
+    # and the tie made the import reject the row.
+    best = None
+    for k in range(1, len(slug_words)):
+        hs, _ = club_score(fixture["home"], slug_words[:k])
+        as_, _ = club_score(fixture["away"], slug_words[k:])
+        if hs and as_ and (best is None or hs + as_ > best):
+            best = hs + as_
+    return best
 
 
 def pick_urls(link_rows, fixtures):
